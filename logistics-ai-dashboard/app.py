@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -6,32 +7,33 @@ import streamlit as st
 
 from modules import forecast, network, optimization, tracking
 
-import os
-st.set_page_config(page_title="SupChainMate", layout="wide", initial_sidebar_state="expanded")
+# ── Page Config ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="SupChainMate — Mission Control",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
+# ── CSS Injection ──────────────────────────────────────────────────────────────
 def load_css(file_name):
     if os.path.exists(file_name):
         with open(file_name) as f:
-            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 load_css("style.css")
 
-st.title("📊 Logistics Intelligence Dashboard")
-st.caption("Unified demand, delivery, and flow intelligence — Olist orders dataset.")
+# ── Data Paths ─────────────────────────────────────────────────────────────────
+DATA_PATH       = "data/olist_orders.csv"
+CUSTOMERS_PATH  = "data/olist_customers_dataset.csv"
 
-DATA_PATH = "data/olist_orders.csv"
-CUSTOMERS_PATH = "data/olist_customers_dataset.csv"
-
-
+# ── Cached Loaders ─────────────────────────────────────────────────────────────
 @st.cache_data
 def _load_orders():
     return forecast.load_orders(DATA_PATH)
 
-
 @st.cache_data
 def _daily_demand():
     return forecast.daily_demand(_load_orders())
-
 
 @st.cache_data
 def _prophet_model():
@@ -39,308 +41,398 @@ def _prophet_model():
     model = forecast.fit_prophet_model(daily)
     return daily, model
 
-
 @st.cache_data
 def _customer_geo_clusters():
     customers = pd.read_csv(CUSTOMERS_PATH)
     geo_df = network.prepare_customer_data(customers)
     return network.run_clustering(geo_df)
 
-
 @st.cache_data
 def _tracking_simulation():
     orders = pd.read_csv("data/olist_orders_dataset.csv")
     return tracking.simulate_tracking(orders)
 
-
 @st.cache_data
 def _flow_tracking_and_delay_model():
-    """Single cache so simulated statuses and delay model stay aligned."""
     tdf = _tracking_simulation()
     model, X_test, y_test = tracking.train_delay_model(tdf)
     return tdf, model, X_test, y_test
 
-
-st.sidebar.header("Controls")
-days = st.sidebar.slider("Forecast Days", 7, 30, 7)
-simulate_event = st.sidebar.toggle("🚨 Simulate Macro Event (Demand Sensing)", value=False)
-
-daily_df, prophet_model = _prophet_model()
-future = prophet_model.make_future_dataframe(periods=days)
-
-# ---- 1. Demand Sensing Feature ----
-future = future.merge(daily_df[['ds', 'external_signal']], on='ds', how='left')
-future['external_signal'] = future['external_signal'].fillna(1 if simulate_event else 0)
-
-forecast_df = prophet_model.predict(future)
-insights = forecast.forecast_insights(forecast_df, daily_df, horizon_days=days)
-
-avg_daily = float(daily_df["y"].mean())
-if avg_daily > 0:
-    growth = (
-        (float(forecast_df["yhat"].tail(days).mean()) - avg_daily) / avg_daily
-    ) * 100.0
-else:
-    growth = 0.0
-
-next_week_demand = insights["next_week_total"]
-
-tab_demand, tab_network, tab_flow, tab_tower = st.tabs(
-    [
-        "Demand prediction",
-        "Network / delivery insights",
-        "Flow / status simulation",
-        "🧠 AI Control Tower"
-    ]
-)
-
-with tab_demand:
-    st.write("### 📈 Demand Overview")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("📦 Total Forecast Demand", next_week_demand)
-    col2.metric("📊 Avg Daily Demand", round(avg_daily, 2))
-    col3.metric("📈 Growth %", f"{growth:.2f}%")
-
-    if growth > 10:
-        st.success(
-            f"📈 Demand is expected to increase by {growth:.2f}% — consider increasing inventory."
-        )
-    elif growth < -10:
-        st.warning(
-            f"📉 Demand is expected to drop by {abs(growth):.2f}% — reduce stock levels."
-        )
-    else:
-        st.info("⚖️ Demand is stable — maintain current inventory strategy.")
-
-    stock_threshold = avg_daily * 0.8
-    if float(forecast_df["yhat"].tail(days).mean()) > stock_threshold:
-        st.error("⚠️ High stockout risk detected — increase inventory immediately.")
-
-    st.subheader("💡 Recommendations")
-    if growth > 10:
-        st.write("- Increase procurement volume")
-        st.write("- Prioritise high-demand SKUs")
-    elif growth < -10:
-        st.write("- Reduce inventory levels")
-        st.write("- Avoid overstock risk")
-    else:
-        st.write("- Maintain current inventory strategy")
-
+# ── Sidebar Controls ───────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### ⚙ SYSTEM CONFIG")
+    days           = st.slider("FORECAST HORIZON (DAYS)", 7, 30, 7)
+    simulate_event = st.toggle("🚨 MACRO EVENT SIMULATION", value=False)
+    demand_change  = st.slider("DEMAND DELTA (%)", -50, 50, 0)
     st.divider()
-    st.subheader("📉 Historical vs Forecast Demand")
-    st.caption(
-        "Meta **Prophet** (open source): build `Prophet()`, `fit` on history with columns **`ds` / `y`**, then "
-        "`make_future_dataframe` → `predict` — exactly like the official Python quick start. "
-        "The chart shows **`yhat`** plus **`yhat_lower` / `yhat_upper`** from `forecast[[...]]`."
-    )
+    if st.button("CLEAR CACHE & RESAMPLE"):
+        st.cache_data.clear()
+        st.rerun()
 
-    fc = forecast_df.sort_values("ds")
-    fig_demand = go.Figure()
-    fig_demand.add_trace(
-        go.Scatter(
-            x=fc["ds"],
-            y=fc["yhat_upper"],
-            mode="lines",
-            line=dict(width=0),
-            showlegend=False,
-            hoverinfo="skip",
-        )
-    )
-    fig_demand.add_trace(
-        go.Scatter(
-            x=fc["ds"],
-            y=fc["yhat_lower"],
-            mode="lines",
-            line=dict(width=0),
-            fill="tonexty",
-            fillcolor="rgba(0, 35, 111, 0.08)",
-            name="Predictive interval (yhat lower–upper)",
-        )
-    )
-    fig_demand.add_trace(
-        go.Scatter(
-            x=fc["ds"],
-            y=fc["yhat"],
-            mode="lines",
-            name="Forecast (yhat)",
-            line=dict(color="#00236F", width=2),
-        )
-    )
-    fig_demand.add_trace(
-        go.Scatter(
-            x=daily_df["ds"],
-            y=daily_df["y"],
-            mode="lines",
-            name="Actual (daily orders)",
-            line=dict(color="#94A3B8", width=1.5),
-        )
-    )
-    fig_demand.update_layout(
-        title="Demand: actuals vs Prophet forecast and uncertainty",
-        template="plotly_white",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        hovermode="x unified",
-        margin=dict(l=40, r=20, t=50, b=40),
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-    )
-    fig_demand.update_xaxes(title_text="Date (ds)")
-    fig_demand.update_yaxes(title_text="Orders (y / yhat)")
-    st.plotly_chart(fig_demand, width="stretch")
+# ── Load & Compute ─────────────────────────────────────────────────────────────
+daily_df, prophet_model        = _prophet_model()
+future                         = prophet_model.make_future_dataframe(periods=days)
+future                         = future.merge(daily_df[["ds", "external_signal"]], on="ds", how="left")
+future["external_signal"]      = future["external_signal"].fillna(1 if simulate_event else 0)
+forecast_df                    = prophet_model.predict(future)
+insights                       = forecast.forecast_insights(forecast_df, daily_df, horizon_days=days)
 
-with tab_network:
-    st.subheader("Network / delivery insights")
-    st.caption(
-        "Spatial clusters from customer ZIP prefixes (simulated coordinates), plus delivery KPIs from orders."
-    )
+avg_daily       = float(daily_df["y"].mean())
+growth          = ((float(forecast_df["yhat"].tail(days).mean()) - avg_daily) / avg_daily * 100.0) if avg_daily > 0 else 0.0
+next_week_demand = insights["next_week_total"]
+adjusted_demand  = int(next_week_demand * (1 + demand_change / 100))
 
-    st.subheader("🗺️ Disruption Radar & Risk Heatmap")
+tracking_df, delay_model, X_test_delay, _ = _flow_tracking_and_delay_model()
+status_counts  = tracking.get_status_counts(tracking_df)
+delayed        = int(status_counts.get("Delayed", 0))
+delivered      = int(status_counts.get("Delivered", 0))
+total_orders   = len(tracking_df)
+preds          = delay_model.predict(X_test_delay)
+delay_risk     = float(preds.mean() * 100)
+
+orders         = _load_orders()
+summary        = optimization.network_summary(orders)
+
+# ── Cost Optimisation ─────────────────────────────────────────────────────────
+rng_cost       = np.random.default_rng(42)
+cost_df        = tracking_df.copy()
+cost_df["cost"]= rng_cost.uniform(5, 20, size=len(cost_df))
+current_cost   = float(cost_df["cost"].sum())
+optimized_cost = current_cost * 0.85
+savings        = current_cost - optimized_cost
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TOP STATUS BAR
+# ═══════════════════════════════════════════════════════════════════════════════
+system_status = "HIGH ALERT" if delay_risk > 15 or delayed > 0.15 * total_orders else "NOMINAL"
+status_color  = "#FF003C" if system_status == "HIGH ALERT" else "#00E676"
+
+active_breaches = sum([
+    1 if delay_risk > 15 else 0,
+    1 if growth < -10 else 0,
+    1 if simulate_event else 0,
+    1 if demand_change > 20 else 0,
+])
+
+st.markdown(f"""
+<div style="background:#0D0D10; border-bottom:1px solid #FF003C; padding:10px 20px;
+            display:flex; align-items:center; justify-content:space-between;
+            font-family:'Share Tech Mono',monospace; font-size:0.72rem; 
+            letter-spacing:0.08rem; margin-bottom:16px;">
+    <div>
+        <span style="color:#FF003C; font-size:1.1rem; font-weight:700; 
+                     font-family:'Teko',sans-serif; letter-spacing:0.1rem;">
+            SUPCHAINMATE — MISSION CONTROL
+        </span>
+        <span style="color:{status_color}; margin-left:16px;">● SYSTEM {system_status}</span>
+    </div>
+    <div style="display:flex; gap:24px; align-items:center;">
+        <div style="text-align:center;">
+            <div style="color:#FBC02D; font-size:1.4rem; font-family:'Teko',sans-serif;">
+                {active_breaches} ACTIVE</div>
+            <div style="color:#666; font-size:0.6rem;">BREACHES</div>
+        </div>
+        <div style="text-align:center;">
+            <div style="color:#00E676; font-size:1.4rem; font-family:'Teko',sans-serif;">
+                {100 - delay_risk:.1f}%</div>
+            <div style="color:#666; font-size:0.6rem;">NOMINAL</div>
+        </div>
+        <div style="background:#FF003C; color:#FFF; padding:6px 14px;
+                    font-size:0.7rem; font-weight:700; cursor:pointer;">
+            OVERRIDE SYSTEM
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MAIN LAYOUT: Map (left) | HUD Panels (right)
+# ═══════════════════════════════════════════════════════════════════════════════
+col_map, col_hud = st.columns([2, 1], gap="small")
+
+# ── LEFT: DISRUPTION RADAR MAP ─────────────────────────────────────────────────
+with col_map:
     geo_df = _customer_geo_clusters()
-    
-    # ---- 2. Disruption Radar Feature ----
     np.random.seed(42)
     geo_df["risk_score"] = np.random.uniform(0, 100, size=len(geo_df))
-    geo_df["risk_level"] = pd.cut(geo_df["risk_score"], bins=[-1, 70, 90, 100], labels=["Safe", "Warning", "Critical"])
+    geo_df["risk_level"] = pd.cut(
+        geo_df["risk_score"],
+        bins=[-1, 70, 90, 100],
+        labels=["Safe", "Warning", "Critical"]
+    )
 
-    fig_zones = px.scatter_mapbox(
+    # Immediate threat overlay
+    threat_lats = geo_df[geo_df["risk_level"] == "Critical"]["lat"].values
+    threat_lons = geo_df[geo_df["risk_level"] == "Critical"]["lon"].values
+
+    fig_map = px.scatter_mapbox(
         geo_df,
-        lat="lat",
-        lon="lon",
+        lat="lat", lon="lon",
         color="risk_level",
         size="risk_score",
-        zoom=3,
-        height=500,
-        title="Predictive Node Vulnerability",
-        color_discrete_map={"Critical": "#D32F2F", "Warning": "#FBC02D", "Safe": "#00236F"}
+        size_max=18,
+        zoom=2.5,
+        height=480,
+        color_discrete_map={
+            "Critical": "#FF003C",
+            "Warning":  "#FBC02D",
+            "Safe":     "#00D4FF",
+        },
     )
-    fig_zones.update_layout(mapbox_style="carto-positron")
-    fig_zones.update_mapboxes(center=dict(lat=-14.0, lon=-51.0), zoom=3)
-    st.plotly_chart(fig_zones, use_container_width=True)
-
-    st.subheader("📦 Zone Insights")
-    cluster_counts = geo_df["cluster"].value_counts()
-    st.write("High-density delivery zones:")
-    st.write(cluster_counts.head())
-
-    st.divider()
-
-    orders = _load_orders()
-    summary = optimization.network_summary(orders)
-    if summary is None:
-        st.warning("No completed customer delivery dates found — cannot compute network KPIs.")
-    else:
-        n1, n2, n3, n4 = st.columns(4)
-        n1.metric("Avg lead time (days)", f"{summary['avg_lead_days']:.1f}")
-        n2.metric("Median lead (days)", f"{summary['median_lead_days']:.1f}")
-        n3.metric("On-time vs estimate", f"{summary['on_time_pct']:.1f}%")
-        n4.metric("Orders in sample", f"{summary['n_delivered_observed']:,}")
-
-        st.divider()
-        daily_net = optimization.daily_network_metrics(orders)
-        seg = optimization.cluster_operating_days(daily_net, k=3)
-
-        st.markdown("##### Daily volume vs median lead time")
-        st.line_chart(
-            daily_net.set_index("day")[["orders", "median_lead"]].rename(
-                columns={"orders": "Orders", "median_lead": "Median lead (days)"}
-            )
-        )
-
-        st.markdown("##### Operating-day segments (volume + delay)")
-        st.dataframe(
-            seg[["day", "orders", "median_lead", "on_time_rate", "segment"]]
-            .tail(30)
-            .sort_values("day", ascending=False),
-            width="stretch",
-            hide_index=True,
-        )
-
-with tab_flow:
-    st.subheader("📦 Supply Chain Flow Tracking")
-    st.caption(
-        "Simulated operational statuses (Processing / Shipped / Delivered / Delayed) for live-style "
-        "visibility — same row count as `olist_orders_dataset.csv`. Clear Streamlit cache to resample."
+    fig_map.update_layout(
+        mapbox_style="carto-darkmatter",
+        mapbox=dict(center=dict(lat=20, lon=0), zoom=1.5),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=0, t=0, b=0),
+        legend=dict(
+            bgcolor="rgba(13,13,16,0.8)",
+            bordercolor="#FF003C",
+            borderwidth=1,
+            font=dict(color="#CCCCCC", size=10),
+        ),
+        showlegend=True,
     )
+    st.plotly_chart(fig_map, use_container_width=True)
 
-    tracking_df, delay_model, X_test_delay, _ = _flow_tracking_and_delay_model()
-    status_counts = tracking.get_status_counts(tracking_df)
+    # Immediate Threat Card
+    critical_pct = len(geo_df[geo_df["risk_level"] == "Critical"]) / len(geo_df) * 100
+    st.markdown(f"""
+    <div class="hud-panel">
+        <div style="color:#FF003C; font-family:'Teko',sans-serif; font-size:1.1rem; letter-spacing:0.1rem;">
+            ⚠ IMMEDIATE THREAT: EAST COAST
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:#AAAAAA; margin:6px 0;">
+            WEATHER SURGE CAUSING TOTAL HUB PARALYSIS. {critical_pct:.0f}% OF VOLUME AT RISK.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.write("### 🚚 Order Status Overview")
-    st.bar_chart(status_counts)
+    # Optimization Ready Card
+    st.markdown(f"""
+    <div class="hud-panel-yellow">
+        <div style="color:#FBC02D; font-family:'Teko',sans-serif; font-size:1.1rem; letter-spacing:0.1rem;">
+            ★ OPTIMIZATION READY
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:#AAAAAA; margin:4px 0 10px 0;">
+            AI IDENTIFIED ${savings:,.0f} SAVINGS ON ACTIVE ROUTES.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("⚡ EXECUTE OPTIMIZATION", key="exec_opt"):
+        st.success("✅ ROUTE OPTIMIZATION DISPATCHED — ETA 2.3 MIN")
 
-    delayed = int(status_counts.get("Delayed", 0))
-    if delayed > 0.15 * len(tracking_df):
-        st.error("⚠️ High delay risk detected in supply chain")
+# ── RIGHT: HUD PANELS ──────────────────────────────────────────────────────────
+with col_hud:
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Orders", len(tracking_df))
-    col2.metric("Delivered", int(status_counts.get("Delivered", 0)))
-    col3.metric("Delayed", delayed)
+    # ── DELAY RISK PANEL ──────────────────────────────────────────────────────
+    risk_label = "EXTREME" if delay_risk > 25 else ("CRITICAL" if delay_risk > 15 else "MODERATE")
+    weather_idx = min(99, delay_risk * 3.2)
+    node_cong   = min(99, delay_risk * 2.4)
 
-    st.divider()
-    st.subheader("🤖 Delay Prediction Model")
-    preds = delay_model.predict(X_test_delay)
-    delay_risk = float(preds.mean() * 100)
-    st.metric("Predicted Delay Risk", f"{delay_risk:.2f}%")
-    if delay_risk > 15:
-        st.error("⚠️ High predicted delay risk — investigate logistics bottlenecks.")
-    else:
-        st.success("✅ Delay risk is within acceptable limits.")
+    st.markdown(f"""
+    <div class="hud-panel" style="border-color:rgba(255,0,60,0.6);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+                <div class="hud-label">DELAY RISK</div>
+                <div class="hud-value-red">{delay_risk:.1f}%</div>
+                <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:#FBC02D; margin-top:4px;">
+                    ↑ {abs(growth):.1f}% TREND
+                </div>
+            </div>
+            <span class="action-required-badge">ACTION REQUIRED</span>
+        </div>
+        <div class="scan-line"></div>
+        <div class="hud-label" style="margin-top:8px;">WEATHER DISRUPTION INDEX</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="progress-bar-container" style="flex:1; margin-right:10px;">
+                <div class="progress-bar-fill-red" style="width:{weather_idx:.0f}%;"></div>
+            </div>
+            <span style="color:#FF003C; font-family:'Share Tech Mono',monospace; font-size:0.7rem; white-space:nowrap;">
+                {weather_idx:.0f}% ({risk_label})
+            </span>
+        </div>
+        <div class="hud-label" style="margin-top:8px;">NODE CONGESTION</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="progress-bar-container" style="flex:1; margin-right:10px;">
+                <div class="progress-bar-fill-yellow" style="width:{node_cong:.0f}%;"></div>
+            </div>
+            <span style="color:#FBC02D; font-family:'Share Tech Mono',monospace; font-size:0.7rem; white-space:nowrap;">
+                {node_cong:.0f}% (WARNING)
+            </span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.divider()
-    st.subheader("💰 Cost Optimisation Scenario")
-    cost_df = tracking_df.copy()
-    rng_cost = np.random.default_rng(42)
-    cost_df["cost"] = rng_cost.uniform(5, 20, size=len(cost_df))
-    current_cost = float(cost_df["cost"].sum())
-    optimized_cost = current_cost * 0.85
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Current Cost", f"${current_cost:,.2f}")
-    m2.metric("Optimized Cost", f"${optimized_cost:,.2f}")
-    m3.metric("Savings", f"${current_cost - optimized_cost:,.2f}")
-    st.info(
-        "💡 Optimising delivery routes and batching orders could reduce logistics costs by ~15%."
-    )
+    # ── SYSTEM BENCHMARKS ───────────────────────────────────────────────────────
+    avg_lead = summary["avg_lead_days"] if summary else 14.2
+    on_time  = summary["on_time_pct"]   if summary else 76.0
+    risk_pct = 24
 
-    st.divider()
-    st.subheader("🔮 What-If Simulation")
-    demand_change = st.slider("Change in Demand (%)", -50, 50, 0)
-    adjusted_demand = next_week_demand * (1 + demand_change / 100)
-    st.metric("Adjusted Demand", int(adjusted_demand))
+    st.markdown(f"""
+    <div class="hud-panel" style="border-color:#333340;">
+        <div style="color:#00D4FF; font-family:'Teko',sans-serif; font-size:1rem; 
+                    letter-spacing:0.1rem; text-transform:uppercase; margin-bottom:6px;">
+            ◈ System Benchmarks
+        </div>
+        <table class="benchmark-table">
+            <tr>
+                <th>VECT</th>
+                <th>LEGACY</th>
+                <th class="optimized">OPTIMIZED</th>
+            </tr>
+            <tr>
+                <td>COST</td>
+                <td>${current_cost:,.0f}</td>
+                <td class="optimized">${optimized_cost:,.1f}</td>
+            </tr>
+            <tr>
+                <td>RISK</td>
+                <td>{risk_pct}%</td>
+                <td class="optimized">{risk_pct * 0.75:.0f}%</td>
+            </tr>
+            <tr>
+                <td>RESP</td>
+                <td>{avg_lead:.1f}H</td>
+                <td class="optimized">{avg_lead * 0.055:.1f}H</td>
+            </tr>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── OPERATIONAL DIRECTIVE ───────────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="hud-panel-blue">
+        <div style="color:#00D4FF; font-family:'Teko',sans-serif; font-size:1rem;
+                    letter-spacing:0.1rem; text-transform:uppercase; margin-bottom:8px;">
+            ◎ Operational Directive
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.72rem; 
+                    color:#AAAAAA; line-height:1.6; font-style:italic;">
+            "Consolidate high-risk clusters immediately. Route {15 + int(delay_risk/2):.0f}% volume 
+            via regional hubs to mitigate port congestion. Confidence score: 87%."
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_ack, col_alert = st.columns([3, 1])
+    with col_ack:
+        if st.button("ACKNOWLEDGE DIRECTIVE", key="ack_dir"):
+            st.success("DIRECTIVE CONFIRMED — EXECUTING")
+    with col_alert:
+        st.markdown("""
+        <div style="background:#FF003C; width:40px; height:40px; display:flex;
+                    align-items:center; justify-content:center; font-size:1.2rem; margin-top:2px;">
+            ⚠
+        </div>
+        """, unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BOTTOM BAR: DEMAND SURGE SIMULATOR
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+
+demand_label = "+10% SURGE IMPACT" if demand_change > 0 else ("-10% DEMAND DROP" if demand_change < 0 else "STABLE DEMAND")
+demand_color = "#FBC02D" if demand_change > 20 else ("#FF003C" if demand_change < -20 else "#00E676")
+
+revenue_opp   =  adjusted_demand * 12
+op_strain_pct =  abs(demand_change) * 0.4
+
+bot_l, bot_m1, bot_m2, bot_m3, bot_r = st.columns([2, 1, 2, 1, 1])
+
+with bot_l:
+    st.markdown("""
+    <div class="hud-label">SIMULATION ENGINE</div>
+    <div style="font-family:'Teko',sans-serif; font-size:1.2rem; color:#FFFFFF;
+                letter-spacing:0.08rem; text-transform:uppercase;">
+        DEMAND SURGE SIMULATOR
+    </div>
+    """, unsafe_allow_html=True)
+
+with bot_m1:
+    st.markdown(f"""
+    <div class="hud-label">REDUCED</div>
+    <div class="hud-value-green" style="font-size:1rem;">-{max(0,demand_change/2):.0f}%</div>
+    """, unsafe_allow_html=True)
+
+with bot_m2:
+    st.markdown(f"""
+    <div style="text-align:center;">
+        <div style="font-family:'Teko',sans-serif; font-size:2rem; color:{demand_color};
+                    text-shadow:0 0 12px {demand_color}88; text-transform:uppercase;">
+            {demand_label}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with bot_m3:
+    st.markdown(f"""
+    <div class="hud-label">CRITICAL</div>
+    <div class="hud-value-red" style="font-size:1rem;">+{max(0,demand_change/2):.0f}%</div>
+    """, unsafe_allow_html=True)
+
+with bot_r:
+    st.markdown(f"""
+    <div class="hud-label">REVENUE OPP</div>
+    <div class="hud-value-green" style="font-size:0.9rem;">+${revenue_opp/1000:.0f}K</div>
+    <div class="hud-label" style="margin-top:4px;">OP STRAIN</div>
+    <div class="hud-value-red" style="font-size:0.9rem;">+{op_strain_pct:.1f}% ERR</div>
+    """, unsafe_allow_html=True)
+
+if st.button("▶ RUN SCENARIO", key="run_scenario"):
+    with st.spinner("RUNNING SIMULATION..."):
+        import time; time.sleep(1)
     if demand_change > 20:
-        st.warning("⚠️ High demand surge — risk of stockouts and delays.")
+        st.error(f"⚠ HIGH DEMAND SURGE — STOCKOUT RISK ELEVATED. ADJUSTED DEMAND: {adjusted_demand:,}")
     elif demand_change < -20:
-        st.info("📉 Demand drop — consider reducing inventory.")
+        st.warning(f"📉 DEMAND DROP DETECTED — REDUCE INVENTORY. ADJUSTED: {adjusted_demand:,}")
     else:
-        st.success("✅ Demand within manageable range.")
+        st.success(f"✅ SCENARIO NOMINAL — ADJUSTED DEMAND: {adjusted_demand:,}")
 
-# ---- 3. AI Cognitive Control Tower Feature ----
-with tab_tower:
-    st.write("### 🧠 Cognitive Control Tower")
-    st.caption("AI-powered prescriptive actions based on predictive analytics across the supply chain.")
-    
-    st.subheader("⚠️ Predictive Risk Alerts")
-    st.error("Critical Disruption Risk detected in **South-East Region** (Risk Score > 90) due to projected port congestion over the next 5 days.")
-    
-    st.subheader("💡 Autonomous Mitigations")
-    
-    colA, colB = st.columns(2)
-    with colA:
-        st.info("📦 **Action 1: Proactive Reallocation**\n\nAI recommends shifting 15% of safety stock from Zone A to Zone C immediately to front-run the delay.")
-        if st.button("Execute Action 1", key="btn1"):
-            st.success("✅ Reallocation order dispatched to WMS.")
-            
-    with colB:
-        st.info("🚚 **Action 2: Dynamic Rerouting**\n\nSwitch 500 pending shipments to your 3PL backup carrier to avoid the localized congestion.")
-        if st.button("Execute Action 2", key="btn2"):
-            st.success("✅ Carrier routing tables updated via API.")
-            
-    st.divider()
-    
-    st.subheader("💬 Query Supply Chain Copilot")
-    query = st.chat_input("Ask the AI Control Tower...")
-    if query:
-        st.chat_message("user").write(query)
-        st.chat_message("assistant").write(f"Analyzing current topology for: '{query}'... Recommended action is to temporarily increase lead-time buffers by 2 days to account for upstream volatility in the supplier network.")
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECONDARY INTELLIGENCE: Forecast Chart + Supply Chain Copilot
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+exp_chart, exp_copilot = st.columns([2, 1])
 
+with exp_chart:
+    with st.expander("📈 DEMAND FORECAST — PROPHET ENGINE", expanded=False):
+        fc = forecast_df.sort_values("ds")
+        fig_demand = go.Figure()
+        fig_demand.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat_upper"], mode="lines",
+            line=dict(width=0), showlegend=False, hoverinfo="skip"))
+        fig_demand.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat_lower"], mode="lines",
+            line=dict(width=0), fill="tonexty", fillcolor="rgba(255,0,60,0.12)",
+            name="Confidence Interval"))
+        fig_demand.add_trace(go.Scatter(x=fc["ds"], y=fc["yhat"], mode="lines",
+            name="Forecast (yhat)", line=dict(color="#FF003C", width=2)))
+        fig_demand.add_trace(go.Scatter(x=daily_df["ds"], y=daily_df["y"], mode="lines",
+            name="Actual Orders", line=dict(color="#00D4FF", width=1.5)))
+        fig_demand.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(13,13,16,1)",
+            hovermode="x unified",
+            margin=dict(l=40, r=20, t=20, b=40),
+            legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#888")),
+            height=320,
+        )
+        fig_demand.update_xaxes(gridcolor="#222228", title_text="")
+        fig_demand.update_yaxes(gridcolor="#222228", title_text="ORDERS")
+        st.plotly_chart(fig_demand, use_container_width=True)
+
+with exp_copilot:
+    with st.expander("🧠 SUPPLY CHAIN COPILOT", expanded=False):
+        st.markdown("""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:#888; margin-bottom:8px;">
+            AI DIRECTIVE ENGINE V2.1 — READY
+        </div>""", unsafe_allow_html=True)
+        query = st.chat_input("QUERY THE AI SYSTEM...")
+        if query:
+            st.chat_message("user").write(query)
+            st.chat_message("assistant").write(
+                f"ANALYZING TOPOLOGY FOR: '{query.upper()}'\n\n"
+                "RECOMMENDED: Increase lead-time buffers +2 days across upstream nodes. "
+                "Reroute Cluster C shipments via Hub 4 to reduce congestion. "
+                "Confidence: 91%."
+            )

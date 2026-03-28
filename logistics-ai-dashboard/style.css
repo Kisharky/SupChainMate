@@ -1,128 +1,355 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Teko:wght@400;500;600&display=swap');
 
-/* The Intelligence Layer: Formal Consulting Theme */
+/* ========================================
+   MISSION CONTROL HUD — CYBERPUNK SYSTEM
+   ======================================== */
 
-/* Clean standard Streamlit wrapper elements */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* --- 2. Colors & Surface Philosophy --- */
-/* Base body - The Foundation */
+/* ---- BASE CANVAS ---- */
 .stApp {
-    font-family: 'Inter', sans-serif !important;
-    background-color: #F7F9FB; /* surface */
-    color: #191C1E; /* on-surface */
+    background-color: #0B0B0C;
+    font-family: 'Rajdhani', sans-serif !important;
+    color: #FFFFFF;
 }
 
-/* Secondary Layouts / Nesting */
+html, body, [class*="css"] {
+    font-family: 'Rajdhani', sans-serif !important;
+}
+
+/* ---- SIDEBAR ---- */
 [data-testid="stSidebar"] {
-    background-color: #F2F4F6 !important; /* surface-container-low */
-    border-right: none !important; /* No-Line Rule */
+    background-color: #0D0D10 !important;
+    border-right: 1px solid #FF003C !important;
 }
-
-/* Base Body Logic / No 100% blacks */
-p, span, div, li {
-    font-family: 'Inter', sans-serif;
-    line-height: 1.5;
-    color: #191C1E;
+[data-testid="stSidebar"] * {
+    color: #CCCCCC !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.8rem;
 }
-
-/* --- 3. Typography: Editorial Authority --- */
-h1 {
-    font-family: 'Inter', sans-serif;
-    font-weight: 700;
-    font-size: 2.75rem !important; /* Display Scale */
-    color: #191C1E !important;
-    margin-bottom: 24px; /* Trust the gutters */
-}
-h2, h3, h4 {
-    font-family: 'Inter', sans-serif;
-    font-weight: 600;
-    color: #191C1E !important;
-    margin-top: 32px;
-}
-
-/* --- 4. Elevation & Depth: Primary Cards (Metrics, Plots, Alerts) --- */
-/* Surface Container Lowest */
-[data-testid="stMetric"], .stPlotlyChart, [data-testid="stAlert"] {
-    background-color: #FFFFFF !important;
-    border-radius: 8px !important; /* lg scale */
-    padding: 24px !important;
-    
-    /* The Layering Principle / Ambient Shadows (No-line rule) */
-    border: none !important;
-    box-shadow: 0px 12px 32px -4px rgba(25, 28, 30, 0.04) !important;
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
-
-/* "Anti-Divider Rule": space vertically via margins outside the card natively */
-
-/* --- Editorial Metric Target Typography --- */
-[data-testid="stMetricValue"] {
-    font-size: 2.75rem !important; /* display-md */
-    font-weight: 600;
-    color: #00236F !important; /* authoritative deep blue */
-    letter-spacing: -0.02rem;
-}
-/* Hierarchy as Navigation */
-[data-testid="stMetricLabel"] {
-    font-size: 0.75rem !important; /* label-md */
-    font-weight: 500;
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #FF003C !important;
+    letter-spacing: 0.1rem;
+    font-family: 'Teko', sans-serif !important;
+    font-size: 1rem !important;
     text-transform: uppercase;
-    letter-spacing: 0.05rem !important; /* generous spacing for meta-data */
-    color: #4A4A4A !important;
 }
 
-/* --- 5. Component Guidelines: Buttons (The "Command" Style) --- */
-.stButton > button {
-    /* Glass & Gradient / Primary Gradient */
-    background: linear-gradient(135deg, #00236F 0%, #1E3A8A 100%) !important;
+/* ---- GLOBAL TYPE ---- */
+h1, h2, h3, h4, h5 {
+    font-family: 'Teko', sans-serif !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
     color: #FFFFFF !important;
-    border: none !important;
-    border-radius: 8px !important; /* lg radius */
-    padding: 12px 24px !important;
-    font-weight: 500;
-    box-shadow: 0 4px 12px rgba(0, 35, 111, 0.1) !important;
-    transition: all 0.2s ease-in-out;
+    margin: 0 !important;
+}
+
+/* ---- TOP STATUS BAR ---- */
+.hud-top-bar {
+    background: #0D0D10;
+    border-bottom: 1px solid #FF003C;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1rem;
+    margin-bottom: 16px;
+}
+
+/* ---- METRIC CARDS ---- */
+[data-testid="stMetric"] {
+    background: #151518 !important;
+    border: 1px solid rgba(255, 0, 60, 0.35) !important;
+    border-radius: 0px !important;
+    padding: 14px 16px !important;
+    margin: 4px 0px !important;
+    position: relative;
+    box-shadow: inset 0 0 20px rgba(255, 0, 60, 0.04), 0 0 12px rgba(255, 0, 60, 0.06);
+}
+
+[data-testid="stMetric"]::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: #FF003C;
+}
+
+[data-testid="stMetricValue"] {
+    font-family: 'Teko', sans-serif !important;
+    font-size: 3rem !important;
+    font-weight: 600 !important;
+    color: #FF003C !important;
+    line-height: 1 !important;
+    text-shadow: 0 0 20px rgba(255, 0, 60, 0.5);
+}
+
+[data-testid="stMetricLabel"] {
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.65rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.12rem;
+    color: #888888 !important;
+}
+
+[data-testid="stMetricDelta"] {
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.75rem !important;
+}
+
+/* ---- ALERT BOXES / THREAT CARDS ---- */
+[data-testid="stAlert"] {
+    border-radius: 0px !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-left: 3px solid #FF003C !important;
+}
+
+/* ---- BUTTONS ---- */
+.stButton > button {
+    background: #FF003C !important;
+    color: #FFFFFF !important;
+    border: 1px solid #FF003C !important;
+    border-radius: 0px !important;
+    font-family: 'Teko', sans-serif !important;
+    font-size: 1.1rem !important;
+    letter-spacing: 0.1rem;
+    text-transform: uppercase;
+    padding: 8px 24px !important;
+    transition: all 0.15s ease;
+    box-shadow: 0 0 16px rgba(255, 0, 60, 0.4);
 }
 .stButton > button:hover {
-    box-shadow: 0 8px 24px rgba(0, 35, 111, 0.2) !important; /* Soft lift */
-    transform: translateY(-2px);
+    background: #CC0030 !important;
+    box-shadow: 0 0 28px rgba(255, 0, 60, 0.7) !important;
 }
 
-/* Toggle switches - tint glow */
-[data-testid="stCheckbox"] {
-    border-radius: 8px;
-    padding: 12px;
-    background-color: #F2F4F6;
+/* Secondary Buttons (Execute Action, Acknowledge) */
+.btn-secondary > button {
+    background: transparent !important;
+    color: #00D4FF !important;
+    border: 1px dashed #00D4FF !important;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2) !important;
 }
 
-/* Tabs: Secondary layout */
+/* ---- CHART WRAPPERS ---- */
+.stPlotlyChart {
+    background: #0D0D10;
+    border: 1px solid #222228;
+    border-radius: 0px;
+    padding: 0px;
+}
+
+/* ---- TABS ---- */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
-    gap: 32px; /* Assymetrical balance, whitespace */
-    border-bottom: 2px solid rgba(197, 197, 211, 0.15); /* Ghost Border Fallback */
+    background-color: #0D0D10;
+    border-bottom: 1px solid #FF003C;
+    gap: 0px;
+    padding: 0px;
 }
 [data-testid="stTabs"] [data-baseweb="tab"] {
-    font-weight: 500;
-    font-size: 0.875rem;
-    color: #4A4A4A;
-    padding-bottom: 12px;
-    border: none;
     background: transparent;
+    color: #666666;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1rem;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    border-right: 1px solid #222228;
+    border-radius: 0px;
 }
 [data-testid="stTabs"] [aria-selected="true"] {
-    color: #00236F !important;
-    border-bottom: 2px solid #00236F !important;
+    color: #FFFFFF !important;
+    background: rgba(255, 0, 60, 0.1) !important;
+    border-bottom: 2px solid #FF003C !important;
 }
 
-/* "Anti-Divider Rule": Replace line weights to extreme faint or wipe them */
+/* ---- SLIDERS ---- */
+[data-testid="stSlider"] {
+    padding: 8px 0px;
+}
+[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stThumbValue"] {
+    color: #FF003C !important;
+    font-family: 'Share Tech Mono', monospace !important;
+}
+div[data-baseweb="slider"] > div > div > div {
+    background: #FF003C !important;
+}
+
+/* ---- DIVIDERS ---- */
 hr {
-    border-top: 1px solid rgba(197, 197, 211, 0.15) !important; /* 15% Outline-variant */
-    margin: 48px 0px !important; /* Allow data to breathe */
+    border-top: 1px solid #222228 !important;
+    margin: 16px 0px !important;
 }
 
-/* Clean background for Plotly inside our card */
-.js-plotly-plot .plotly .bg {
-    fill: transparent !important;
+/* ---- DATAFRAMES ---- */
+[data-testid="stDataFrame"] {
+    border: 1px solid #222228;
+    border-radius: 0px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+}
+
+/* ---- TOGGLE SWITCHES ---- */
+[data-testid="stCheckbox"] span {
+    color: #FF003C !important;
+}
+
+/* ---- PROGRESS BARS ---- */
+[data-testid="stProgress"] > div > div {
+    background: #FF003C !important;
+    box-shadow: 0 0 8px rgba(255,0,60,0.5);
+}
+[data-testid="stProgress"] > div {
+    background: #222228 !important;
+}
+
+/* ---- CHAT INTERFACE ---- */
+[data-testid="stChatMessage"] {
+    background: #0D0D10 !important;
+    border: 1px solid #222228 !important;
+    border-radius: 0px !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.8rem !important;
+}
+
+/* ---- CUSTOM HUD PANEL CONTAINERS ---- */
+.hud-panel {
+    background: #151518;
+    border: 1px solid rgba(255, 0, 60, 0.3);
+    padding: 16px;
+    margin-bottom: 8px;
+    position: relative;
+}
+.hud-panel-blue {
+    background: #0D111E;
+    border: 1px dashed rgba(0, 212, 255, 0.4);
+    padding: 16px;
+    margin-bottom: 8px;
+}
+.hud-panel-yellow {
+    background: #14120A;
+    border: 1px solid rgba(251, 192, 45, 0.4);
+    padding: 16px;
+    margin-bottom: 8px;
+}
+.scan-line {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #FF003C, transparent);
+    margin: 8px 0;
+    opacity: 0.5;
+}
+.hud-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: #888888;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
+    margin-bottom: 4px;
+}
+.hud-value-red {
+    font-family: 'Teko', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 600;
+    color: #FF003C;
+    text-shadow: 0 0 20px rgba(255,0,60,0.5);
+    line-height: 1;
+}
+.hud-value-yellow {
+    font-family: 'Teko', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #FBC02D;
+    text-shadow: 0 0 10px rgba(251,192,45,0.4);
+}
+.hud-value-green {
+    font-family: 'Teko', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #00E676;
+    text-shadow: 0 0 10px rgba(0,230,118,0.4);
+}
+.hud-value-blue {
+    font-family: 'Teko', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #00D4FF;
+}
+.progress-bar-container {
+    width: 100%;
+    background: #222228;
+    height: 6px;
+    margin: 6px 0 2px 0;
+}
+.progress-bar-fill-red {
+    height: 6px;
+    background: #FF003C;
+    box-shadow: 0 0 8px rgba(255,0,60,0.5);
+}
+.progress-bar-fill-yellow {
+    height: 6px;
+    background: #FBC02D;
+    box-shadow: 0 0 8px rgba(251,192,45,0.4);
+}
+.benchmark-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    margin-top: 8px;
+}
+.benchmark-table th {
+    color: #555555;
+    text-align: left;
+    padding: 4px 8px;
+    border-bottom: 1px solid #222228;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+}
+.benchmark-table td {
+    padding: 6px 8px;
+    color: #AAAAAA;
+    border-bottom: 1px solid #1A1A1E;
+}
+.benchmark-table .optimized {
+    color: #00D4FF;
+    font-weight: bold;
+}
+.coordinate-display {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    color: #444444;
+    text-align: center;
+    margin-bottom: 4px;
+}
+.status-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    margin: 2px;
+}
+.chip-red { background: rgba(255,0,60,0.15); border: 1px solid #FF003C; color: #FF003C; }
+.chip-yellow { background: rgba(251,192,45,0.15); border: 1px solid #FBC02D; color: #FBC02D; }
+.chip-green { background: rgba(0,230,118,0.15); border: 1px solid #00E676; color: #00E676; }
+.action-required-badge {
+    background: #FF003C;
+    color: #FFFFFF;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    float: right;
 }

@@ -9,7 +9,7 @@ import streamlit as st
 from sklearn.ensemble import RandomForestClassifier
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions
-from modules import nvidia_api
+from modules import nvidia_api, groq_ai
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -425,6 +425,37 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# AUTO-INSIGHTS (Groq AI — instant analysis on load)
+# ═══════════════════════════════════════════════════════════════════════════════
+if groq_ai.is_available():
+    _insight_ctx = {
+        "Delay Risk":        f"{delay_risk:.1f}%",
+        "Demand Growth":     f"{growth:+.1f}%",
+        "Safety Stock":      f"{decision_outputs.safety_stock:,.0f} units",
+        "EOQ":               f"{decision_outputs.eoq:,.0f} units",
+        "Annual Savings":    f"${decision_outputs.savings_vs_current:,.0f}",
+        "Active Breaches":   active_breaches,
+        "Total Orders":      total_orders,
+        "Forecast Demand":   f"{next_week_demand:,}",
+    }
+    _severity_colors = {"HIGH": "#FF003C", "MEDIUM": "#FBC02D", "LOW": "#00D4FF"}
+    with st.spinner("Groq AI generating insights..."):
+        auto_insights = groq_ai.generate_auto_insights(_insight_ctx)
+
+    ins_cols = st.columns(len(auto_insights))
+    for col, ins in zip(ins_cols, auto_insights):
+        color = _severity_colors.get(ins["severity"], "#888")
+        col.markdown(f"""
+        <div style="background:#151518;border-top:2px solid {color};padding:12px 14px;
+                    font-family:'Share Tech Mono',monospace;font-size:0.72rem;">
+            <div style="color:{color};font-size:0.6rem;letter-spacing:0.1rem;margin-bottom:4px;">
+                AI INSIGHT {ins['number']} · {ins['severity']}
+            </div>
+            <div style="color:#CCCCCC;line-height:1.5;">{ins['text']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN LAYOUT: Map (left) | HUD Panels (right)
 # ═══════════════════════════════════════════════════════════════════════════════
 col_map, col_hud = st.columns([2, 1], gap="small")
@@ -759,28 +790,36 @@ with exp_chart:
         st.plotly_chart(fig, use_container_width=True)
 
 with exp_copilot:
-    with st.expander("🧠 SUPPLY CHAIN COPILOT — LLaMA-4-Scout (NVIDIA)", expanded=False):
-        st.markdown('<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">NVIDIA LLaMA-4-SCOUT 17B — LIVE AI ENGINE</div>', unsafe_allow_html=True)
-
-        # Build live context for the model
+    with st.expander("🧠 SUPPLY CHAIN COPILOT — Groq AI (LLaMA-3.3-70B)", expanded=False):
+        groq_status = "🟢 GROQ LIVE" if groq_ai.is_available() else "🟡 GROQ OFFLINE → NVIDIA FALLBACK"
+        st.markdown(
+            f'<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">'
+            f'{groq_status} · LLaMA-3.3-70B · CONTEXT-AWARE · REAL-TIME</div>',
+            unsafe_allow_html=True
+        )
         live_context = {
-            "Delay Risk": f"{delay_risk:.1f}%",
-            "Demand Forecast (next period)": f"{next_week_demand:,} units",
-            "Demand Growth": f"{growth:+.1f}%",
-            "Safety Stock Target": f"{decision_outputs.safety_stock:,.0f} units",
-            "EOQ":                 f"{decision_outputs.eoq:,.0f} units",
-            "Reorder Point":       f"{decision_outputs.reorder_point:,.0f} units",
-            "Annual Savings (EOQ)": f"${decision_outputs.savings_vs_current:,.0f}",
-            "Active Breaches":     active_breaches,
-            "System Status":       system_status,
-            "Critical Zones":      len(agreed_critical),
+            "Delay Risk":              f"{delay_risk:.1f}%",
+            "Demand Forecast":         f"{next_week_demand:,} units ({days}-day horizon)",
+            "Demand Growth":           f"{growth:+.1f}%",
+            "Safety Stock Target":     f"{decision_outputs.safety_stock:,.0f} units",
+            "EOQ":                     f"{decision_outputs.eoq:,.0f} units/order",
+            "Reorder Point":           f"{decision_outputs.reorder_point:,.0f} units",
+            "Lead Time Buffer":        f"+{decision_outputs.lead_time_buffer_days:.1f} days",
+            "Annual Cost Savings":     f"${decision_outputs.savings_vs_current:,.0f}",
+            "Active Breaches":         active_breaches,
+            "System Status":           system_status,
+            "Critical Zones":          len(agreed_critical),
+            "Service Level Target":    f"{service_level*100:.0f}%",
+            "Total Orders Analysed":   total_orders,
         }
-
         query = st.chat_input("Ask the AI about your supply chain...")
         if query:
             st.chat_message("user").write(query)
-            with st.spinner("LLaMA-4-Scout processing..."):
-                ai_response = nvidia_api.llama_copilot(query, live_context, stream=True)
+            with st.spinner("Groq LLaMA-3.3 analysing..."):
+                if groq_ai.is_available():
+                    ai_response = groq_ai.supply_chain_copilot(query, live_context)
+                else:
+                    ai_response = nvidia_api.llama_copilot(query, live_context, stream=True)
             st.chat_message("assistant").write(ai_response)
 
 # ═══════════════════════════════════════════════════════════════════════════════

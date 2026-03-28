@@ -16,6 +16,8 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 GEOLOCATION_PATH = "data/olist_geolocation_dataset.csv"
@@ -150,6 +152,58 @@ def run_clustering(
     n   = min(n_clusters, len(out))
     kmeans = KMeans(n_clusters=n, random_state=42, n_init=10)
     out["cluster"] = kmeans.fit_predict(out[["lat", "lon"]])
+    return out
+
+
+def isolation_forest_risk_scores(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Use Isolation Forest to score each geographic node for anomalousness
+    based on its spatial density relative to all other nodes.
+
+    Anomalous = isolated = higher risk (fewer neighbouring delivery nodes).
+
+    Adds columns:
+      - risk_score  : 0–100, higher = more anomalous / isolated
+      - risk_level  : 'Safe' | 'Warning' | 'Critical'
+      - if_score    : raw Isolation Forest decision score (negative = more anomalous)
+
+    The Isolation Forest is trained on [lat, lon] coordinates.
+    Points in dense urban clusters score low (Safe).
+    Points in sparse, isolated zones score high (Critical).
+    """
+    out = df.copy()
+
+    # Scale coordinates so lat and lon contribute equally
+    scaler = StandardScaler()
+    coords = scaler.fit_transform(out[["lat", "lon"]])
+
+    # contamination = expected fraction of anomalous / isolated nodes
+    iso = IsolationForest(
+        n_estimators=200,
+        contamination=0.10,   # ~10% of nodes flagged as high-risk
+        random_state=42,
+        n_jobs=-1,
+    )
+    iso.fit(coords)
+
+    # decision_function: more negative = more anomalous
+    raw_scores = iso.decision_function(coords)
+
+    # Invert and normalise to 0–100 (high = risky)
+    inverted = -raw_scores
+    lo, hi   = inverted.min(), inverted.max()
+    if hi > lo:
+        normalised = (inverted - lo) / (hi - lo) * 100
+    else:
+        normalised = np.full(len(out), 50.0)
+
+    out["if_score"]   = raw_scores
+    out["risk_score"] = normalised.round(1)
+    out["risk_level"] = pd.cut(
+        out["risk_score"],
+        bins=[-1, 70, 90, 100],
+        labels=["Safe", "Warning", "Critical"],
+    )
     return out
 
 

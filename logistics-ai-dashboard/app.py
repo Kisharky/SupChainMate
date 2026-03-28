@@ -433,12 +433,9 @@ with col_map:
     geo_df = geo_df.copy()
     geo_df = network.run_clustering(geo_df[["lat", "lon"]], n_clusters=n_clusters)
 
-    np.random.seed(42)
-    geo_df["risk_score"] = np.random.uniform(0, 100, size=len(geo_df))
-    geo_df["risk_level"] = pd.cut(
-        geo_df["risk_score"], bins=[-1, 70, 90, 100],
-        labels=["Safe", "Warning", "Critical"]
-    )
+    # ── Isolation Forest anomaly scoring ──────────────────────────────────────
+    # Replaces random risk scores — isolated nodes = genuinely higher delivery risk
+    geo_df = network.isolation_forest_risk_scores(geo_df)
 
     # Haversine centroid metrics
     centroid_stats = network.cluster_centroid_distances(geo_df)

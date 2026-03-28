@@ -22,6 +22,14 @@ def daily_demand(orders_df: pd.DataFrame) -> pd.DataFrame:
     )
     g.columns = ["ds", "y"]
     g["ds"] = pd.to_datetime(g["ds"])
+    
+    # Add synthetic external signal (e.g., Marketing Event / Holiday)
+    import numpy as np
+    np.random.seed(42)
+    g['external_signal'] = np.random.choice([0, 1], size=len(g), p=[0.95, 0.05])
+    # Amplify historical demand when signal is present so the model learns it
+    g.loc[g['external_signal'] == 1, 'y'] = g.loc[g['external_signal'] == 1, 'y'] * 1.5 
+    
     return g.sort_values("ds").reset_index(drop=True)
 
 
@@ -31,6 +39,7 @@ def fit_prophet_model(daily_df: pd.DataFrame) -> Prophet:
         weekly_seasonality=True,
         yearly_seasonality=True,
     )
+    model.add_regressor('external_signal')
     model.fit(daily_df)
     return model
 

@@ -1,0 +1,10 @@
+[theme]
+# primary-container: #1E3A8A / primary: #00236F
+primaryColor="#00236F"
+# surface: #F7F9FB (Base layer)
+backgroundColor="#F7F9FB"
+# surface-container-low: #F2F4F6 (Sidebar/Secondary)
+secondaryBackgroundColor="#F2F4F6"
+# on-surface: #191C1E
+textColor="#191C1E"
+font="sans serif"

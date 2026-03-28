@@ -1,0 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* The Intelligence Layer: Formal Consulting Theme */
+
+/* Clean standard Streamlit wrapper elements */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* --- 2. Colors & Surface Philosophy --- */
+/* Base body - The Foundation */
+.stApp {
+    font-family: 'Inter', sans-serif !important;
+    background-color: #F7F9FB; /* surface */
+    color: #191C1E; /* on-surface */
+}
+
+/* Secondary Layouts / Nesting */
+[data-testid="stSidebar"] {
+    background-color: #F2F4F6 !important; /* surface-container-low */
+    border-right: none !important; /* No-Line Rule */
+}
+
+/* Base Body Logic / No 100% blacks */
+p, span, div, li {
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    color: #191C1E;
+}
+
+/* --- 3. Typography: Editorial Authority --- */
+h1 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 2.75rem !important; /* Display Scale */
+    color: #191C1E !important;
+    margin-bottom: 24px; /* Trust the gutters */
+}
+h2, h3, h4 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    color: #191C1E !important;
+    margin-top: 32px;
+}
+
+/* --- 4. Elevation & Depth: Primary Cards (Metrics, Plots, Alerts) --- */
+/* Surface Container Lowest */
+[data-testid="stMetric"], .stPlotlyChart, [data-testid="stAlert"] {
+    background-color: #FFFFFF !important;
+    border-radius: 8px !important; /* lg scale */
+    padding: 24px !important;
+    
+    /* The Layering Principle / Ambient Shadows (No-line rule) */
+    border: none !important;
+    box-shadow: 0px 12px 32px -4px rgba(25, 28, 30, 0.04) !important;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+/* "Anti-Divider Rule": space vertically via margins outside the card natively */
+
+/* --- Editorial Metric Target Typography --- */
+[data-testid="stMetricValue"] {
+    font-size: 2.75rem !important; /* display-md */
+    font-weight: 600;
+    color: #00236F !important; /* authoritative deep blue */
+    letter-spacing: -0.02rem;
+}
+/* Hierarchy as Navigation */
+[data-testid="stMetricLabel"] {
+    font-size: 0.75rem !important; /* label-md */
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem !important; /* generous spacing for meta-data */
+    color: #4A4A4A !important;
+}
+
+/* --- 5. Component Guidelines: Buttons (The "Command" Style) --- */
+.stButton > button {
+    /* Glass & Gradient / Primary Gradient */
+    background: linear-gradient(135deg, #00236F 0%, #1E3A8A 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important; /* lg radius */
+    padding: 12px 24px !important;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 35, 111, 0.1) !important;
+    transition: all 0.2s ease-in-out;
+}
+.stButton > button:hover {
+    box-shadow: 0 8px 24px rgba(0, 35, 111, 0.2) !important; /* Soft lift */
+    transform: translateY(-2px);
+}
+
+/* Toggle switches - tint glow */
+[data-testid="stCheckbox"] {
+    border-radius: 8px;
+    padding: 12px;
+    background-color: #F2F4F6;
+}
+
+/* Tabs: Secondary layout */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    gap: 32px; /* Assymetrical balance, whitespace */
+    border-bottom: 2px solid rgba(197, 197, 211, 0.15); /* Ghost Border Fallback */
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: #4A4A4A;
+    padding-bottom: 12px;
+    border: none;
+    background: transparent;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+    color: #00236F !important;
+    border-bottom: 2px solid #00236F !important;
+}
+
+/* "Anti-Divider Rule": Replace line weights to extreme faint or wipe them */
+hr {
+    border-top: 1px solid rgba(197, 197, 211, 0.15) !important; /* 15% Outline-variant */
+    margin: 48px 0px !important; /* Allow data to breathe */
+}
+
+/* Clean background for Plotly inside our card */
+.js-plotly-plot .plotly .bg {
+    fill: transparent !important;
+}

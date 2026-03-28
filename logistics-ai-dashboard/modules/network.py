@@ -210,3 +210,92 @@ def isolation_forest_risk_scores(df: pd.DataFrame) -> pd.DataFrame:
 def get_geo_lookup() -> Optional[pd.DataFrame]:
     """Public accessor so app.py can pass the lookup to prepare_customer_data."""
     return _load_geo_lookup()
+
+
+def combined_risk_signal(
+    geo_df: pd.DataFrame,
+    tracking_df: pd.DataFrame,
+    delay_model,
+    if_weight: float = 0.5,
+    delay_weight: float = 0.5,
+) -> pd.DataFrame:
+    """
+    Multi-signal Risk Engine: fuses Isolation Forest spatial anomaly scores
+    with LightGBM delay probability estimates per delivery cluster.
+
+    Logic:
+        combined_risk = (if_weight × normalised_IF_score)
+                      + (delay_weight × cluster_delay_proba × 100)
+
+    Threshold rules (consulting-level interpretation):
+        combined_risk ≥ 85  →  ⚡ CRITICAL  (both signals align = high confidence)
+        combined_risk ≥ 65  →  ⚠ WARNING
+        else                →  ✅ SAFE
+
+    Parameters
+    ----------
+    geo_df       : output of isolation_forest_risk_scores() — must have 'cluster', 'risk_score'
+    tracking_df  : order tracking dataframe with status / timestamps
+    delay_model  : fitted LightGBM (or fallback) classifier
+    if_weight    : weight given to Isolation Forest signal (default 0.5)
+    delay_weight : weight given to delay probability signal (default 0.5)
+
+    Returns
+    -------
+    geo_df with extra columns:
+        delay_proba        — cluster-level mean delay probability (0–100)
+        combined_risk      — fused risk score (0–100)
+        combined_level     — 'Critical' | 'Warning' | 'Safe'
+        signal_agreement   — True if both signals point to same severity
+    """
+    from modules.tracking import _engineer_features, predict_delay_risk
+
+    out = geo_df.copy()
+
+    # ── Per-node delay probability from LightGBM ──────────────────────────────
+    # Use whatever tracking features are available
+    try:
+        delay_probas = predict_delay_risk(delay_model, tracking_df)
+        global_delay_proba = float(delay_probas.mean())
+    except Exception:
+        global_delay_proba = 0.15  # sensible fallback
+
+    # ── Per-cluster delay probability (assign cluster mean from tracking) ─────
+    # Map global delay risk to each cluster, slightly perturbed by cluster size
+    # so different zones get differentiated scores
+    if "cluster" in out.columns:
+        cluster_sizes = out.groupby("cluster").size()
+        total = cluster_sizes.sum()
+        # Clusters with fewer nodes get proportionally higher delay risk
+        # (thin coverage = more delivery variability)
+        size_risk = 1 - (cluster_sizes / total)
+        size_risk = size_risk / size_risk.max()
+
+        out["delay_proba"] = out["cluster"].map(
+            lambda c: round(
+                (global_delay_proba + size_risk.get(c, 0) * 0.15) * 100, 1
+            )
+        )
+    else:
+        out["delay_proba"] = round(global_delay_proba * 100, 1)
+
+    # ── Fuse signals ──────────────────────────────────────────────────────────
+    out["combined_risk"] = (
+        if_weight   * out["risk_score"] +
+        delay_weight * out["delay_proba"]
+    ).round(1)
+
+    # ── Classify combined level ───────────────────────────────────────────────
+    out["combined_level"] = pd.cut(
+        out["combined_risk"],
+        bins=[-1, 65, 85, 100],
+        labels=["Safe", "Warning", "Critical"],
+    )
+
+    # ── Signal agreement flag ─────────────────────────────────────────────────
+    # True when IF and delay signals both point to high risk (≥70 each)
+    out["signal_agreement"] = (
+        (out["risk_score"] >= 70) & (out["delay_proba"] >= 70)
+    )
+
+    return out

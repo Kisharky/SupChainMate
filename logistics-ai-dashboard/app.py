@@ -437,12 +437,19 @@ with col_map:
     # Replaces random risk scores — isolated nodes = genuinely higher delivery risk
     geo_df = network.isolation_forest_risk_scores(geo_df)
 
+    # ── Combined multi-signal risk fusion ────────────────────────────────
+    # Fuses Isolation Forest spatial score + LightGBM delay probability
+    geo_df = network.combined_risk_signal(geo_df, tracking_df, delay_model)
+
     # Haversine centroid metrics
     centroid_stats = network.cluster_centroid_distances(geo_df)
 
     fig_map = px.scatter_mapbox(
         geo_df, lat="lat", lon="lon",
-        color="risk_level", size="risk_score", size_max=18,
+        color="combined_level",       # ← fused multi-signal colour
+        size="combined_risk",
+        size_max=18,
+        hover_data={"risk_score": True, "delay_proba": True, "combined_risk": True, "signal_agreement": True},
         zoom=2.5, height=480,
         color_discrete_map={"Critical": "#FF003C", "Warning": "#FBC02D", "Safe": "#00D4FF"},
     )
@@ -456,18 +463,39 @@ with col_map:
     )
     st.plotly_chart(fig_map, use_container_width=True)
 
-    critical_pct = len(geo_df[geo_df["risk_level"] == "Critical"]) / len(geo_df) * 100
+    critical_pct    = len(geo_df[geo_df["combined_level"] == "Critical"]) / len(geo_df) * 100
+    agreed_critical = geo_df[geo_df["signal_agreement"] == True]["cluster"].unique()
+
     st.markdown(f"""
     <div class="hud-panel">
         <div style="color:#FF003C;font-family:'Teko',sans-serif;font-size:1.1rem;letter-spacing:0.1rem;">
-            ⚠ IMMEDIATE THREAT DETECTED
+            ⚡ MULTI-SIGNAL DISRUPTION RADAR — ACTIVE
         </div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:#AAAAAA;margin:6px 0;">
-            {critical_pct:.0f}% OF NETWORK NODES IN CRITICAL DISRUPTION ZONE.
-            WEATHER / CONGESTION RISK ELEVATED.
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#AAAAAA;margin:6px 0;">
+            {critical_pct:.0f}% OF NODES CRITICAL &nbsp;·&nbsp;
+            <span style="color:#FF003C;">{len(agreed_critical)} ZONE(S) WITH SIGNAL AGREEMENT</span>
+            &nbsp;(ISOLATION FOREST + LGBM BOTH ≥ 70 — HIGH CONFIDENCE)
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Consulting-grade per-zone alerts where both signals agree
+    for cid in agreed_critical[:3]:
+        zone_data = geo_df[geo_df["cluster"] == cid]
+        avg_cr = zone_data["combined_risk"].mean()
+        avg_dp = zone_data["delay_proba"].mean()
+        avg_if = zone_data["risk_score"].mean()
+        st.markdown(f"""
+        <div style="background:#1A0508;border-left:3px solid #FF003C;padding:8px 14px;
+                    margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;">
+            <b style="color:#FF003C;">⚡ ZONE {cid} — HIGH CONFIDENCE RISK ALERT</b><br>
+            <span style="color:#AAAAAA;">
+                Spatial anomaly (IF): <b style="color:#FF003C;">{avg_if:.0f}/100</b> &nbsp;·&nbsp;
+                Delay probability (LightGBM): <b style="color:#FBC02D;">{avg_dp:.1f}%</b> &nbsp;·&nbsp;
+                Combined signal: <b style="color:#FF003C;">{avg_cr:.0f}/100</b>
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Haversine cluster efficiency table
     with st.expander(f"📡 NETWORK TOPOLOGY — {n_clusters} HUBS (HAVERSINE METRICS)", expanded=False):

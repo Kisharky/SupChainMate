@@ -9,6 +9,7 @@ import streamlit as st
 from sklearn.ensemble import RandomForestClassifier
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions
+from modules import nvidia_api
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -509,15 +510,29 @@ with col_map:
     st.markdown(f"""
     <div class="hud-panel-yellow">
         <div style="color:#FBC02D;font-family:'Teko',sans-serif;font-size:1.1rem;letter-spacing:0.1rem;">
-            ★ OPTIMIZATION READY
+            ★ NVIDIA cuOPT — ROUTE OPTIMIZATION
         </div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#AAAAAA;margin:4px 0 10px 0;">
-            AI IDENTIFIED ${savings:,.0f} SAVINGS ON ACTIVE ROUTES.
+            REAL VRP SOLVER · HAVERSINE COST MATRIX · {n_clusters} DELIVERY ZONES
         </div>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("⚡ EXECUTE OPTIMIZATION", key="exec_opt"):
-        st.success("✅ ROUTE OPTIMIZATION DISPATCHED")
+    if st.button("⚡ EXECUTE cuOPT OPTIMIZATION", key="exec_opt"):
+        with st.spinner("NVIDIA cuOpt solving VRP..."):
+            opt_result = nvidia_api.cuopt_optimize(geo_df, n_vehicles=max(2, n_clusters // 2))
+        if opt_result.get("success"):
+            st.success(f"✅ {opt_result['summary']}")
+            if opt_result.get("savings_km", 0) > 0:
+                st.markdown(f"""
+                <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;
+                            color:#00E676;padding:6px 0;">
+                    TOTAL ROUTE: {opt_result.get('total_cost_km',0):,.0f} KM &nbsp;·&nbsp;
+                    NAIVE BASELINE: {opt_result.get('naive_cost_km',0):,.0f} KM &nbsp;·&nbsp;
+                    SAVINGS: {opt_result.get('savings_km',0):,.0f} KM ({opt_result.get('savings_pct',0):.1f}%)
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.error(opt_result.get("summary", "cuOpt error"))
 
 with col_hud:
     risk_label  = "EXTREME" if delay_risk > 25 else ("CRITICAL" if delay_risk > 15 else "MODERATE")
@@ -744,17 +759,29 @@ with exp_chart:
         st.plotly_chart(fig, use_container_width=True)
 
 with exp_copilot:
-    with st.expander("🧠 SUPPLY CHAIN COPILOT", expanded=False):
-        st.markdown('<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">AI DIRECTIVE ENGINE V2.1 — READY</div>', unsafe_allow_html=True)
-        query = st.chat_input("QUERY THE AI SYSTEM...")
+    with st.expander("🧠 SUPPLY CHAIN COPILOT — LLaMA-4-Scout (NVIDIA)", expanded=False):
+        st.markdown('<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">NVIDIA LLaMA-4-SCOUT 17B — LIVE AI ENGINE</div>', unsafe_allow_html=True)
+
+        # Build live context for the model
+        live_context = {
+            "Delay Risk": f"{delay_risk:.1f}%",
+            "Demand Forecast (next period)": f"{next_week_demand:,} units",
+            "Demand Growth": f"{growth:+.1f}%",
+            "Safety Stock Target": f"{decision_outputs.safety_stock:,.0f} units",
+            "EOQ":                 f"{decision_outputs.eoq:,.0f} units",
+            "Reorder Point":       f"{decision_outputs.reorder_point:,.0f} units",
+            "Annual Savings (EOQ)": f"${decision_outputs.savings_vs_current:,.0f}",
+            "Active Breaches":     active_breaches,
+            "System Status":       system_status,
+            "Critical Zones":      len(agreed_critical),
+        }
+
+        query = st.chat_input("Ask the AI about your supply chain...")
         if query:
             st.chat_message("user").write(query)
-            st.chat_message("assistant").write(
-                f"ANALYZING: '{query.upper()}'\n\n"
-                "RECOMMENDATION: Increase lead-time buffers +2 days across upstream nodes. "
-                f"Current delay risk at {delay_risk:.1f}% — reroute via secondary carriers. "
-                "Confidence: 91%."
-            )
+            with st.spinner("LLaMA-4-Scout processing..."):
+                ai_response = nvidia_api.llama_copilot(query, live_context, stream=True)
+            st.chat_message("assistant").write(ai_response)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENTERPRISE REPORTING LAYER

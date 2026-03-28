@@ -730,3 +730,228 @@ with exp_copilot:
                 f"Current delay risk at {delay_risk:.1f}% — reroute via secondary carriers. "
                 "Confidence: 91%."
             )
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENTERPRISE REPORTING LAYER
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+st.markdown("""
+<div style="font-family:'Teko',sans-serif;font-size:1.6rem;letter-spacing:0.12rem;
+            text-transform:uppercase;color:#FFFFFF;padding:8px 0;border-bottom:1px solid #333340;
+            margin-bottom:16px;">
+    ◈ ENTERPRISE REPORTING LAYER
+    <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#666;margin-left:12px;">
+        STRUCTURED TABLES · EXPORTS · EXECUTIVE REPORT
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
+rep1, rep2 = st.columns(2)
+
+# ── Zone Risk Intelligence Table ───────────────────────────────────────────────
+with rep1:
+    with st.expander("📡 ZONE RISK INTELLIGENCE TABLE", expanded=True):
+        if "cluster" in geo_df.columns and "risk_score" in geo_df.columns:
+            zone_summary = (
+                geo_df.groupby("cluster")
+                .agg(
+                    Customers=("lat", "count"),
+                    Avg_Risk_Score=("risk_score", "mean"),
+                    Max_Risk_Score=("risk_score", "max"),
+                )
+                .reset_index()
+                .rename(columns={"cluster": "Zone"})
+                .round(1)
+            )
+            zone_summary["Risk Level"] = zone_summary["Avg_Risk_Score"].apply(
+                lambda s: "🔴 CRITICAL" if s > 90 else ("🟡 WARNING" if s > 70 else "🟢 SAFE")
+            )
+            zone_summary["Action"] = zone_summary["Avg_Risk_Score"].apply(
+                lambda s: "Reroute shipments" if s > 90 else ("Monitor closely" if s > 70 else "No action required")
+            )
+            st.dataframe(
+                zone_summary[["Zone", "Customers", "Avg_Risk_Score", "Risk Level", "Action"]],
+                use_container_width=True, hide_index=True
+            )
+            st.download_button(
+                "⇩ EXPORT ZONE TABLE (CSV)",
+                data=zone_summary.to_csv(index=False).encode(),
+                file_name="supchainmate_zone_risk.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+# ── Inventory Decision Table ───────────────────────────────────────────────────
+with rep2:
+    with st.expander("📦 INVENTORY DECISION TABLE", expanded=True):
+        inventory_table = pd.DataFrame({
+            "Parameter":   ["Safety Stock", "EOQ (Order Qty)", "Reorder Point",
+                            "Lead Time Buffer", "Avg Daily Demand", "Demand Std Dev",
+                            "Service Level", "Annual Demand", "Holding Cost (Opt.)",
+                            "Ordering Cost (Opt.)", "Total Cost (Opt.)", "Annual Savings"],
+            "Value":       [
+                f"{decision_outputs.safety_stock:,.0f} units",
+                f"{decision_outputs.eoq:,.0f} units",
+                f"{decision_outputs.reorder_point:,.0f} units",
+                f"+{decision_outputs.lead_time_buffer_days:.1f} days",
+                f"{demand_profile.avg_daily_demand:,.1f} units/day",
+                f"{demand_profile.std_daily_demand:,.1f} units/day",
+                f"{service_level*100:.0f}%  (Z={decision_outputs.z_value})",
+                f"{demand_profile.annual_demand:,.0f} units/yr",
+                f"${decision_outputs.holding_cost_optimized:,.0f}/yr",
+                f"${decision_outputs.ordering_cost_annual:,.0f}/yr",
+                f"${decision_outputs.total_optimized_cost:,.0f}/yr",
+                f"${decision_outputs.savings_vs_current:,.0f}/yr",
+            ],
+            "Status": [
+                "▲ Action" if decision_outputs.safety_stock_delta_pct > 0 else "▼ Reduce",
+                "Optimized", "Set", "Add Buffer", "Stable", "Monitored",
+                "Target", "Annual", "Optimized", "Optimized", "Final", "Realised",
+            ],
+        })
+        st.dataframe(inventory_table, use_container_width=True, hide_index=True)
+        st.download_button(
+            "⇩ EXPORT INVENTORY PLAN (CSV)",
+            data=inventory_table.to_csv(index=False).encode(),
+            file_name="supchainmate_inventory_plan.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+# ── Forecast Export ────────────────────────────────────────────────────────────
+st.divider()
+exp_exports, exp_report = st.columns([1, 2])
+
+with exp_exports:
+    st.markdown("<div class='hud-label' style='margin-bottom:8px;'>EXPORT BUNDLE</div>", unsafe_allow_html=True)
+
+    # Forecast data
+    forecast_export = forecast_df[["ds", "yhat", "yhat_lower", "yhat_upper"]].copy()
+    forecast_export.columns = ["Date", "Forecast", "Lower_Bound", "Upper_Bound"]
+    st.download_button(
+        "⇩ FORECAST DATA (CSV)",
+        data=forecast_export.to_csv(index=False).encode(),
+        file_name="supchainmate_forecast.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    # KPI Summary
+    kpi_summary = pd.DataFrame({
+        "KPI":   ["Total Forecast Demand", "Avg Daily Demand", "Demand Growth %",
+                  "Delay Risk %", "Safety Stock", "EOQ", "Reorder Point",
+                  "Current Cost", "Optimised Cost", "Annual Savings",
+                  "Active Breaches", "System Status"],
+        "Value": [next_week_demand, round(avg_daily, 1), f"{growth:.1f}%",
+                  f"{delay_risk:.1f}%", decision_outputs.safety_stock,
+                  decision_outputs.eoq, decision_outputs.reorder_point,
+                  f"${current_cost:,.0f}", f"${optimized_cost:,.0f}",
+                  f"${savings:,.0f}", active_breaches, system_status],
+    })
+    st.download_button(
+        "⇩ KPI SUMMARY (CSV)",
+        data=kpi_summary.to_csv(index=False).encode(),
+        file_name="supchainmate_kpi_summary.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    st.download_button(
+        "⇩ EXECUTION PLAN (CSV)",
+        data=exec_plan_df.to_csv(index=False).encode(),
+        file_name="supchainmate_execution_plan.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+# ── Executive Report ────────────────────────────────────────────────────────────
+with exp_report:
+    with st.expander("📄 EXECUTIVE REPORT — AI INTELLIGENCE SUMMARY", expanded=True):
+        top_rec = decision_outputs.recommendations[0] if decision_outputs.recommendations else {}
+        risk_banner = "🔴 HIGH RISK" if delay_risk > 15 else ("🟡 MODERATE" if delay_risk > 8 else "🟢 NOMINAL")
+
+        st.markdown(f"""
+<div style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;
+            line-height:1.9;color:#CCCCCC;background:#0D0D10;
+            border:1px solid #222228;padding:20px;border-top:2px solid #FF003C;">
+
+<div style="color:#FFFFFF;font-family:'Teko',sans-serif;font-size:1.3rem;
+            letter-spacing:0.1rem;margin-bottom:12px;">
+    SUPCHAINMATE EXECUTIVE INTELLIGENCE REPORT
+</div>
+
+<div style="color:#888;font-size:0.65rem;letter-spacing:0.08rem;margin-bottom:16px;">
+    GENERATED: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')} UTC &nbsp;|&nbsp;
+    SOURCE: {'DEMO DATASET' if st.session_state.demo_mode else 'USER DATA'} &nbsp;|&nbsp;
+    ORDERS ANALYSED: {total_orders:,}
+</div>
+
+<div style="color:#FF003C;font-size:0.65rem;letter-spacing:0.1rem;margin-bottom:4px;">■ EXECUTIVE SUMMARY</div>
+The system has analysed <b style="color:#FFF;">{total_orders:,} orders</b> spanning
+<b style="color:#FFF;">{len(daily_df)} days</b>.
+Forecast demand over the next <b style="color:#FFF;">{days} days</b> is
+<b style="color:#FFF;">{next_week_demand:,} units</b>
+({'+' if growth >= 0 else ''}{growth:.1f}% vs baseline).
+Overall system risk posture: <b style="color:#FF003C;">{risk_banner}</b>.
+
+<br><br>
+
+<div style="color:#FF003C;font-size:0.65rem;letter-spacing:0.1rem;margin-bottom:4px;">■ KEY RISKS</div>
+• Delay risk at <b style="color:#FF003C;">{delay_risk:.1f}%</b>
+  — {f"immediate intervention required." if delay_risk > 15 else "within acceptable limits."}<br>
+• {f"Demand growth of {growth:.1f}% signals possible stockout pressure." if growth > 10
+  else f"Demand contraction of {abs(growth):.1f}% — overstock risk." if growth < -10
+  else "Demand is stable — standard replenishment applies."}<br>
+• <b style="color:#FFF;">{active_breaches} active breach(es)</b> detected across monitored KPIs.
+
+<br><br>
+
+<div style="color:#FF003C;font-size:0.65rem;letter-spacing:0.1rem;margin-bottom:4px;">■ DECISION ENGINE RECOMMENDATIONS</div>
+{"".join([f"• <b style='color:#FFF;'>[{r['impact']}] {r['category']}:</b> {r['action']}<br>" for r in decision_outputs.recommendations])}
+
+<br>
+
+<div style="color:#FF003C;font-size:0.65rem;letter-spacing:0.1rem;margin-bottom:4px;">■ FINANCIAL IMPACT</div>
+• Optimised total inventory cost: <b style="color:#00E676;">${decision_outputs.total_optimized_cost:,.0f}/yr</b><br>
+• Estimated annual savings vs current strategy: <b style="color:#00E676;">${decision_outputs.savings_vs_current:,.0f}</b><br>
+• Safety stock target: <b style="color:#FFF;">{decision_outputs.safety_stock:,.0f} units</b>
+  @ {service_level*100:.0f}% service level
+
+<br><br>
+
+<div style="color:#888;font-size:0.6rem;border-top:1px solid #222228;padding-top:8px;">
+    Generated by SupChainMate Autonomous Decision Engine · 
+    For integration with Power BI or Excel, use the Export Bundle above.
+</div>
+
+</div>
+        """, unsafe_allow_html=True)
+
+        # Export report as plain-text CSV
+        exec_report_df = pd.DataFrame({
+            "Section": ["Summary", "Summary", "Summary",
+                        "Risk", "Risk", "Risk",
+                        "Decision", "Decision", "Decision", "Decision",
+                        "Financial", "Financial", "Financial"],
+            "Item": [
+                "Total Orders Analysed", "Forecast Demand (Next Period)", "Demand Growth %",
+                "Delay Risk %", "Active Breaches", "System Status",
+                "Safety Stock (units)", "EOQ (units)", "Reorder Point (units)", "Lead Time Buffer (days)",
+                "Optimised Total Cost ($/yr)", "Annual Savings ($/yr)", "Service Level Target",
+            ],
+            "Value": [
+                total_orders, next_week_demand, f"{growth:.1f}%",
+                f"{delay_risk:.1f}%", active_breaches, system_status,
+                decision_outputs.safety_stock, decision_outputs.eoq,
+                decision_outputs.reorder_point, decision_outputs.lead_time_buffer_days,
+                decision_outputs.total_optimized_cost, decision_outputs.savings_vs_current,
+                f"{service_level*100:.0f}%",
+            ],
+        })
+        st.download_button(
+            "⇩ EXPORT EXECUTIVE REPORT (CSV)",
+            data=exec_report_df.to_csv(index=False).encode(),
+            file_name="supchainmate_executive_report.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )

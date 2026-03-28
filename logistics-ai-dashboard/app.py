@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from sklearn.ensemble import RandomForestClassifier
 
-from modules import forecast, network, optimization, tracking, ingestion
+from modules import forecast, network, optimization, tracking, ingestion, decisions
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -314,6 +314,19 @@ with st.sidebar:
     n_clusters     = st.slider("NETWORK HUBS (CLUSTERS)", 2, 12, 5,
                                help="What if we opened N hubs instead? Reconfigures the network instantly.")
     st.divider()
+    st.markdown("<div class='hud-label'>DECISION ENGINE PARAMS</div>", unsafe_allow_html=True)
+    service_level  = st.select_slider(
+        "SERVICE LEVEL TARGET",
+        options=[0.80, 0.85, 0.90, 0.95, 0.98, 0.99],
+        value=0.95,
+        format_func=lambda x: f"{int(x*100)}%"
+    )
+    avg_lead_time  = st.slider("AVG LEAD TIME (DAYS)", 1, 30, 7)
+    std_lead_time  = st.slider("LEAD TIME STD DEV (DAYS)", 0, 10, 2)
+    unit_cost      = st.number_input("UNIT COST ($)", min_value=1.0, value=15.0, step=1.0)
+    ordering_cost  = st.number_input("ORDER COST ($)", min_value=10.0, value=200.0, step=10.0)
+    holding_rate   = st.slider("HOLDING RATE (%/YR)", 10, 40, 25) / 100.0
+    st.divider()
     mode_label = "DEMO DATASET" if st.session_state.demo_mode else "USER DATA"
     st.markdown(f"<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#666;'>SOURCE: {mode_label}</div>", unsafe_allow_html=True)
     if st.button("🔄 LOAD NEW DATA"):
@@ -338,6 +351,19 @@ future["external_signal"] = future["external_signal"].fillna(1 if simulate_event
 forecast_df               = forecast_obj.predict(future)
 insights                  = forecast.forecast_insights(forecast_df, daily_df, horizon_days=days)
 
+# ── Decision Engine ────────────────────────────────────────────────────────────
+demand_profile = decisions.build_demand_profile(
+    daily_df, forecast_df, horizon_days=days,
+    avg_lead_time_days=avg_lead_time,
+    std_lead_time_days=std_lead_time,
+)
+decision_outputs = decisions.run_decision_engine(
+    demand_profile,
+    service_level=service_level,
+    unit_cost=unit_cost,
+    holding_rate=holding_rate,
+    ordering_cost=ordering_cost,
+)
 avg_daily        = float(daily_df["y"].mean())
 growth           = ((float(forecast_df["yhat"].tail(days).mean()) - avg_daily) / avg_daily * 100.0) if avg_daily > 0 else 0.0
 next_week_demand = insights["next_week_total"]
@@ -546,6 +572,89 @@ with col_hud:
             st.success("CONFIRMED — EXECUTING")
     with col_warn:
         st.markdown('<div style="background:#FF003C;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-top:2px;">⚠</div>', unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DECISION ENGINE SECTION
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+st.markdown("""
+<div style="font-family:'Teko',sans-serif;font-size:1.6rem;letter-spacing:0.12rem;
+            text-transform:uppercase;color:#FFFFFF;padding:8px 0;border-bottom:1px solid #FF003C;
+            margin-bottom:16px;">
+    ⌁ SUPPLY CHAIN DECISION ENGINE
+    <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#666;margin-left:12px;">
+        SAFETY STOCK · EOQ · REORDER POINT · LEAD TIME BUFFER
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
+de1, de2, de3, de4 = st.columns(4)
+impact_color = {"CRITICAL": "#FF003C", "HIGH": "#FF003C", "MEDIUM": "#FBC02D", "LOW": "#00E676"}
+
+de1.markdown(f"""
+<div class="hud-panel">
+    <div class="hud-label">SAFETY STOCK</div>
+    <div class="hud-value-red">{decision_outputs.safety_stock:,.0f}</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#888;margin-top:4px;">
+        UNITS @ {service_level*100:.0f}% SVC LEVEL (Z={decision_outputs.z_value})
+    </div>
+    <div style="color:{'#00E676' if decision_outputs.safety_stock_delta_pct >= 0 else '#FF003C'};
+                font-family:'Share Tech Mono',monospace;font-size:0.7rem;margin-top:6px;">
+        {'▲' if decision_outputs.safety_stock_delta_pct >= 0 else '▼'}
+        {abs(decision_outputs.safety_stock_delta_pct):.0f}% vs CURRENT
+    </div>
+</div>""", unsafe_allow_html=True)
+
+de2.markdown(f"""
+<div class="hud-panel">
+    <div class="hud-label">EOQ — OPTIMAL ORDER QTY</div>
+    <div class="hud-value-red">{decision_outputs.eoq:,.0f}</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#888;margin-top:4px;">
+        UNITS/ORDER · EVERY {decision_outputs.order_frequency_days:.0f} DAYS
+    </div>
+</div>""", unsafe_allow_html=True)
+
+de3.markdown(f"""
+<div class="hud-panel">
+    <div class="hud-label">REORDER POINT</div>
+    <div class="hud-value-red">{decision_outputs.reorder_point:,.0f}</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#888;margin-top:4px;">
+        UNITS IN STOCK · TRIGGER REPLENISHMENT
+    </div>
+</div>""", unsafe_allow_html=True)
+
+de4.markdown(f"""
+<div class="hud-panel">
+    <div class="hud-label">ANNUAL SAVINGS</div>
+    <div class="hud-value-red">${decision_outputs.savings_vs_current:,.0f}</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#888;margin-top:4px;">
+        VS CURRENT ORDERING STRATEGY
+    </div>
+</div>""", unsafe_allow_html=True)
+
+st.markdown("<div class='hud-label' style='margin:16px 0 8px 0;'>PRESCRIPTIVE ACTIONS</div>", unsafe_allow_html=True)
+for rec in decision_outputs.recommendations:
+    color = impact_color.get(rec["impact"], "#888888")
+    st.markdown(f"""
+    <div style="background:#151518;border-left:3px solid {color};padding:10px 16px;
+                margin-bottom:6px;font-family:'Share Tech Mono',monospace;font-size:0.75rem;">
+        <span style="color:{color};font-weight:bold;font-size:0.65rem;letter-spacing:0.08rem;">
+            [{rec['impact']}] {rec['category']}
+        </span><br>
+        <span style="color:#CCCCCC;">{rec['action']}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+exec_plan_df = decisions.build_execution_plan(demand_profile, decision_outputs, unit_cost, ordering_cost)
+col_dl, _ = st.columns([1, 3])
+with col_dl:
+    st.download_button(
+        label="⇩ DOWNLOAD EXECUTION PLAN (CSV)",
+        data=exec_plan_df.to_csv(index=False).encode(),
+        file_name="supchainmate_execution_plan.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BOTTOM: DEMAND SURGE SIMULATOR

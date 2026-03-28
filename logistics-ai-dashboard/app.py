@@ -125,8 +125,9 @@ def _load_demo():
         st.session_state.X_test_delay  = X_test
 
         customers = pd.read_csv(DEMO_CUSTOMERS)
-        geo_df    = network.prepare_customer_data(customers)
-        st.session_state.geo_df        = network.run_clustering(geo_df)
+        geo_lookup = network.get_geo_lookup()
+        geo_df    = network.prepare_customer_data(customers, geo_lookup=geo_lookup)
+        st.session_state.geo_df = network.run_clustering(geo_df)
 
         st.session_state.summary       = optimization.network_summary(raw_orders)
 
@@ -310,6 +311,9 @@ with st.sidebar:
     simulate_event = st.toggle("🚨 MACRO EVENT SIMULATION", value=False)
     demand_change  = st.slider("DEMAND DELTA (%)", -50, 50, 0)
     st.divider()
+    n_clusters     = st.slider("NETWORK HUBS (CLUSTERS)", 2, 12, 5,
+                               help="What if we opened N hubs instead? Reconfigures the network instantly.")
+    st.divider()
     mode_label = "DEMO DATASET" if st.session_state.demo_mode else "USER DATA"
     st.markdown(f"<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#666;'>SOURCE: {mode_label}</div>", unsafe_allow_html=True)
     if st.button("🔄 LOAD NEW DATA"):
@@ -399,14 +403,19 @@ st.markdown(f"""
 col_map, col_hud = st.columns([2, 1], gap="small")
 
 with col_map:
-    np.random.seed(42)
+    # Re-cluster with sidebar n_clusters (what-if parameter)
     geo_df = geo_df.copy()
-    if "risk_score" not in geo_df.columns:
-        geo_df["risk_score"] = np.random.uniform(0, 100, size=len(geo_df))
+    geo_df = network.run_clustering(geo_df[["lat", "lon"]], n_clusters=n_clusters)
+
+    np.random.seed(42)
+    geo_df["risk_score"] = np.random.uniform(0, 100, size=len(geo_df))
     geo_df["risk_level"] = pd.cut(
         geo_df["risk_score"], bins=[-1, 70, 90, 100],
         labels=["Safe", "Warning", "Critical"]
     )
+
+    # Haversine centroid metrics
+    centroid_stats = network.cluster_centroid_distances(geo_df)
 
     fig_map = px.scatter_mapbox(
         geo_df, lat="lat", lon="lon",
@@ -436,6 +445,15 @@ with col_map:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Haversine cluster efficiency table
+    with st.expander(f"📡 NETWORK TOPOLOGY — {n_clusters} HUBS (HAVERSINE METRICS)", expanded=False):
+        display_stats = centroid_stats.reset_index()[["cluster","customers","avg_dist_km","max_dist_km","efficiency_score"]]
+        display_stats.columns = ["CLUSTER", "CUSTOMERS", "AVG DIST KM", "MAX DIST KM", "EFFICIENCY %"]
+        st.dataframe(
+            display_stats.style.background_gradient(subset=["EFFICIENCY %"], cmap="RdYlGn"),
+            use_container_width=True, hide_index=True
+        )
 
     st.markdown(f"""
     <div class="hud-panel-yellow">

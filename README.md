@@ -25,21 +25,38 @@ Master of Business (Supply Chain & International Business) — Monash University
 
 ## 🎯 What Is This?
 
-SupChainMate is **not a reporting tool**. It is an autonomous decision layer that sits on top of your supply chain data and:
+SupChainMate is **not a reporting tool**. It is an autonomous decision layer with **two entry points**:
 
-1. **Detects disruptions** before they cascade (Isolation Forest + LightGBM combined signal)
-2. **Calculates optimal inventory decisions** (Safety Stock, EOQ, Reorder Point — domain math)
-3. **Reasons over your data in real-time** (Groq LLaMA-3.3-70B copilot + auto-insights on load)
-4. **Optimises routes** with NVIDIA cuOpt (real Capacitated VRP solver)
-5. **Generates execution-ready outputs** (CSV exports consumable by Power BI, Excel, ERP)
+| Mode | Who it is for | Input |
+|------|----------------|-------|
+| **Enterprise** | Supply chain teams with data | Upload CSV/Excel (orders, delivery, locations, costs) or try the Olist demo |
+| **Small Retailer** | Shops without spreadsheets | A short form per product (weekly sales, lead time, unit cost, safety buffer) — **no file upload** |
+
+Both paths use the **same decision engine** under the hood (`modules/decisions.py`: safety stock, EOQ, reorder point, cost trade-offs). Enterprise adds Prophet, maps, multi-signal risk, Groq, and NVIDIA routing on top of that core.
+
+1. **Detects disruptions** before they cascade (Isolation Forest + LightGBM combined signal) — *Enterprise*
+2. **Calculates optimal inventory decisions** (Safety Stock, EOQ, Reorder Point — domain math) — *Enterprise + Small Retailer*
+3. **Reasons over your data in real-time** (Groq LLaMA-3.3-70B copilot + auto-insights on load) — *Enterprise*
+4. **Optimises routes** with NVIDIA cuOpt (real Capacitated VRP solver) — *Enterprise*
+5. **Generates execution-ready outputs** (CSV exports consumable by Power BI, Excel, ERP) — *Enterprise*
 
 ```
-Your Data (CSV / Excel)
+                    ┌─ Enterprise: CSV/Excel + Prophet + Maps + AI
+  Launch screen ────┤
+                    └─ Small Retailer: form inputs → DemandProfile (retail helper)
+                                    ↓
+                    Decision Engine (SS, EOQ, ROP, savings)
+                                    ↓
+        Enterprise: full HUD + exports    |    Retailer: plain-language alerts + product tracker
+```
+
+```
+Your Data (CSV / Excel) — Enterprise only
         ↓
 AI Analysis Layer
   ├── Demand Sensing     (Prophet + External Regressors)
   ├── Disruption Radar   (Isolation Forest × LightGBM fusion)
-  ├── Decision Engine    (Safety Stock, EOQ, ROP, LT Buffer)
+  ├── Decision Engine    (Safety Stock, EOQ, ROP, LT Buffer)  ← shared with Small Retailer
   ├── Groq AI            (Auto-Insights + Live Copilot + Executive Narrative)
   └── NVIDIA cuOpt       (Real VRP Route Optimisation)
         ↓
@@ -63,7 +80,8 @@ logistics-ai-dashboard/
 │   ├── network.py                # Geolocation, KMeans, Isolation Forest,
 │   │                             #   Haversine metrics, combined_risk_signal()
 │   ├── tracking.py               # LightGBM delay prediction + feature engineering
-│   ├── decisions.py              # Supply Chain Decision Engine (SS, EOQ, ROP)
+│   ├── decisions.py              # Decision Engine (SS, EOQ, ROP) + build_demand_profile_from_retail_inputs()
+│   ├── retail.py                 # Small Retailer helpers (tier → service level, tracker rows, status)
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -137,10 +155,15 @@ else                →  ✅ SAFE
 
 ## 📊 Features
 
-### Upload Flow
+### Dual entry (launch screen)
+- **Enterprise mode** — existing upload flow, demo data, and Mission Control dashboard.
+- **Small Retailer mode** — five questions per product (name, avg weekly sales, supplier lead time, unit cost, safety buffer). Outputs plain-language reorder, order quantity, safety stock, and estimated savings; multi-product tracker with editable current stock; optional advanced ordering/holding costs. Phone/email alerts are reserved for a future release (UI placeholder).
+
+### Upload Flow (Enterprise)
 - Upload **CSV or Excel** for Orders, Delivery, Location, or Cost data
 - **Auto-detect column names** — regex engine + Groq LLM fallback for ambiguous columns
 - **Try Demo Data** — instant load of 99k real Brazilian e-commerce orders
+- **Load new data** (sidebar) returns to the Enterprise upload screen without wiping your Small Retailer product list
 
 ### Mission Control Dashboard
 - Real-time system status bar (breach count, nominal %, override button)
@@ -219,6 +242,13 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.1.0 — Dual entry: Enterprise + Small Retailer
+- **NEW**: Launch screen — choose **Enterprise** or **Small Retailer** mode
+- **NEW**: `modules/retail.py` — retail form helpers, inventory status (ORDER NOW / SOON / OK), tracker rows
+- **NEW**: `decisions.build_demand_profile_from_retail_inputs()` — builds `DemandProfile` from weekly sales + lead time + safety tier (no Prophet)
+- **NEW**: Small Retailer UI — add products, instant guidance from `run_decision_engine`, multi-product table with **Apply stock levels**
+- **UX**: Sidebar reset preserves `retail_products` and returns to Enterprise upload (`entry_mode` + `data_loaded` handling)
 
 ### v4.0.0 — Groq AI + NVIDIA API Integration
 - **NEW**: `modules/groq_ai.py` — 4 Groq-powered features (LLaMA-3.3-70B)

@@ -32,11 +32,11 @@ def _get_key(env_var: str) -> Optional[str]:
     return None
 
 
-CUOPT_KEY = _get_key("NVIDIA_CUOPT_API_KEY")
-LLAMA_KEY = _get_key("NVIDIA_LLAMA_API_KEY")
+CUOPT_KEY    = _get_key("NVIDIA_CUOPT_API_KEY")
+LLAMA_KEY    = _get_key("NVIDIA_LLAMA_API_KEY")
+DEEPSEEK_KEY = _get_key("NVIDIA_DEEPSEEK_API_KEY")
 
-LLAMA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-CUOPT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"   # cuopt via NIM
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -76,8 +76,8 @@ def deepseek_copilot(
     -------
     Full response text as a string.
     """
-    if not LLAMA_KEY:
-        return "[NVIDIA API key not configured. Set NVIDIA_LLAMA_API_KEY in .env]"
+    if not DEEPSEEK_KEY:
+        return "[NVIDIA DeepSeek API key not configured. Set NVIDIA_DEEPSEEK_API_KEY in .env]"
 
     # Build context string from live metrics
     ctx_str = "\n".join([
@@ -86,7 +86,7 @@ def deepseek_copilot(
     system_with_ctx = SYSTEM_PROMPT + f"\n\nCURRENT SYSTEM METRICS:\n{ctx_str}"
 
     headers = {
-        "Authorization": f"Bearer {LLAMA_KEY}",
+        "Authorization": f"Bearer {DEEPSEEK_KEY}",
         "Accept": "text/event-stream" if stream else "application/json",
         "Content-Type": "application/json",
     }
@@ -96,14 +96,15 @@ def deepseek_copilot(
             {"role": "system", "content": system_with_ctx},
             {"role": "user",   "content": user_query},
         ],
-        "max_tokens": 400,
-        "temperature": 0.4,    # lower = more precise / less hallucination
+        "max_tokens": 16384,
+        "temperature": 0.4,
         "top_p": 0.95,
         "stream": stream,
+        "chat_template_kwargs": {"thinking": False},
     }
 
     try:
-        response = requests.post(LLAMA_URL, headers=headers, json=payload, timeout=30)
+        response = requests.post(NVIDIA_BASE_URL, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
 
         if stream:

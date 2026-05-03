@@ -791,7 +791,7 @@ with exp_chart:
 
 with exp_copilot:
     with st.expander("🧠 SUPPLY CHAIN COPILOT — Groq AI (LLaMA-3.3-70B)", expanded=False):
-        groq_status = "🟢 GROQ LIVE" if groq_ai.is_available() else "🟡 GROQ OFFLINE → NVIDIA FALLBACK"
+        groq_status = "🟢 GROQ LIVE" if groq_ai.is_available() else "🟡 GROQ OFFLINE → DEEPSEEK V4 PRO FALLBACK"
         st.markdown(
             f'<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">'
             f'{groq_status} · LLaMA-3.3-70B · CONTEXT-AWARE · REAL-TIME</div>',

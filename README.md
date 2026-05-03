@@ -1,6 +1,6 @@
 # SupChainMate — Autonomous Supply Chain Decision System
 
-**Built by [Kishan Nagesh](https://linkedin.com/in/kishannagesh)**
+**Built by [Kishan Nagesh](https://www.linkedin.com/in/kisharky-n-5147941a4)**
 Master of Business (Supply Chain & International Business) — Monash University, Melbourne
 
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**

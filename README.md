@@ -1,5 +1,8 @@
 # SupChainMate — Autonomous Supply Chain Decision System
 
+**Built by [Kishan Nagesh](https://linkedin.com/in/kishannagesh)**
+Master of Business (Supply Chain & International Business) — Monash University, Melbourne
+
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
@@ -7,7 +10,7 @@
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
-[![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20LLaMA--4-76b900)](https://build.nvidia.com)
+[![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek%20V4-76b900)](https://build.nvidia.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -179,11 +182,15 @@ pip install -r requirements.txt
 ```
 
 ### API Keys (Optional — all features degrade gracefully without them)
-Create `logistics-ai-dashboard/.env`:
+Copy the example and fill in your keys:
+```bash
+cp logistics-ai-dashboard/.env.example logistics-ai-dashboard/.env
+```
 ```env
 GROQ_API_KEY=your_groq_key_here
 NVIDIA_CUOPT_API_KEY=your_nvidia_cuopt_key_here
 NVIDIA_LLAMA_API_KEY=your_nvidia_llama_key_here
+NVIDIA_DEEPSEEK_API_KEY=your_deepseek_key_here
 ```
 
 ### Run
@@ -273,4 +280,4 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 
 ## 📄 License
 
-MIT © Ishai — SupChainMate
+MIT © Kishan Nagesh — SupChainMate

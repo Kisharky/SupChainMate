@@ -174,9 +174,9 @@ def run_decision_engine(
     lt_buffer = round(z * σLT, 1)
 
     # ── Cost Projections  ─────────────────────────────────────────────────────
-    # Current (naive): order monthly-ish, hold too much stock
-    naive_orders_py = max(D / (μd * 30), 1)
-    holding_cost_current  = naive_current * unit_cost * holding_rate
+    # Current (naive): assume monthly ordering cadence, hold ~half lead-time demand
+    naive_orders_py = D / (μd * 30) if μd > 0 else 12  # orders per year
+    holding_cost_current  = naive_current * unit_cost * holding_rate  # $/yr (units × $/unit × rate)
     ordering_cost_current = naive_orders_py * ordering_cost
 
     # Optimised (EOQ-based)

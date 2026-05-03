@@ -91,6 +91,8 @@ def deepseek_copilot(
         "Content-Type": "application/json",
     }
     payload = {
+        # Note: Requires NVIDIA NIM access with DeepSeek V4 Pro deployed.
+        # Free alternative: Groq AI (LLaMA-3.3-70B) works out of the box via groq_ai.py
         "model": "deepseek-ai/deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": system_with_ctx},

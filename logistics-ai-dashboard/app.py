@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from sklearn.ensemble import RandomForestClassifier
+
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions
 from modules import nvidia_api, groq_ai
@@ -164,17 +164,11 @@ def _process_uploaded(raw_orders, raw_delivery, raw_location, raw_cost):
             # Simulate from orders if no delivery file provided
             tdf           = tracking.simulate_tracking(orders_norm.rename(columns={"order_date": "order_purchase_timestamp"}))
 
-        # Quick delay model on available data
-        tdf["is_late"]     = (tdf.get("status", "") == "Delayed").astype(int) if "status" in tdf.columns else np.random.randint(0, 2, len(tdf))
-        tdf["lead_days"]   = tdf.get("lead_days", pd.Series(np.random.uniform(1, 20, len(tdf))))
-        X                  = tdf[["lead_days"]].fillna(10)
-        y                  = tdf["is_late"]
-        from sklearn.ensemble import RandomForestClassifier
-        clf = RandomForestClassifier(n_estimators=50, random_state=42)
-        clf.fit(X, y)
+        # Train delay model using the proper LightGBM pipeline from tracking.py
+        m, X_test, _ = tracking.train_delay_model(tdf)
         st.session_state.tracking_df   = tdf
-        st.session_state.delay_model   = clf
-        st.session_state.X_test_delay  = X.tail(100)
+        st.session_state.delay_model   = m
+        st.session_state.X_test_delay  = X_test
 
         # ── Location (optional) ───────────────────────────────────────────────
         if raw_location is not None:
@@ -791,7 +785,7 @@ with exp_chart:
 
 with exp_copilot:
     with st.expander("🧠 SUPPLY CHAIN COPILOT — Groq AI (LLaMA-3.3-70B)", expanded=False):
-        groq_status = "🟢 GROQ LIVE" if groq_ai.is_available() else "🟡 GROQ OFFLINE → DEEPSEEK V4 PRO FALLBACK"
+        groq_status = "🟢 GROQ LIVE" if groq_ai.is_available() else "🟡 GROQ OFFLINE → NVIDIA FALLBACK (configure NVIDIA_DEEPSEEK_API_KEY)"
         st.markdown(
             f'<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">'
             f'{groq_status} · LLaMA-3.3-70B · CONTEXT-AWARE · REAL-TIME</div>',

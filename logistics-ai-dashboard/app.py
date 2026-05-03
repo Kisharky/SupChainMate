@@ -1,5 +1,6 @@
 import os
 import io
+import math
 import time
 import numpy as np
 import pandas as pd
@@ -8,7 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-from modules import forecast, network, optimization, tracking, ingestion, decisions
+from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
 from modules import nvidia_api, groq_ai
 
 # ── Page Config ───────────────────────────────────────────────────────────────
@@ -81,21 +82,207 @@ st.markdown("""
     display: inline-block;
     margin: 2px 3px;
 }
+.mode-card-retail {
+    border-top: 2px solid #00E676;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SESSION STATE INITIALISATION
 # ═══════════════════════════════════════════════════════════════════════════════
-for key in ["orders_df", "delivery_df", "location_df", "cost_df",
-            "daily_df", "forecast_df", "tracking_df", "geo_df",
-            "delay_model", "X_test_delay", "summary", "current_cost",
-            "data_loaded", "demo_mode"]:
+_SESSION_KEYS = [
+    "orders_df", "delivery_df", "location_df", "cost_df",
+    "daily_df", "forecast_df", "tracking_df", "geo_df",
+    "delay_model", "X_test_delay", "summary", "current_cost",
+    "data_loaded", "demo_mode",
+]
+
+for key in _SESSION_KEYS:
     if key not in st.session_state:
         st.session_state[key] = None
 
 if "data_loaded" not in st.session_state:
     st.session_state["data_loaded"] = False
+
+if "retail_products" not in st.session_state:
+    st.session_state.retail_products = []
+
+if "entry_mode" not in st.session_state:
+    # Skip landing if user already has enterprise data loaded (returning session).
+    st.session_state.entry_mode = "enterprise" if st.session_state.get("data_loaded") else "landing"
+
+
+def _reset_enterprise_session_preserve_retail():
+    """Clear enterprise dashboard state; return to enterprise upload. Keep retail tracker."""
+    backup = list(st.session_state.get("retail_products") or [])
+    st.session_state.clear()
+    st.session_state.retail_products = backup
+    st.session_state.entry_mode = "enterprise"
+    for key in _SESSION_KEYS:
+        if key not in st.session_state:
+            st.session_state[key] = None
+    st.session_state.data_loaded = False
+
+
+def _render_small_retailer_page():
+    st.markdown("""
+    <div class="upload-hero">
+        <h1>⬡ SupChainMate</h1>
+        <div class="subtitle">SMALL RETAILER MODE — NO SPREADSHEETS REQUIRED</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("← Change mode", key="retail_change_mode"):
+        st.session_state.entry_mode = "landing"
+        st.rerun()
+
+    st.caption(
+        "Answer a few questions per product. The same inventory math as Enterprise runs underneath "
+        "(reorder point, EOQ, safety stock, cost trade-offs)."
+    )
+
+    with st.expander("Advanced costs (optional)", expanded=False):
+        r_order_cost = st.number_input(
+            "Cost per purchase order ($)",
+            min_value=10.0,
+            value=retail.DEFAULT_ORDERING_COST,
+            step=5.0,
+            key="retail_ordering_cost",
+        )
+        r_hold_pct = st.slider("Holding cost (% of unit value / year)", 10, 40, 25, key="retail_holding_pct")
+    r_holding_rate = r_hold_pct / 100.0
+
+    st.subheader("Add a product")
+    with st.form("retail_add_product", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            pname = st.text_input("Product name", placeholder="e.g. Blue Jeans (S)")
+            p_weekly = st.number_input("How many do you sell per week (average)?", min_value=0.01, value=20.0, step=1.0)
+            p_lead = st.number_input("Supplier lead time (days)", min_value=0.5, value=14.0, step=0.5)
+        with c2:
+            p_cost = st.number_input("Your cost per unit ($)", min_value=0.01, value=25.0, step=1.0)
+            p_tier = st.selectbox(
+                "Safety buffer",
+                options=["Low", "Medium", "High"],
+                index=1,
+                help="Higher buffer → higher service level target in the engine.",
+            )
+            p_stock = st.number_input("Current stock (units)", min_value=0.0, value=0.0, step=1.0)
+        add_sub = st.form_submit_button("Add to tracker")
+    if add_sub and pname and pname.strip():
+        st.session_state.retail_products.append(
+            retail.product_dict(pname.strip(), p_weekly, p_lead, p_cost, p_tier, p_stock)
+        )
+        st.rerun()
+
+    products = st.session_state.retail_products
+    if not products:
+        st.info("Add at least one product to see reorder guidance and the tracker.")
+        st.subheader("Alerts (coming soon)")
+        st.text_input("WhatsApp / phone number", disabled=True, key="retail_phone_ph")
+        st.text_input("Email", disabled=True, key="retail_email_ph")
+        st.caption("We will text or email you when any SKU hits its reorder point.")
+        return
+
+    st.subheader("Your answers — instant guidance")
+    focus_labels = [p["name"] for p in products]
+    pick = st.selectbox("Product to show", range(len(products)), format_func=lambda i: focus_labels[i])
+    p_focus = products[pick]
+    _, out_focus = retail.run_retail_decisions(
+        p_focus["units_per_week"],
+        p_focus["lead_time_days"],
+        p_focus["unit_cost"],
+        p_focus["safety_tier"],
+        ordering_cost=r_order_cost,
+        holding_rate=r_holding_rate,
+    )
+    rop_i = int(math.ceil(out_focus.reorder_point))
+    eoq_i = int(round(out_focus.eoq))
+    ss_i = int(round(out_focus.safety_stock))
+    save_yr = out_focus.savings_vs_current
+
+    st.success(f"REORDER ALERT: Reorder **{p_focus['name']}** when you have **{rop_i}** units left.")
+    st.info(f"ORDER QUANTITY: Order **{eoq_i}** units at a time.")
+    st.warning(f"SAFETY BUFFER: Keep at least **{ss_i}** units as emergency stock.")
+    if save_yr > 0:
+        st.error(
+            f"YOU ARE LEAVING MONEY ON THE TABLE: Aligning to this pattern could save "
+            f"**~${save_yr:,.0f}/year** on inventory-related costs (vs. a naive ordering baseline)."
+        )
+    else:
+        st.info("Cost outlook: your parameters are already close to the model baseline.")
+
+    st.subheader("Multi-product tracker")
+    tbl_rows = [
+        retail.tracker_row(p, ordering_cost=r_order_cost, holding_rate=r_holding_rate)
+        for p in products
+    ]
+    df_track = pd.DataFrame(tbl_rows)
+    edited = st.data_editor(
+        df_track,
+        width="stretch",
+        hide_index=True,
+        disabled=["Product", "Reorder when (units left)", "Order qty", "Status"],
+        key="retail_tracker_editor",
+    )
+    if st.button("Apply stock levels from table", key="retail_apply_stock"):
+        try:
+            for i in range(len(st.session_state.retail_products)):
+                st.session_state.retail_products[i]["current_stock"] = float(
+                    edited.iloc[i]["Current stock"]
+                )
+        except (ValueError, KeyError, TypeError, IndexError):
+            st.error("Could not read stock values; use numbers only.")
+        else:
+            st.rerun()
+
+    st.subheader("Alerts (coming soon)")
+    st.text_input("WhatsApp / phone number", disabled=True, key="retail_phone")
+    st.text_input("Email", disabled=True, key="retail_email")
+    st.caption("Enter your phone or email and we will notify you when any product hits its reorder point.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LANDING — CHOOSE ENTERPRISE VS SMALL RETAILER
+# ═══════════════════════════════════════════════════════════════════════════════
+if st.session_state.entry_mode == "landing":
+    st.markdown("""
+    <div class="upload-hero">
+        <h1>⬡ SupChainMate</h1>
+        <div class="subtitle">CHOOSE HOW YOU WANT TO WORK</div>
+    </div>
+    """, unsafe_allow_html=True)
+    ec, rc = st.columns(2)
+    with ec:
+        st.markdown("""
+        <div class="upload-card">
+            <div class="upload-card-label">ENTERPRISE MODE</div>
+            <div class="upload-card-sub">FOR SUPPLY CHAIN TEAMS WITH DATA<br><br>
+            Upload orders, delivery, locations, costs — full mission control, maps, and AI insights.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("OPEN ENTERPRISE MODE", use_container_width=True, type="primary", key="btn_enterprise"):
+            st.session_state.entry_mode = "enterprise"
+            st.rerun()
+    with rc:
+        st.markdown("""
+        <div class="upload-card mode-card-retail">
+            <div class="upload-card-label">SMALL RETAILER MODE</div>
+            <div class="upload-card-sub">FOR SMALL SHOPS — NO CSV<br><br>
+            Answer five quick questions per product. Same decision engine, plain-English answers.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("OPEN SMALL RETAILER MODE", use_container_width=True, key="btn_retail"):
+            st.session_state.entry_mode = "retail"
+            st.rerun()
+    st.stop()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SMALL RETAILER — STANDALONE FLOW (NO ENTERPRISE DATA)
+# ═══════════════════════════════════════════════════════════════════════════════
+if st.session_state.entry_mode == "retail":
+    _render_small_retailer_page()
+    st.stop()
 
 
 # ── Demo data loader ───────────────────────────────────────────────────────────
@@ -138,6 +325,7 @@ def _load_demo():
 
         st.session_state.data_loaded   = True
         st.session_state.demo_mode     = True
+        st.session_state.entry_mode    = "enterprise"
     st.rerun()
 
 
@@ -197,13 +385,18 @@ def _process_uploaded(raw_orders, raw_delivery, raw_location, raw_cost):
         st.session_state.summary     = None  # Network summary needs olist shape
         st.session_state.data_loaded = True
         st.session_state.demo_mode   = False
+        st.session_state.entry_mode  = "enterprise"
     st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# UPLOAD SCREEN
+# UPLOAD SCREEN (ENTERPRISE ONLY)
 # ═══════════════════════════════════════════════════════════════════════════════
-if not st.session_state.data_loaded:
+if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loaded:
+
+    if st.button("← Change mode", key="enterprise_upload_back"):
+        st.session_state.entry_mode = "landing"
+        st.rerun()
 
     st.markdown("""
     <div class="upload-hero">
@@ -325,8 +518,7 @@ with st.sidebar:
     mode_label = "DEMO DATASET" if st.session_state.demo_mode else "USER DATA"
     st.markdown(f"<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#666;'>SOURCE: {mode_label}</div>", unsafe_allow_html=True)
     if st.button("🔄 LOAD NEW DATA"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+        _reset_enterprise_session_preserve_retail()
         st.rerun()
 
 # Pull from session

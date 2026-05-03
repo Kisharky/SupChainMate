@@ -126,6 +126,52 @@ def build_demand_profile(
     )
 
 
+# ── Retail / simple inputs (no time series) ───────────────────────────────────
+
+# Coefficient of variation for daily demand by safety buffer tier.
+# Lower tier = shopkeeper accepts more stockout risk → we model higher effective demand variability.
+_RETAIL_TIER_DEMAND_CV = {
+    "Low": 0.40,
+    "Medium": 0.25,
+    "High": 0.15,
+}
+
+
+def build_demand_profile_from_retail_inputs(
+    units_per_week: float,
+    avg_lead_time_days: float,
+    safety_tier: str = "Medium",
+    horizon_days: int = 7,
+) -> DemandProfile:
+    """
+    Build a DemandProfile from a small-retailer form (no CSV / Prophet).
+
+    - avg_daily_demand = units_per_week / 7
+    - std_daily_demand = avg_daily × CV, where CV depends on safety tier (Low/Medium/High buffer intent)
+    - std_lead_time_days = max(0.5, 15% of mean lead time)
+    - horizon_forecast = flat forecast μ_d × horizon_days
+
+    Pass service_level into run_decision_engine separately; map tier there as 0.85 / 0.95 / 0.99.
+    """
+    tier = safety_tier if safety_tier in _RETAIL_TIER_DEMAND_CV else "Medium"
+    mu_d = float(units_per_week) / 7.0
+    cv = _RETAIL_TIER_DEMAND_CV[tier]
+    sigma_d = max(mu_d * cv, 0.01)
+    sigma_lt = max(0.5, float(avg_lead_time_days) * 0.15)
+    mu_lt = float(avg_lead_time_days)
+    horizon_fc = mu_d * horizon_days
+
+    return DemandProfile(
+        avg_daily_demand=round(mu_d, 2),
+        std_daily_demand=round(sigma_d, 2),
+        avg_lead_time_days=mu_lt,
+        std_lead_time_days=round(sigma_lt, 2),
+        annual_demand=round(mu_d * 365, 0),
+        horizon_forecast=round(horizon_fc, 0),
+        horizon_days=int(horizon_days),
+    )
+
+
 def run_decision_engine(
     profile: DemandProfile,
     service_level: float = 0.95,

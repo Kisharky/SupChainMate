@@ -231,6 +231,13 @@ def _render_small_retailer_page():
         ],
         key="retail_tracker_editor",
     )
+    st.download_button(
+        "⇩ DOWNLOAD REORDER CHECKLIST (CSV)",
+        data=df_track.to_csv(index=False).encode(),
+        file_name="reorder_checklist.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
     if st.button("Apply stock levels from table", key="retail_apply_stock"):
         try:
             for i in range(len(st.session_state.retail_products)):

@@ -169,6 +169,10 @@ def _render_small_retailer_page():
             )
             p_stock = st.number_input("Current stock (units)", min_value=0.0, value=0.0, step=1.0)
         add_sub = st.form_submit_button("Add to tracker")
+    st.caption(
+        "Lead time variability is estimated at 15% of your supplier's average — "
+        "adjust the safety buffer if your supplier is unpredictable."
+    )
     if add_sub and pname and pname.strip():
         st.session_state.retail_products.append(
             retail.product_dict(pname.strip(), p_weekly, p_lead, p_cost, p_tier, p_stock)
@@ -178,10 +182,6 @@ def _render_small_retailer_page():
     products = st.session_state.retail_products
     if not products:
         st.info("Add at least one product to see reorder guidance and the tracker.")
-        st.subheader("Alerts (coming soon)")
-        st.text_input("WhatsApp / phone number", disabled=True, key="retail_phone_ph")
-        st.text_input("Email", disabled=True, key="retail_email_ph")
-        st.caption("We will text or email you when any SKU hits its reorder point.")
         return
 
     st.subheader("Your answers — instant guidance")
@@ -222,7 +222,13 @@ def _render_small_retailer_page():
         df_track,
         width="stretch",
         hide_index=True,
-        disabled=["Product", "Reorder when (units left)", "Order qty", "Status"],
+        disabled=[
+            "Product",
+            "Reorder when (units left)",
+            "Order qty",
+            "Est. savings/yr ($)",
+            "Status",
+        ],
         key="retail_tracker_editor",
     )
     if st.button("Apply stock levels from table", key="retail_apply_stock"):
@@ -235,6 +241,16 @@ def _render_small_retailer_page():
             st.error("Could not read stock values; use numbers only.")
         else:
             st.rerun()
+
+    del_idx = st.selectbox(
+        "Remove a product",
+        range(len(products)),
+        format_func=lambda i: products[i]["name"],
+        key="retail_del_select",
+    )
+    if st.button("Remove selected product", key="retail_del_btn"):
+        st.session_state.retail_products.pop(del_idx)
+        st.rerun()
 
     st.subheader("Alerts (coming soon)")
     st.text_input("WhatsApp / phone number", disabled=True, key="retail_phone")

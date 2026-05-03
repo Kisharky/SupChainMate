@@ -15,6 +15,8 @@ SAFETY_TIER_TO_SERVICE_LEVEL = {
 }
 
 # Retail-friendly defaults for EOQ / cost math
+# $75 per order is appropriate for small retail (phone/email ordering, no formal procurement).
+# Enterprise default is $200 (formal PO process, admin overhead).
 DEFAULT_ORDERING_COST = 75.0
 DEFAULT_HOLDING_RATE = 0.25
 
@@ -120,5 +122,6 @@ def tracker_row(
         "Reorder when (units left)": int(math.ceil(rop)),
         "Order qty": int(round(out.eoq)),
         "Current stock": p["current_stock"],
+        "Est. savings/yr ($)": int(round(out.savings_vs_current)),
         "Status": f"{status_display_emoji(st)} {st}",
     }

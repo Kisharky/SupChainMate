@@ -157,6 +157,8 @@ def build_demand_profile_from_retail_inputs(
     mu_d = float(units_per_week) / 7.0
     cv = _RETAIL_TIER_DEMAND_CV[tier]
     sigma_d = max(mu_d * cv, 0.01)
+    # Assume lead time σ ≈ 15% of mean — typical for small retail suppliers
+    # (no historical data available in this mode)
     sigma_lt = max(0.5, float(avg_lead_time_days) * 0.15)
     mu_lt = float(avg_lead_time_days)
     horizon_fc = mu_d * horizon_days

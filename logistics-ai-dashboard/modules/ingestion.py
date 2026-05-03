@@ -227,6 +227,8 @@ def orders_to_daily_demand(orders_df: pd.DataFrame) -> pd.DataFrame:
         .rename(columns={"day": "ds", "quantity": "y"})
     )
     daily["ds"] = pd.to_datetime(daily["ds"])
+    # Ensure float dtype before applying non-integer signal multipliers.
+    daily["y"] = daily["y"].astype(float)
     # Add external signal placeholder
     np.random.seed(42)
     daily["external_signal"] = np.random.choice(

@@ -20,9 +20,12 @@ st.set_page_config(
 )
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def load_css(file_name):
-    if os.path.exists(file_name):
-        with open(file_name) as f:
+    path = os.path.join(BASE_DIR, file_name)
+    if os.path.exists(path):
+        with open(path) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 load_css("style.css")
@@ -309,9 +312,9 @@ if st.session_state.entry_mode == "retail":
 
 
 # ── Demo data loader ───────────────────────────────────────────────────────────
-DEMO_ORDERS    = "data/olist_orders.csv"
-DEMO_DELIVERY  = "data/olist_orders_dataset.csv"
-DEMO_CUSTOMERS = "data/olist_customers_dataset.csv"
+DEMO_ORDERS    = os.path.join(BASE_DIR, "data", "olist_orders.csv")
+DEMO_DELIVERY  = os.path.join(BASE_DIR, "data", "olist_orders_dataset.csv")
+DEMO_CUSTOMERS = os.path.join(BASE_DIR, "data", "olist_customers_dataset.csv")
 
 
 def _load_demo():

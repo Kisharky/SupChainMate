@@ -2,7 +2,7 @@
 modules/nvidia_api.py
 NVIDIA API integrations:
   1. cuOpt  — real vehicle route optimisation
-  2. LLaMA-4-Scout — live AI supply chain copilot
+  2. DeepSeek V4 Pro — live AI supply chain copilot
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ CUOPT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"   # cuopt via
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 1. LLaMA-4-Scout Supply Chain Copilot
+# 1. DeepSeek V4 Pro Supply Chain Copilot
 # ══════════════════════════════════════════════════════════════════════════════
 
 SYSTEM_PROMPT = """You are SupChainMate, an autonomous supply chain decision AI.
@@ -58,13 +58,13 @@ When answering, always:
 Format: plain text, no markdown bullet points."""
 
 
-def llama_copilot(
+def deepseek_copilot(
     user_query: str,
     context: dict,
     stream: bool = True,
 ) -> str:
     """
-    Call LLaMA-4-Scout with supply chain context injected into the system prompt.
+    Call DeepSeek V4 Pro with supply chain context injected into the system prompt.
 
     Parameters
     ----------
@@ -91,7 +91,7 @@ def llama_copilot(
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "meta/llama-4-scout-17b-16e-instruct",
+        "model": "deepseek-ai/deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": system_with_ctx},
             {"role": "user",   "content": user_query},

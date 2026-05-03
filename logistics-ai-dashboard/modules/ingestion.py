@@ -64,7 +64,7 @@ def _find_col(df: pd.DataFrame, pattern: re.Pattern) -> Optional[str]:
 
 def _coerce_datetime(series: pd.Series) -> pd.Series:
     """Best-effort parse a series of mixed date strings to datetime."""
-    return pd.to_datetime(series, infer_datetime_format=True, errors="coerce")
+    return pd.to_datetime(series, errors="coerce")
 
 
 # ── Public Normalisation Functions ─────────────────────────────────────────────
@@ -81,7 +81,7 @@ def normalise_orders(df: pd.DataFrame) -> pd.DataFrame:
         for col in df.columns:
             sample = df[col].dropna().head(5)
             try:
-                pd.to_datetime(sample, infer_datetime_format=True)
+                pd.to_datetime(sample)
                 date_col = col
                 break
             except Exception:

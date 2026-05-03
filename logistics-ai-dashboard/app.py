@@ -819,7 +819,7 @@ with exp_copilot:
                 if groq_ai.is_available():
                     ai_response = groq_ai.supply_chain_copilot(query, live_context)
                 else:
-                    ai_response = nvidia_api.llama_copilot(query, live_context, stream=True)
+                    ai_response = nvidia_api.deepseek_copilot(query, live_context, stream=True)
             st.chat_message("assistant").write(ai_response)
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -441,7 +441,7 @@ if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loa
             <div class="upload-card-label">📦 Orders Data</div>
             <div class="upload-card-sub">ORDER DATE · PRODUCT · QUANTITY · REGION<br><br>AUTO-DETECTED: date, quantity, sku</div>
         </div>""", unsafe_allow_html=True)
-        orders_file = st.file_uploader("", type=["csv", "xlsx", "xls"], key="orders",
+        orders_file = st.file_uploader("Orders file", type=["csv", "xlsx", "xls"], key="orders",
                                         label_visibility="collapsed")
 
     with u2:
@@ -450,7 +450,7 @@ if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loa
             <div class="upload-card-label">🚚 Delivery Data</div>
             <div class="upload-card-sub">DELIVERY DATE · STATUS · ROUTE · LEAD TIME<br><br>AUTO-DETECTED: status, lead days</div>
         </div>""", unsafe_allow_html=True)
-        delivery_file = st.file_uploader("", type=["csv", "xlsx", "xls"], key="delivery",
+        delivery_file = st.file_uploader("Delivery file", type=["csv", "xlsx", "xls"], key="delivery",
                                           label_visibility="collapsed")
 
     with u3:
@@ -459,7 +459,7 @@ if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loa
             <div class="upload-card-label">📍 Location Data</div>
             <div class="upload-card-sub">CUSTOMER LOCATIONS · WAREHOUSES · ZIP<br><br>AUTO-DETECTED: lat/lon or postal code</div>
         </div>""", unsafe_allow_html=True)
-        location_file = st.file_uploader("", type=["csv", "xlsx", "xls"], key="location",
+        location_file = st.file_uploader("Location file", type=["csv", "xlsx", "xls"], key="location",
                                           label_visibility="collapsed")
 
     with u4:
@@ -468,7 +468,7 @@ if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loa
             <div class="upload-card-label">💰 Cost Data</div>
             <div class="upload-card-sub">COST PER DELIVERY · FUEL · WAREHOUSE<br><br>AUTO-DETECTED: cost, price, fee columns</div>
         </div>""", unsafe_allow_html=True)
-        cost_file = st.file_uploader("", type=["csv", "xlsx", "xls"], key="cost",
+        cost_file = st.file_uploader("Cost file", type=["csv", "xlsx", "xls"], key="cost",
                                       label_visibility="collapsed")
 
     # Auto-detect preview

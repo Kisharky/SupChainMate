@@ -23,14 +23,15 @@ def daily_demand(orders_df: pd.DataFrame) -> pd.DataFrame:
     g.columns = ["ds", "y"]
     g["ds"] = pd.to_datetime(g["ds"])
     # Keep demand as float because external signal scaling applies non-integer multipliers.
-    g["y"] = g["y"].astype(float)
+    g["y"] = pd.to_numeric(g["y"], errors="coerce").astype("float64")
     
     # Add synthetic external signal (e.g., Marketing Event / Holiday)
     import numpy as np
     np.random.seed(42)
     g['external_signal'] = np.random.choice([0, 1], size=len(g), p=[0.95, 0.05])
-    # Amplify historical demand when signal is present so the model learns it
-    g.loc[g['external_signal'] == 1, 'y'] = g.loc[g['external_signal'] == 1, 'y'] * 1.5
+    # Amplify historical demand when signal is present so the model learns it.
+    # Use vectorized arithmetic instead of masked assignment to avoid dtype setitem issues on pandas 3.x.
+    g["y"] = g["y"] * (1.0 + 0.5 * g["external_signal"].astype(float))
     
     return g.sort_values("ds").reset_index(drop=True)
 

@@ -228,13 +228,14 @@ def orders_to_daily_demand(orders_df: pd.DataFrame) -> pd.DataFrame:
     )
     daily["ds"] = pd.to_datetime(daily["ds"])
     # Ensure float dtype before applying non-integer signal multipliers.
-    daily["y"] = daily["y"].astype(float)
+    daily["y"] = pd.to_numeric(daily["y"], errors="coerce").astype("float64")
     # Add external signal placeholder
     np.random.seed(42)
     daily["external_signal"] = np.random.choice(
         [0, 1], size=len(daily), p=[0.95, 0.05]
     )
-    daily.loc[daily["external_signal"] == 1, "y"] *= 1.5
+    # Use vectorized arithmetic to avoid dtype setitem issues on pandas 3.x.
+    daily["y"] = daily["y"] * (1.0 + 0.5 * daily["external_signal"].astype(float))
     return daily.sort_values("ds").reset_index(drop=True)
 
 

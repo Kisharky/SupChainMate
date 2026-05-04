@@ -4,3 +4,7 @@ backgroundColor="#0B0B0C"
 secondaryBackgroundColor="#151518"
 textColor="#FFFFFF"
 font="sans serif"
+
+[server]
+# Streamlit Cloud can hit inotify limits in shared containers; polling/none prevents noisy watcher errors.
+fileWatcherType="none"

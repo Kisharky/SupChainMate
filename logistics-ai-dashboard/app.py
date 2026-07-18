@@ -12,6 +12,7 @@ import streamlit as st
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
 from modules import nvidia_api, groq_ai, control_tower, agent, cost_audit
+from modules import health_check, tender, alerts, store
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -110,7 +111,8 @@ if "data_loaded" not in st.session_state:
     st.session_state["data_loaded"] = False
 
 if "retail_products" not in st.session_state:
-    st.session_state.retail_products = []
+    # Restore the saved tracker from SQLite (empty list when nothing saved)
+    st.session_state.retail_products = store.load_retail_products()
 
 if "entry_mode" not in st.session_state:
     # Skip landing if user already has enterprise data loaded (returning session).
@@ -181,6 +183,7 @@ def _render_small_retailer_page():
         st.session_state.retail_products.append(
             retail.product_dict(pname.strip(), p_weekly, p_lead, p_cost, p_tier, p_stock)
         )
+        store.save_retail_products(st.session_state.retail_products)
         st.rerun()
 
     products = st.session_state.retail_products
@@ -251,6 +254,7 @@ def _render_small_retailer_page():
         except (ValueError, KeyError, TypeError, IndexError):
             st.error("Could not read stock values; use numbers only.")
         else:
+            store.save_retail_products(st.session_state.retail_products)
             st.rerun()
 
     del_idx = st.selectbox(
@@ -261,12 +265,42 @@ def _render_small_retailer_page():
     )
     if st.button("Remove selected product", key="retail_del_btn"):
         st.session_state.retail_products.pop(del_idx)
+        store.save_retail_products(st.session_state.retail_products)
         st.rerun()
 
-    st.subheader("Alerts (coming soon)")
-    st.text_input("WhatsApp / phone number", disabled=True, key="retail_phone")
-    st.text_input("Email", disabled=True, key="retail_email")
-    st.caption("Enter your phone or email and we will notify you when any product hits its reorder point.")
+    st.subheader("Alerts")
+    digest_text, n_alerts = alerts.build_retail_digest(products, tbl_rows)
+    if n_alerts:
+        st.warning(f"{n_alerts} product(s) need attention — see the digest below.")
+    else:
+        st.success("Nothing needs ordering right now.")
+    smtp_ok = alerts.smtp_configured()
+    ral1, ral2 = st.columns([2, 1])
+    with ral1:
+        r_email = st.text_input("Email for reorder alerts", key="retail_email",
+                                value=store.load_setting("retail_alert_email", "") or "")
+    with ral2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Send digest now", key="retail_send_digest",
+                     disabled=not (smtp_ok and r_email), use_container_width=True):
+            ok, send_msg = alerts.send_email(r_email, "SupChainMate — Reorder Digest", digest_text)
+            (st.success if ok else st.error)(send_msg)
+            if ok:
+                store.save_setting("retail_alert_email", r_email)
+    if r_email:
+        store.save_setting("retail_alert_email", r_email)
+    if not smtp_ok:
+        st.caption("Email sending needs SMTP settings in .env (SMTP_HOST, SMTP_FROM, SMTP_USER, SMTP_PASS). "
+                   "You can always download the digest below.")
+    with st.expander("Preview digest"):
+        st.code(digest_text, language=None)
+    st.download_button(
+        "⇩ Download reorder digest (TXT)",
+        data=digest_text.encode(),
+        file_name="reorder_digest.txt", mime="text/plain",
+        use_container_width=True,
+    )
+    st.caption("Your products and email are saved locally (SQLite) and restored next time you open the app.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -484,6 +518,9 @@ if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loa
             if meta["date_col"]:  badges += f'<span class="detected-badge">✓ DATE: {meta["date_col"]}</span>'
             if meta["qty_col"]:   badges += f'<span class="detected-badge">✓ QTY: {meta["qty_col"]}</span>'
             badges += f'<span class="detected-badge">✓ {meta["rows"]:,} ROWS</span>'
+            platform = ingestion.detect_store_platform(raw)
+            if platform:
+                badges += f'<span class="detected-badge">🛒 {platform.upper()} EXPORT DETECTED</span>'
             st.markdown(f"<div style='margin:8px 0;'>{badges}</div>", unsafe_allow_html=True)
             orders_file.seek(0)
         except Exception as e:
@@ -1203,6 +1240,144 @@ with st.expander("⚖ FREIGHT COST AUDIT — BILLING ANOMALY DETECTION", expande
                     use_container_width=True,
                 )
 
+# ── Supply Chain Health Check ──────────────────────────────────────────────────
+with st.expander("🩺 SUPPLY CHAIN HEALTH CHECK — SCORED ASSESSMENT", expanded=False):
+    hc = health_check.run_health_check(
+        shipments=shipments_df,
+        kpis=ct_kpis,
+        audit=audit,
+        decision_outputs=decision_outputs,
+        delay_risk=delay_risk,
+        centroid_stats=centroid_stats.reset_index() if centroid_stats is not None else None,
+    )
+    hc_color = {"A": "#00E676", "B": "#00D4FF", "C": "#FBC02D", "D": "#FF9800", "F": "#FF003C"}[hc["grade"]]
+    hgl, hgr = st.columns([1, 2])
+    with hgl:
+        st.markdown(f"""
+        <div class="hud-panel" style="border-color:{hc_color};text-align:center;">
+            <div class="hud-label">OVERALL HEALTH</div>
+            <div style="font-family:'Teko',sans-serif;font-size:4rem;color:{hc_color};line-height:1;">
+                {hc['grade']}
+            </div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:1rem;color:#FFF;">
+                {hc['score']:.0f}/100
+            </div>
+            {f'<div style="font-family:Share Tech Mono,monospace;font-size:0.65rem;color:#888;margin-top:6px;">DIFOT (APPROX): {hc["difot"]:.1f}%</div>' if hc.get("difot") is not None else ''}
+        </div>""", unsafe_allow_html=True)
+    with hgr:
+        dim_df = pd.DataFrame(hc["dimensions"])[["dimension", "grade", "score", "detail"]]
+        dim_df.columns = ["Dimension", "Grade", "Score", "Detail"]
+        st.dataframe(dim_df, use_container_width=True, hide_index=True)
+    for rec_txt in hc["recommendations"]:
+        st.markdown(f"""
+        <div style="background:#151518;border-left:3px solid {hc_color};padding:8px 14px;
+                    margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#CCCCCC;">
+            {rec_txt}
+        </div>""", unsafe_allow_html=True)
+    st.download_button(
+        "⇩ EXPORT HEALTH CHECK (TXT)",
+        data=health_check.health_report(hc).encode(),
+        file_name="supchainmate_health_check.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
+
+# ── Freight Tender / RFP Toolkit ───────────────────────────────────────────────
+with st.expander("📑 FREIGHT TENDER / RFP TOOLKIT", expanded=False):
+    tender_pack = tender.build_tender_pack(shipments_df, scorecard)
+    if tender_pack is None:
+        st.info("Tender pack needs shipment data with order dates.")
+    else:
+        ts = tender_pack["stats"]
+        st.markdown(
+            f"<div style='font-family:Share Tech Mono,monospace;font-size:0.72rem;color:#AAAAAA;'>"
+            f"DATA-BACKED TENDER: {ts['total_shipments']:,} SHIPMENTS ({ts['period']}) · "
+            f"AVG {ts['monthly_avg']:,.0f}/MONTH · PEAK {ts['peak_shipments']:,} IN {ts['peak_month']}"
+            + (f" · SPEND ${ts['annual_spend']:,.0f}" if ts["annual_spend"] else "") + "</div>",
+            unsafe_allow_html=True,
+        )
+        tl, tr = st.columns([1, 1])
+        with tl:
+            st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>MONTHLY LANE SUMMARY</div>", unsafe_allow_html=True)
+            st.dataframe(tender_pack["lanes"], use_container_width=True, hide_index=True, height=240)
+            st.download_button(
+                "⇩ LANE SUMMARY (CSV)",
+                data=tender_pack["lanes"].to_csv(index=False).encode(),
+                file_name="tender_lane_summary.csv", mime="text/csv",
+                use_container_width=True,
+            )
+            if tender_pack["carriers"] is not None:
+                st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>INCUMBENT CARRIERS</div>", unsafe_allow_html=True)
+                st.dataframe(tender_pack["carriers"], use_container_width=True, hide_index=True)
+        with tr:
+            st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>RFP DOCUMENT DRAFT</div>", unsafe_allow_html=True)
+            st.code(tender_pack["rfp_text"], language=None)
+            st.download_button(
+                "⇩ RFP DRAFT (TXT)",
+                data=tender_pack["rfp_text"].encode(),
+                file_name="freight_rfp_draft.txt", mime="text/plain",
+                use_container_width=True,
+            )
+
+        # ── Rate-shift simulator ─────────────────────────────────────────────
+        if audit is not None and audit["by_carrier"] is not None and len(audit["by_carrier"]) >= 2:
+            st.markdown("<div class='hud-label' style='margin:12px 0 4px 0;'>RATE-SHIFT SIMULATOR</div>", unsafe_allow_html=True)
+            carriers_list = audit["by_carrier"]["Carrier"].tolist()
+            rs1, rs2, rs3 = st.columns(3)
+            shift_from = rs1.selectbox("Move volume FROM", carriers_list,
+                                       index=len(carriers_list) - 1, key="rs_from")
+            shift_to = rs2.selectbox("TO", carriers_list, index=0, key="rs_to")
+            shift_pct = rs3.slider("VOLUME TO SHIFT (%)", 5, 100, 25, key="rs_pct")
+            sim = tender.simulate_rate_shift(audit["by_carrier"], shift_from, shift_to, shift_pct)
+            if sim is None:
+                st.caption("Pick two different carriers to simulate.")
+            else:
+                sim_color = "#00E676" if sim["cost_delta"] < 0 else "#FF003C"
+                st.markdown(f"""
+                <div style="background:#151518;border-left:3px solid {sim_color};padding:10px 16px;
+                            font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:#CCCCCC;">
+                    {sim['summary']}<br>
+                    <span style="color:#888;font-size:0.65rem;">Rate-only estimate — verify the
+                    receiving carrier's capacity and service level (see scorecard) before committing.</span>
+                </div>""", unsafe_allow_html=True)
+
+# ── Alert Digest ───────────────────────────────────────────────────────────────
+with st.expander("🔔 ALERT DIGEST — EMAIL / DOWNLOAD", expanded=False):
+    _digest_ctx = {"shipments": shipments_df, "kpis": ct_kpis, "scorecard": scorecard}
+    _, exc_arts = agent._TOOL_FUNCS["exception_summary"](_digest_ctx)
+    exc_text = exc_arts[0]["data"] if exc_arts else "No exception data."
+    digest_body = alerts.build_enterprise_digest(
+        exc_text,
+        audit_text=cost_audit.audit_digest(audit) if audit else None,
+        health_text=health_check.health_report(hc),
+    )
+    smtp_ok = alerts.smtp_configured()
+    st.markdown(
+        f"<div style='font-family:Share Tech Mono,monospace;font-size:0.65rem;color:{'#00E676' if smtp_ok else '#FBC02D'};'>"
+        f"{'🟢 SMTP CONFIGURED — EMAIL DELIVERY ENABLED' if smtp_ok else '🟡 SMTP NOT CONFIGURED — set SMTP_HOST / SMTP_FROM (and SMTP_USER / SMTP_PASS) in .env to enable email delivery'}"
+        f"</div>", unsafe_allow_html=True)
+    al1, al2 = st.columns([2, 1])
+    with al1:
+        alert_email = st.text_input("Email address", key="ent_alert_email",
+                                    value=store.load_setting("enterprise_alert_email", "") or "")
+    with al2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("SEND DIGEST NOW", key="ent_send_digest", use_container_width=True,
+                     disabled=not (smtp_ok and alert_email)):
+            ok, send_msg = alerts.send_email(alert_email, "SupChainMate — Supply Chain Digest", digest_body)
+            (st.success if ok else st.error)(send_msg)
+            if ok:
+                store.save_setting("enterprise_alert_email", alert_email)
+    if alert_email and not smtp_ok:
+        store.save_setting("enterprise_alert_email", alert_email)
+    st.code(digest_body, language=None)
+    st.download_button(
+        "⇩ DOWNLOAD DIGEST (TXT)",
+        data=digest_body.encode(),
+        file_name="supchainmate_digest.txt", mime="text/plain",
+        use_container_width=True,
+    )
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # BOTTOM: DEMAND SURGE SIMULATOR
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1323,16 +1498,20 @@ with exp_copilot:
             "metrics":          live_context,
             "decision_outputs": decision_outputs,
             "exec_plan":        exec_plan_df,
+            "delay_risk":       delay_risk,
+            "centroid_stats":   centroid_stats,
         }
 
         if "agent_chat" not in st.session_state:
             st.session_state.agent_chat = []
 
-        qa_cols = st.columns(len(agent.QUICK_ACTIONS))
         pending_query = None
-        for qa_col, (qa_label, qa_prompt) in zip(qa_cols, agent.QUICK_ACTIONS):
-            if qa_col.button(qa_label, key=f"qa_{qa_label}", use_container_width=True):
-                pending_query = qa_prompt
+        for row_start in range(0, len(agent.QUICK_ACTIONS), 4):
+            row_actions = agent.QUICK_ACTIONS[row_start:row_start + 4]
+            qa_cols = st.columns(4)
+            for qa_col, (qa_label, qa_prompt) in zip(qa_cols, row_actions):
+                if qa_col.button(qa_label, key=f"qa_{qa_label}", use_container_width=True):
+                    pending_query = qa_prompt
 
         typed_query = st.chat_input("Ask the agent to do something — it can act, not just answer...")
         if typed_query:

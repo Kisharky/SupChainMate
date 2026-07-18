@@ -26,6 +26,8 @@ import pandas as pd
 
 from modules import groq_ai
 from modules import cost_audit as cost_audit_mod
+from modules import health_check as health_mod
+from modules import tender as tender_mod
 
 MAX_AGENT_TURNS = 4
 
@@ -237,6 +239,51 @@ def _tool_cost_audit(ctx: dict) -> tuple[str, list]:
     return summary, artifacts
 
 
+def _tool_health_check(ctx: dict) -> tuple[str, list]:
+    ships = ctx.get("shipments")
+    if ships is None:
+        return "No shipment data loaded.", []
+    audit = cost_audit_mod.run_audit(ships)
+    hc = health_mod.run_health_check(
+        shipments=ships,
+        kpis=ctx.get("kpis"),
+        audit=audit,
+        decision_outputs=ctx.get("decision_outputs"),
+        delay_risk=ctx.get("delay_risk"),
+        centroid_stats=ctx.get("centroid_stats"),
+    )
+    report = health_mod.health_report(hc)
+    summary = (f"Health check complete: {hc['score']:.0f}/100, grade {hc['grade']}"
+               + (f", DIFOT {hc['difot']:.1f}%" if hc.get("difot") is not None else "")
+               + f". Weakest dimension: "
+               + (min(hc['dimensions'], key=lambda d: d['score'])['dimension']
+                  if hc['dimensions'] else "n/a") + ".")
+    return summary, [{"type": "text", "title": "Supply chain health check",
+                      "data": report, "filename": "health_check.txt"}]
+
+
+def _tool_tender_pack(ctx: dict) -> tuple[str, list]:
+    ships = ctx.get("shipments")
+    pack = tender_mod.build_tender_pack(ships, ctx.get("scorecard")) if ships is not None else None
+    if pack is None:
+        return "Cannot build a tender pack — no shipment data with order dates loaded.", []
+    s = pack["stats"]
+    artifacts = [
+        {"type": "text", "title": "RFP draft", "data": pack["rfp_text"],
+         "filename": "freight_rfp_draft.txt"},
+        {"type": "dataframe", "title": "Tender lane summary", "data": pack["lanes"],
+         "filename": "tender_lane_summary.csv"},
+    ]
+    if pack["carriers"] is not None:
+        artifacts.append({"type": "dataframe", "title": "Incumbent carrier summary",
+                          "data": pack["carriers"], "filename": "tender_carrier_summary.csv"})
+    summary = (f"Tender pack built from {s['total_shipments']:,} shipments ({s['period']}): "
+               f"avg {s['monthly_avg']:,.0f}/month, peak {s['peak_shipments']:,} in {s['peak_month']}"
+               + (f", spend ${s['annual_spend']:,.0f}" if s['annual_spend'] else "")
+               + ". RFP draft + lane summary ready.")
+    return summary, artifacts
+
+
 _TOOL_FUNCS: dict[str, Callable] = {
     "get_at_risk_shipments": _tool_at_risk,
     "get_carrier_scorecard": _tool_scorecard,
@@ -244,6 +291,8 @@ _TOOL_FUNCS: dict[str, Callable] = {
     "generate_reorder_plan": _tool_reorder_plan,
     "exception_summary": _tool_exception_summary,
     "freight_cost_audit": _tool_cost_audit,
+    "supply_chain_health_check": _tool_health_check,
+    "generate_tender_pack": _tool_tender_pack,
 }
 
 TOOLS_SCHEMA = [
@@ -279,6 +328,16 @@ TOOLS_SCHEMA = [
         "description": "Audit freight charges for billing anomalies: cost outliers, potential "
                        "duplicate charges, premiums paid on late deliveries, re-tender opportunity.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "supply_chain_health_check",
+        "description": "Run the scored supply chain health check (0-100, grade A-F) across "
+                       "delivery, risk, cost, inventory, network, and data-quality dimensions.",
+        "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "generate_tender_pack",
+        "description": "Build a freight tender / RFP pack: monthly lane volumes, incumbent "
+                       "carrier summary, and a ready-to-edit RFP document from real data.",
+        "parameters": {"type": "object", "properties": {}, "required": []}}},
 ]
 
 
@@ -312,6 +371,10 @@ def _extract_carrier(query: str, ctx: dict) -> Optional[str]:
 def _route_offline(query: str, ctx: dict) -> list[tuple[str, dict]]:
     q = query.lower()
     carrier = _extract_carrier(query, ctx)
+    if re.search(r"\b(tender|rfp|bid|proposal|procurement)\b", q):
+        return [("generate_tender_pack", {})]
+    if re.search(r"\b(health|assessment|scorecard of (the )?(chain|network)|how healthy|grade (the|my))\b", q):
+        return [("supply_chain_health_check", {})]
     if re.search(r"\b(email|draft|write|letter|sla)\b", q):
         return [("draft_carrier_email", {"carrier": carrier})]
     if re.search(r"\b(audit|invoice|billing|overcharge|duplicate|cost anomal|freight (cost|spend))\b", q):
@@ -411,4 +474,6 @@ QUICK_ACTIONS = [
     ("✉ Email worst carrier", "Draft an SLA-review email to our worst-performing carrier."),
     ("📦 Reorder plan", "Generate the reorder plan."),
     ("⚖ Cost audit", "Audit our freight costs for billing anomalies."),
+    ("🩺 Health check", "Run a supply chain health check."),
+    ("📑 Tender pack", "Build a freight tender pack with an RFP draft."),
 ]

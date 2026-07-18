@@ -6,7 +6,7 @@ Master of Business (Supply Chain & International Business) — Monash University
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Version](https://img.shields.io/badge/version-4.4.0-brightgreen)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-4.5.0-brightgreen)](CHANGELOG)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
@@ -89,6 +89,10 @@ logistics-ai-dashboard/
 │   │                             #   6 tools acting on live data
 │   ├── cost_audit.py             # Freight Cost Audit: outliers, duplicates, late-premiums,
 │   │                             #   re-tender opportunity
+│   ├── health_check.py           # Scored supply chain health check (6 dimensions, DIFOT)
+│   ├── tender.py                 # Freight tender / RFP pack + rate-shift simulator
+│   ├── alerts.py                 # Alert digests + optional SMTP email delivery
+│   ├── store.py                  # SQLite persistence (retail tracker, settings)
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -190,6 +194,8 @@ The copilot no longer just answers — it **executes tools on your live data**:
 | `generate_reorder_plan` | Produces the EOQ / ROP / safety-stock execution plan (CSV) |
 | `exception_summary` | Builds a digest: late + at-risk counts, weak carriers, top risks |
 | `freight_cost_audit` | Audits freight charges: outliers, duplicates, late-premiums, re-tender opportunity |
+| `supply_chain_health_check` | Scored assessment (0-100, A-F) across 6 dimensions with DIFOT |
+| `generate_tender_pack` | Data-backed freight tender: lane volumes, carrier summary, RFP draft |
 
 - **Groq LLaMA-3.3-70B function calling** picks and chains tools, then answers citing tool results
 - **Offline mode** — with no API key, a deterministic router still runs every action on live data (LLM adds reasoning + wording, never the numbers)
@@ -216,6 +222,26 @@ The copilot no longer just answers — it **executes tools on your live data**:
 ### What-If Lab (v4.4)
 - Stress-test sliders: demand ±%, lead time ±%, lead-time variability ±%, service level
 - Live recalculation of safety stock, reorder point, EOQ, order cadence, and total cost — with deltas vs your current baseline
+
+### Supply Chain Health Check (v4.5)
+- Scored assessment (0–100, grade A–F) across six dimensions: delivery performance, risk posture, cost discipline, inventory discipline, network efficiency, data quality
+- **DIFOT** (delivered-in-full-on-time, approx) headline metric
+- Dimensions without data are excluded from the weighting — never guessed
+- Priority actions + exportable report
+
+### Freight Tender / RFP Toolkit (v4.5)
+- One-click, data-backed tender pack: monthly lane volumes, peak-month capacity callout, incumbent carrier summary
+- Ready-to-edit **RFP document** populated with your real volumes, spend, and on-time baseline
+- **Rate-shift simulator** — estimate the cost impact of moving X% of one carrier's volume to another's rate
+
+### Alerts & Persistence (v4.5)
+- **Alert digests** for both modes: enterprise (exceptions + audit + health) and retail (ORDER NOW / SOON per product)
+- **Email delivery** via SMTP settings in `.env` (degrades to download when unset)
+- **SQLite persistence** — the Small Retailer tracker and alert emails survive restarts (`data/supchainmate.db`, gitignored)
+- **Shopify / WooCommerce** order exports auto-recognised on upload (badge confirms the platform)
+
+### Marketing Site
+- `docs/index.html` — a self-contained dark landing page, ready for GitHub Pages (Settings → Pages → `docs/`)
 
 ### Route Optimisation
 - **NVIDIA cuOpt** — real Capacitated Vehicle Routing Problem solver
@@ -281,6 +307,16 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.5.0 — Health Check, Tender Toolkit, Alerts, Persistence
+- **NEW**: `modules/health_check.py` — 6-dimension scored assessment with DIFOT and priority actions
+- **NEW**: `modules/tender.py` — freight tender pack (lane volumes, carrier summary, RFP draft) + rate-shift simulator
+- **NEW**: `modules/alerts.py` — enterprise + retail alert digests, optional SMTP email delivery (`SMTP_*` in `.env`)
+- **NEW**: `modules/store.py` — SQLite persistence; retail tracker and alert emails survive restarts
+- **NEW**: Retail alerts activated (replaces the "coming soon" placeholder) — digest preview, download, send
+- **NEW**: Shopify / WooCommerce export detection badge on upload
+- **NEW**: 2 more agent tools (health check, tender pack) → 8 total, quick actions in two rows
+- **NEW**: `docs/index.html` marketing landing page (GitHub Pages ready)
 
 ### v4.4.0 — Freight Cost Audit + What-If Lab
 - **NEW**: `modules/cost_audit.py` — deterministic billing checks: per-carrier IQR outliers, potential duplicates, late-delivery premiums, re-tender opportunity vs network-median rate

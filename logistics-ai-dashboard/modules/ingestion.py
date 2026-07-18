@@ -278,6 +278,23 @@ def delivery_to_tracking(delivery_df: pd.DataFrame, n: int = None) -> pd.DataFra
     return df.reset_index(drop=True)
 
 
+# ── E-commerce store export detection ─────────────────────────────────────────
+
+def detect_store_platform(df: pd.DataFrame) -> Optional[str]:
+    """
+    Recognise standard e-commerce order exports so the UI can confirm support.
+    Shopify orders_export.csv → 'Created at' + 'Lineitem quantity';
+    WooCommerce order exports → order_number/order_id + a product/item column.
+    Either way the generic auto-detection ingests them (date + quantity).
+    """
+    cols = {str(c).strip().lower() for c in df.columns}
+    if "lineitem quantity" in cols and "created at" in cols:
+        return "Shopify"
+    if ({"order_number", "order_id"} & cols) and ({"item_name", "product_name", "product_id", "sku"} & cols):
+        return "WooCommerce"
+    return None
+
+
 # ── Summary Helper ─────────────────────────────────────────────────────────────
 
 def detected_columns_summary(raw_df: pd.DataFrame, file_type: str) -> dict:

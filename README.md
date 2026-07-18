@@ -6,7 +6,7 @@ Master of Business (Supply Chain & International Business) — Monash University
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Version](https://img.shields.io/badge/version-4.1.0-brightgreen)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-4.2.0-brightgreen)](CHANGELOG)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
@@ -83,6 +83,8 @@ logistics-ai-dashboard/
 │   ├── tracking.py               # LightGBM delay prediction + feature engineering
 │   ├── decisions.py              # Decision Engine (SS, EOQ, ROP) + build_demand_profile_from_retail_inputs()
 │   ├── retail.py                 # Small Retailer helpers (tier → service level, tracker rows, status)
+│   ├── control_tower.py          # Freight Control Tower: shipment board, carrier scorecards,
+│   │                             #   on-time KPIs, exception insights
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -179,6 +181,14 @@ else                →  ✅ SAFE
 - **NVIDIA LLaMA-4-Scout** — automatic fallback if Groq unavailable
 - Shows 🟢 LIVE / 🟡 OFFLINE status indicator
 
+### Freight Control Tower (v4.2)
+- **Shipment Tracking Board** — every shipment classified as ON TRACK / AT RISK / LATE / DELIVERED ON TIME / DELIVERED LATE / CANCELLED, exceptions surfaced first
+- **Real on-time performance** — computed from promised vs actual delivery dates when both exist (93.2% on the Olist demo — real dates, not simulated)
+- **ML risk flagging** — open shipments in the top decile of LightGBM delay probability are flagged AT RISK
+- **Carrier Scorecards** — per-carrier volume, on-time %, late count, avg delay, avg cost/shipment, A–D grade, plus plain-language insights (volume-shift and SLA-review suggestions)
+- **Carrier auto-detection** — upload a delivery file with a carrier/courier/transporter/3PL column to unlock scorecards on your own carriers (demo uses fictional carriers, clearly labelled)
+- **Exports** — tracking board + carrier scorecard CSVs
+
 ### Route Optimisation
 - **NVIDIA cuOpt** — real Capacitated Vehicle Routing Problem solver
 - Haversine distance matrix built from delivery cluster centroids
@@ -243,6 +253,14 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.2.0 — Freight Control Tower
+- **NEW**: `modules/control_tower.py` — shipment board, carrier scorecards, on-time KPIs
+- **NEW**: Shipment Tracking Board — per-shipment health (ON TRACK / AT RISK / LATE / DELIVERED LATE), exceptions-first sorting, CSV export
+- **NEW**: Carrier Scorecards — on-time %, late count, avg delay, cost/shipment, A–D grades, on-time bar chart, plain-language insights
+- **NEW**: Control Tower KPI strip — total, in transit, on-time % (real promised-vs-actual dates), late, ML at-risk
+- **NEW**: Carrier column auto-detection in delivery uploads (`carrier|courier|transporter|3PL|LSP`); promised-date detection (`estimated|promised|expected|due|eta|sla`)
+- **DEMO**: Fictional carriers + freight costs simulated over real Olist delivery dates (labelled in UI)
 
 ### v4.1.0 — Dual entry: Enterprise + Small Retailer
 - **NEW**: Launch screen — choose **Enterprise** or **Small Retailer** mode

@@ -10,7 +10,7 @@ import streamlit as st
 
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
-from modules import nvidia_api, groq_ai
+from modules import nvidia_api, groq_ai, control_tower
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -98,7 +98,7 @@ _SESSION_KEYS = [
     "orders_df", "delivery_df", "location_df", "cost_df",
     "daily_df", "forecast_df", "tracking_df", "geo_df",
     "delay_model", "X_test_delay", "summary", "current_cost",
-    "data_loaded", "demo_mode",
+    "data_loaded", "demo_mode", "shipments_df", "carriers_simulated",
 ]
 
 for key in _SESSION_KEYS:
@@ -333,6 +333,8 @@ def _load_demo():
 
         raw_delivery = pd.read_csv(DEMO_DELIVERY)
         tdf          = tracking.simulate_tracking(raw_delivery)
+        tdf          = control_tower.assign_demo_carriers(tdf)
+        st.session_state.carriers_simulated = True
         m, X_test, _ = tracking.train_delay_model(tdf)
         st.session_state.tracking_df   = tdf
         st.session_state.delay_model   = m
@@ -374,6 +376,7 @@ def _process_uploaded(raw_orders, raw_delivery, raw_location, raw_cost):
         if raw_delivery is not None:
             delivery_norm = ingestion.normalise_delivery(raw_delivery)
             tdf           = ingestion.delivery_to_tracking(delivery_norm)
+            st.session_state.carriers_simulated = False
         else:
             # Simulate from orders if no delivery file provided
             tdf           = tracking.simulate_tracking(orders_norm.rename(columns={"order_date": "order_purchase_timestamp"}))
@@ -938,6 +941,130 @@ with col_dl:
         mime="text/csv",
         use_container_width=True,
     )
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FREIGHT CONTROL TOWER — SHIPMENT TRACKING BOARD + CARRIER SCORECARDS
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+st.markdown("""
+<div style="font-family:'Teko',sans-serif;font-size:1.6rem;letter-spacing:0.12rem;
+            text-transform:uppercase;color:#FFFFFF;padding:8px 0;border-bottom:1px solid #00D4FF;
+            margin-bottom:16px;">
+    ⛟ FREIGHT CONTROL TOWER
+    <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#666;margin-left:12px;">
+        SHIPMENT TRACKING BOARD · CARRIER SCORECARDS · EXCEPTION ALERTS
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
+# Shipment prep is independent of sidebar params — compute once per data load.
+if st.session_state.get("shipments_df") is None:
+    with st.spinner("BUILDING SHIPMENT BOARD..."):
+        st.session_state.shipments_df = control_tower.prepare_shipments(tracking_df, delay_model)
+shipments_df = st.session_state.shipments_df
+ct_kpis      = control_tower.shipment_kpis(shipments_df)
+
+_hp = lambda label, value, sub, color="#00D4FF": f"""
+<div class="hud-panel" style="border-color:#333340;">
+    <div class="hud-label">{label}</div>
+    <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:{color};">{value}</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#666;">{sub}</div>
+</div>"""
+
+ct1, ct2, ct3, ct4, ct5 = st.columns(5)
+_on_time_txt = f"{ct_kpis['on_time_pct']:.1f}%" if not math.isnan(ct_kpis["on_time_pct"]) else "N/A"
+_on_time_col = "#00E676" if (not math.isnan(ct_kpis["on_time_pct"]) and ct_kpis["on_time_pct"] >= 90) else "#FBC02D"
+ct1.markdown(_hp("TOTAL SHIPMENTS", f"{ct_kpis['total']:,}", "ALL RECORDS"), unsafe_allow_html=True)
+ct2.markdown(_hp("IN TRANSIT / OPEN", f"{ct_kpis['in_transit']:,}", "NOT YET DELIVERED", "#FBC02D"), unsafe_allow_html=True)
+ct3.markdown(_hp("ON-TIME DELIVERY", _on_time_txt, "VS PROMISED DATE", _on_time_col), unsafe_allow_html=True)
+ct4.markdown(_hp("LATE", f"{ct_kpis['late']:,}", "MISSED PROMISE", "#FF003C"), unsafe_allow_html=True)
+ct5.markdown(_hp("AT RISK (ML)", f"{ct_kpis['at_risk']:,}", f"AVG DELAY {ct_kpis['avg_delay_days']:.1f}D WHEN LATE", "#FF003C"), unsafe_allow_html=True)
+
+tower_board, tower_score = st.columns([1, 1], gap="medium")
+
+with tower_board:
+    st.markdown("<div class='hud-label' style='margin:12px 0 6px 0;'>SHIPMENT TRACKING BOARD</div>", unsafe_allow_html=True)
+    health_options = ["ALL"] + sorted(shipments_df["health"].unique().tolist())
+    pick_health = st.selectbox("Filter by status", health_options, key="ct_health_filter")
+    board = shipments_df if pick_health == "ALL" else shipments_df[shipments_df["health"] == pick_health]
+    # Exceptions first, then most recent
+    _health_priority = {"LATE": 0, "AT RISK": 1, "DELIVERED LATE": 2, "ON TRACK": 3,
+                        "DELIVERED ON TIME": 4, "CANCELLED": 5}
+    board_view = (
+        board.assign(_prio=board["health"].map(_health_priority).fillna(9))
+        .sort_values(["_prio", "order_date"], ascending=[True, False])
+        .drop(columns="_prio")
+        .head(500)
+        .copy()
+    )
+    for dcol in ("order_date", "promised_date", "delivered_date"):
+        board_view[dcol] = board_view[dcol].dt.strftime("%Y-%m-%d")
+    show_cols = ["shipment_id", "order_date", "promised_date", "delivered_date", "health", "delay_days", "delay_proba"]
+    if board_view["carrier"].notna().any():
+        show_cols.insert(1, "carrier")
+    board_view = board_view[show_cols].rename(columns={
+        "shipment_id": "Shipment", "carrier": "Carrier", "order_date": "Ordered",
+        "promised_date": "Promised", "delivered_date": "Delivered",
+        "health": "Status", "delay_days": "Delay (days)", "delay_proba": "ML Risk %",
+    })
+    st.dataframe(board_view.round({"ML Risk %": 1}), use_container_width=True, hide_index=True, height=320)
+    st.caption(f"Showing {len(board_view):,} highest-priority of {len(board):,} matching shipments (exceptions first).")
+    st.download_button(
+        "⇩ EXPORT TRACKING BOARD (CSV)",
+        data=board.to_csv(index=False).encode(),
+        file_name="supchainmate_tracking_board.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+with tower_score:
+    st.markdown("<div class='hud-label' style='margin:12px 0 6px 0;'>CARRIER SCORECARD</div>", unsafe_allow_html=True)
+    if st.session_state.get("carriers_simulated"):
+        st.markdown(
+            "<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#FBC02D;'>"
+            "⚠ DEMO MODE — CARRIER NAMES &amp; COSTS ARE SIMULATED (fictional carriers over real Olist delivery dates)</div>",
+            unsafe_allow_html=True,
+        )
+    scorecard = control_tower.carrier_scorecard(shipments_df)
+    if scorecard is None:
+        st.info(
+            "No carrier column detected. Add a 'carrier' (or courier/transporter/3PL) column "
+            "to your delivery file to unlock carrier scorecards."
+        )
+    else:
+        st.dataframe(scorecard, use_container_width=True, hide_index=True)
+
+        fig_carrier = px.bar(
+            scorecard.dropna(subset=["On-Time %"]),
+            x="Carrier", y="On-Time %", color="Grade",
+            color_discrete_map={"A": "#00E676", "B": "#00D4FF", "C": "#FBC02D", "D": "#FF003C"},
+            height=240,
+        )
+        fig_carrier.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,13,16,1)",
+            margin=dict(l=40, r=20, t=10, b=30),
+            yaxis_range=[0, 100],
+            legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#888")),
+        )
+        fig_carrier.update_xaxes(gridcolor="#222228")
+        fig_carrier.update_yaxes(gridcolor="#222228")
+        st.plotly_chart(fig_carrier, use_container_width=True)
+
+        for note in control_tower.scorecard_insights(scorecard):
+            st.markdown(f"""
+            <div style="background:#151518;border-left:3px solid #00D4FF;padding:8px 14px;
+                        margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#CCCCCC;">
+                {note}
+            </div>""", unsafe_allow_html=True)
+
+        st.download_button(
+            "⇩ EXPORT CARRIER SCORECARD (CSV)",
+            data=scorecard.to_csv(index=False).encode(),
+            file_name="supchainmate_carrier_scorecard.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BOTTOM: DEMAND SURGE SIMULATOR

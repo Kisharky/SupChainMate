@@ -2,6 +2,13 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v4.10.0 — Autonomous Workforce: Runbook + Status Board
+- **NEW**: `modules/runbook.py` — plain-English standing rules ("flag any shipment over $50", "alert me when SwiftLine on-time drops below 95%") parsed deterministically, auto-assigned to the right AI Worker, persisted in SQLite, evaluated on every data load
+- **NEW**: `agent.autonomous_sweep()` — background monitoring; every worker reports live status without being asked
+- **NEW**: Autonomous Workforce section — 5 worker status cards with green/yellow/red indicators and RULE FIRED badges, plus the Runbook management panel
+- **NEW**: Triggered runbook rules included in the enterprise alert digest
+- Tests: +10 (53 total)
+
 ## v4.9.0 — Market Signals: External Factor Engine
 - **NEW**: `modules/factors.py` — keyless factor sources: FX (frankfurter/ECB), Brent crude (Stooq), weather (Open-Meteo), offline holiday calendar (`holidays`), PostHog/GA daily-events CSV import
 - **NEW**: Market Signals panel — Bloomberg-style ticker strip, factor↔demand correlations (same-day + 7-day leading), factor frame export

@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules import (agent, alerts, carbon, connect, control_tower, cost_audit,
                      doc_intel, ensemble, factors, health_check, ingestion, retail,
-                     store, tender)
+                     runbook, store, tender)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -260,6 +260,70 @@ def test_workers_cover_all_tools():
     assert tools_in_workers == schema_tools
     assert agent.workers_for_actions(["freight_cost_audit", "exception_summary"]) == \
         ["Auditor", "Tracker"]
+
+
+# ── Runbook + autonomous sweep ────────────────────────────────────────────────
+
+@pytest.mark.parametrize("text,metric,op,thr,worker", [
+    ("flag any shipment over $50", "shipment_cost", ">", 50.0, "Auditor"),
+    ("alert me when SwiftLine on-time drops below 95%", "on_time", "<", 95.0, "Carrier Manager"),
+    ("flag deliveries more than 5 days late", "delay_days", ">", 5.0, "Tracker"),
+    ("alert me if ml risk above 20%", "ml_risk", ">", 20.0, "Tracker"),
+    ("health below 70", "health_score", "<", 70.0, "Planner"),
+    ("notify me when retender opportunity exceeds $100,000", "retender", ">", 100000.0, "Procurement"),
+])
+def test_parse_rule(text, metric, op, thr, worker):
+    r = runbook.parse_rule(text)
+    assert r is not None, text
+    assert (r["metric"], r["op"], r["threshold"], r["worker"]) == (metric, op, thr, worker)
+
+
+def test_parse_rule_carrier_and_action():
+    r = runbook.parse_rule("alert me when SwiftLine on-time drops below 95%")
+    assert r["carrier"] == "swiftline" and r["action"] == "alert"
+    assert runbook.parse_rule("make the warehouse nicer") is None
+
+
+def test_evaluate_rules(shipments):
+    ctx = {"shipments": shipments,
+           "kpis": control_tower.shipment_kpis(shipments),
+           "scorecard": control_tower.carrier_scorecard(shipments),
+           "audit": cost_audit.run_audit(shipments),
+           "health": {"score": 62.0, "grade": "C"}}
+    fired = runbook.evaluate_rule(runbook.parse_rule("flag any shipment over $30"), ctx)
+    assert fired["triggered"] and "over $30.00" in fired["detail"]
+    clear = runbook.evaluate_rule(runbook.parse_rule("flag any shipment over $999999"), ctx)
+    assert not clear["triggered"]
+    health_rule = runbook.evaluate_rule(runbook.parse_rule("health below 70"), ctx)
+    assert health_rule["triggered"] and "62" in health_rule["detail"]
+    missing = runbook.evaluate_rule(
+        runbook.parse_rule("alert me when GhostCarrier on-time drops below 95%"), ctx)
+    assert not missing["triggered"] and "not found" in missing["detail"]
+    digest = runbook.runbook_digest([fired, clear])
+    assert "1 rule(s) triggered" in digest and "Auditor" in digest
+
+
+def test_runbook_persistence(tmp_db):
+    assert runbook.load_rules() == []
+    added = runbook.add_rule("flag any shipment over $50")
+    assert added is not None and len(runbook.load_rules()) == 1
+    assert runbook.add_rule("gibberish with no rule") is None
+    runbook.remove_rule(0)
+    assert runbook.load_rules() == []
+
+
+def test_autonomous_sweep(shipments):
+    ctx = {"kpis": control_tower.shipment_kpis(shipments),
+           "audit": cost_audit.run_audit(shipments),
+           "scorecard": control_tower.carrier_scorecard(shipments),
+           "health": {"score": 85.0, "grade": "B"},
+           "shipments": shipments}
+    sweep = agent.autonomous_sweep(ctx)
+    assert [s["worker"] for s in sweep] == \
+        ["Tracker", "Auditor", "Carrier Manager", "Procurement", "Planner"]
+    assert all(s["level"] in ("green", "yellow", "red", "grey") for s in sweep)
+    planner = next(s for s in sweep if s["worker"] == "Planner")
+    assert "85" in planner["status"] and planner["level"] == "green"
 
 
 # ── External factors ──────────────────────────────────────────────────────────

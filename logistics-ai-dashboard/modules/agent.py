@@ -549,6 +549,56 @@ WORKERS = {
 _TOOL_TO_WORKER = {tool: name for name, w in WORKERS.items() for tool in w["tools"]}
 
 
+def autonomous_sweep(ctx: dict) -> list[dict]:
+    """
+    Manhattan-style background monitoring: every worker reports its live
+    status from already-computed context — no LLM, no recompute.
+    Returns [{worker, status, level}] with level in green/yellow/red/grey.
+    """
+    out = []
+    kpis = ctx.get("kpis") or {}
+
+    at_risk, late = kpis.get("at_risk", 0) or 0, kpis.get("late", 0) or 0
+    out.append({"worker": "Tracker",
+                "status": f"{at_risk:,} at risk · {late:,} late",
+                "level": "red" if late else ("yellow" if at_risk else "green")})
+
+    audit = ctx.get("audit")
+    if audit:
+        k = audit["kpis"]
+        out.append({"worker": "Auditor",
+                    "status": f"${k['flagged_value']:,.0f} across {k['flagged_count']:,} flagged charges",
+                    "level": "red" if k["flagged_count"] else "green"})
+    else:
+        out.append({"worker": "Auditor", "status": "no freight cost data", "level": "grey"})
+
+    score = ctx.get("scorecard")
+    if score is not None and len(score):
+        worst = score.iloc[-1]
+        out.append({"worker": "Carrier Manager",
+                    "status": f"worst: {worst['Carrier']} ({worst['On-Time %']}% · grade {worst['Grade']})",
+                    "level": "red" if worst["Grade"] in ("C", "D") else "green"})
+    else:
+        out.append({"worker": "Carrier Manager", "status": "no carrier data", "level": "grey"})
+
+    if audit and audit["kpis"]["retender_opportunity"] > 0:
+        out.append({"worker": "Procurement",
+                    "status": f"${audit['kpis']['retender_opportunity']:,.0f} re-tender opportunity",
+                    "level": "yellow"})
+    else:
+        out.append({"worker": "Procurement", "status": "no re-tender opportunity found",
+                    "level": "green" if audit else "grey"})
+
+    hc = ctx.get("health")
+    if hc:
+        out.append({"worker": "Planner",
+                    "status": f"network health {hc['grade']} ({hc['score']:.0f}/100)",
+                    "level": {"A": "green", "B": "green", "C": "yellow"}.get(hc["grade"], "red")})
+    else:
+        out.append({"worker": "Planner", "status": "health check pending", "level": "grey"})
+    return out
+
+
 def workers_for_actions(actions: list[str]) -> list[str]:
     """Which named workers handled these executed tools (ordered, deduped)."""
     seen: list[str] = []

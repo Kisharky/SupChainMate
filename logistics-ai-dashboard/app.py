@@ -25,6 +25,8 @@ st.set_page_config(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 from views import helpers as vh
 from views import landing as v_landing, retail as v_retail, upload as v_upload
+from views import decision_center as v_decisions
+from modules import trust
 
 vh.apply_theme()
 
@@ -1322,6 +1324,33 @@ with st.expander("📓 RUNBOOK — STANDING RULES IN PLAIN ENGLISH", expanded=bo
         if st.button("Remove selected rule", key="rb_del_btn"):
             runbook.remove_rule(del_idx)
             st.rerun()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DECISION CENTER — EXPLAINABLE, HUMAN-APPROVED RECOMMENDATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+st.markdown("""
+<div style="font-family:'Teko',sans-serif;font-size:1.6rem;letter-spacing:0.12rem;
+            text-transform:uppercase;color:#FFFFFF;padding:8px 0;border-bottom:1px solid #00D4FF;
+            margin-bottom:16px;">
+    🛡 DECISION CENTER
+    <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#666;margin-left:12px;">
+        EXPLAINED · SCORED · HUMAN-APPROVED · FULLY AUDITED
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
+_trust_ctx = {
+    "demand_profile": demand_profile,
+    "decision_outputs": decision_outputs,
+    "history_days": len(daily_df),
+    "service_level": service_level,
+    "sku_plan": sku_plan_with_status,
+    "avg_lead_time": avg_lead_time,
+    "scorecard": scorecard,
+    "audit": audit,
+}
+v_decisions.render(trust.generate_all(_trust_ctx))
 
 # ── Freight Tender / RFP Toolkit ───────────────────────────────────────────────
 with st.expander("📑 FREIGHT TENDER / RFP TOOLKIT", expanded=False):

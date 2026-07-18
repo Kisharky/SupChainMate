@@ -6,14 +6,14 @@
 
 *A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
 
-[![Version](https://img.shields.io/badge/version-4.12.0-brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.13.0-brightgreen)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-73%20passing-brightgreen)](logistics-ai-dashboard/tests)
+[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen)](logistics-ai-dashboard/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 [Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
@@ -103,6 +103,20 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 
 ---
 
+## Decision Center — the trust layer
+
+Every material AI recommendation flows through a human-in-the-loop **Decision Center** before it counts:
+
+- **Explainable** — each recommendation carries WHY drivers, every one backed by an evidence value from the data (demand σ, days of cover, on-time gaps, the formula used)
+- **Confidence with a stated basis** — a transparent heuristic (data support + signal strength, 20–95). The basis string says exactly what it's built from; it is deliberately *not* presented as a calibrated probability
+- **Quantified business impact** — cost savings ($/yr), stockout risk (%), and service level (%) chips on every card, computed by the same deterministic engines
+- **Approve / Reject / Modify** — modifications carry a note; decisions are stamped with actor and UTC time
+- **Decision history + immutable audit trail** — every creation and decision event is logged to SQLite and exportable as CSV
+
+This adapts the design patterns common across enterprise control towers (action centers, explanation drill-downs, approval workflows, audit trails) into an open implementation — patterns, not proprietary features.
+
+---
+
 ## AI Workers
 
 The agentic copilot organises its **10 tools** as five named workers — each with a defined remit, one-click actions, and reply attribution:
@@ -172,7 +186,8 @@ SupChainMate/
 │   │   ├── landing.py            # Mode-select launch screen
 │   │   ├── retail.py             # Small Retailer page
 │   │   ├── upload.py             # Enterprise upload screen + store connect
-│   │   └── pipeline.py           # Demo loading & upload processing
+│   │   ├── pipeline.py           # Demo loading & upload processing
+│   │   └── decision_center.py    # Human-in-the-loop approval workflow + audit
 │   ├── modules/
 │   │   ├── ingestion.py          # Column auto-detection, store-export recognition
 │   │   ├── forecast.py           # Prophet + external regressors
@@ -189,6 +204,7 @@ SupChainMate/
 │   │   ├── health_check.py       # Scored 6-dimension assessment, DIFOT
 │   │   ├── tender.py             # Tender/RFP pack + rate-shift simulation
 │   │   ├── agent.py              # AI Workers: tool-calling loop + offline router + sweep
+│   │   ├── trust.py              # Decision trust layer: explainable, scored recommendations
 │   │   ├── runbook.py            # Plain-English standing rules engine
 │   │   ├── groq_ai.py            # Groq copilot, auto-insights, column detection
 │   │   ├── nvidia_api.py         # cuOpt VRP solver, DeepSeek fallback

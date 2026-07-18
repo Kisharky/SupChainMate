@@ -28,6 +28,10 @@
 
 *Mission Control — multi-signal disruption radar, AI auto-insights, and the decision engine on 99k live orders.*
 
+![Autonomous Workforce](docs/workforce_preview.png)
+
+*The Autonomous Workforce — five AI workers reporting live status on every load, with plain-English runbook rules.*
+
 ---
 
 ## Overview
@@ -91,7 +95,8 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 |---|---|
 | **Live Store Connect** | Order sync from Shopify (Admin API) and WooCommerce (REST v3); credentials are used per-fetch and never persisted |
 | **Smart Ingestion** | Column auto-detection (regex + optional LLM) for any CSV/Excel naming convention; Shopify/WooCommerce export recognition |
-| **Alert Digests** | Enterprise (exceptions + audit + health) and retail (per-product reorder) digests, delivered by SMTP email or download |
+| **Autonomous Runbook** | Standing rules in plain English, parsed deterministically, auto-assigned to the right AI Worker, persisted, and enforced on every data load — triggered rules lead the alert digest |
+| **Alert Digests** | Enterprise (runbook + exceptions + audit + health) and retail (per-product reorder) digests, delivered by SMTP email or download |
 | **Reporting Layer** | Six structured CSV exports — forecast, KPI summary, inventory plan, zone risk, execution plan, executive report — ready for Power BI, Excel, or ERP import |
 | **Persistence** | SQLite-backed retail tracker, settings, and KPI history that survive restarts |
 

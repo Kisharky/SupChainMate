@@ -73,7 +73,13 @@ def assign_demo_carriers(df: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
     df["carrier"] = carriers
 
     base = df["carrier"].map(_DEMO_BASE_RATES).astype(float)
-    df["freight_cost"] = (base * rng.uniform(0.7, 1.5, size=len(df))).round(2)
+    costs = base.to_numpy() * rng.uniform(0.7, 1.5, size=len(df))
+    # Inject ~0.4% simulated billing errors (2-4x normal rate) so the cost
+    # audit's outlier detector has realistic anomalies to surface in the demo.
+    n_anom = max(3, int(len(df) * 0.004))
+    anom_idx = rng.choice(len(df), size=n_anom, replace=False)
+    costs[anom_idx] *= rng.uniform(2.2, 4.0, size=n_anom)
+    df["freight_cost"] = np.round(costs, 2)
     return df
 
 

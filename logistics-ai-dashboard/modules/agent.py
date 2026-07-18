@@ -25,6 +25,7 @@ from typing import Callable, Optional
 import pandas as pd
 
 from modules import groq_ai
+from modules import cost_audit as cost_audit_mod
 
 MAX_AGENT_TURNS = 4
 
@@ -213,12 +214,36 @@ def _tool_exception_summary(ctx: dict) -> tuple[str, list]:
                       "data": digest, "filename": "exception_digest.txt"}]
 
 
+def _tool_cost_audit(ctx: dict) -> tuple[str, list]:
+    ships = ctx.get("shipments")
+    if ships is None:
+        return "No shipment data loaded.", []
+    audit = cost_audit_mod.run_audit(ships)
+    if audit is None:
+        return "No freight cost data available — add a cost column to the delivery file.", []
+    k = audit["kpis"]
+    digest = cost_audit_mod.audit_digest(audit)
+    artifacts = [{"type": "text", "title": "Freight cost audit report",
+                  "data": digest, "filename": "freight_cost_audit.txt"}]
+    if len(audit["flagged"]):
+        artifacts.append({"type": "dataframe", "title": "Flagged charges",
+                          "data": audit["flagged"].head(200),
+                          "filename": "flagged_charges.csv"})
+    summary = (f"Audited ${k['total_spend']:,.0f} of freight spend: "
+               f"{k['flagged_count']:,} charges flagged worth ${k['flagged_value']:,.0f} "
+               f"(outliers ${k['outlier_overcharge']:,.0f}, duplicates ${k['duplicate_value']:,.0f}, "
+               f"late-premiums ${k['late_premium_value']:,.0f}); re-tender opportunity "
+               f"${k['retender_opportunity']:,.0f}.")
+    return summary, artifacts
+
+
 _TOOL_FUNCS: dict[str, Callable] = {
     "get_at_risk_shipments": _tool_at_risk,
     "get_carrier_scorecard": _tool_scorecard,
     "draft_carrier_email": _tool_draft_email,
     "generate_reorder_plan": _tool_reorder_plan,
     "exception_summary": _tool_exception_summary,
+    "freight_cost_audit": _tool_cost_audit,
 }
 
 TOOLS_SCHEMA = [
@@ -248,6 +273,11 @@ TOOLS_SCHEMA = [
     {"type": "function", "function": {
         "name": "exception_summary",
         "description": "Build a digest of all current exceptions: late, at-risk, weak carriers.",
+        "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "freight_cost_audit",
+        "description": "Audit freight charges for billing anomalies: cost outliers, potential "
+                       "duplicate charges, premiums paid on late deliveries, re-tender opportunity.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
 ]
 
@@ -284,6 +314,8 @@ def _route_offline(query: str, ctx: dict) -> list[tuple[str, dict]]:
     carrier = _extract_carrier(query, ctx)
     if re.search(r"\b(email|draft|write|letter|sla)\b", q):
         return [("draft_carrier_email", {"carrier": carrier})]
+    if re.search(r"\b(audit|invoice|billing|overcharge|duplicate|cost anomal|freight (cost|spend))\b", q):
+        return [("freight_cost_audit", {})]
     if re.search(r"\b(reorder|replenish|order plan|execution plan|how much.*order)\b", q):
         return [("generate_reorder_plan", {})]
     if re.search(r"\b(summar|digest|report|overview|status update|brief)\b", q):
@@ -378,4 +410,5 @@ QUICK_ACTIONS = [
     ("⛟ At-risk shipments", "List the shipments most at risk of delay."),
     ("✉ Email worst carrier", "Draft an SLA-review email to our worst-performing carrier."),
     ("📦 Reorder plan", "Generate the reorder plan."),
+    ("⚖ Cost audit", "Audit our freight costs for billing anomalies."),
 ]

@@ -6,7 +6,7 @@ Master of Business (Supply Chain & International Business) — Monash University
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Version](https://img.shields.io/badge/version-4.3.0-brightgreen)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-4.4.0-brightgreen)](CHANGELOG)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
@@ -86,7 +86,9 @@ logistics-ai-dashboard/
 │   ├── control_tower.py          # Freight Control Tower: shipment board, carrier scorecards,
 │   │                             #   on-time KPIs, exception insights
 │   ├── agent.py                  # Agentic Copilot: LLaMA-3.3 tool calling + offline router,
-│   │                             #   5 tools acting on live data
+│   │                             #   6 tools acting on live data
+│   ├── cost_audit.py             # Freight Cost Audit: outliers, duplicates, late-premiums,
+│   │                             #   re-tender opportunity
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -187,6 +189,7 @@ The copilot no longer just answers — it **executes tools on your live data**:
 | `draft_carrier_email` | Writes an SLA-review email citing the carrier's real scorecard numbers |
 | `generate_reorder_plan` | Produces the EOQ / ROP / safety-stock execution plan (CSV) |
 | `exception_summary` | Builds a digest: late + at-risk counts, weak carriers, top risks |
+| `freight_cost_audit` | Audits freight charges: outliers, duplicates, late-premiums, re-tender opportunity |
 
 - **Groq LLaMA-3.3-70B function calling** picks and chains tools, then answers citing tool results
 - **Offline mode** — with no API key, a deterministic router still runs every action on live data (LLM adds reasoning + wording, never the numbers)
@@ -201,6 +204,18 @@ The copilot no longer just answers — it **executes tools on your live data**:
 - **Carrier Scorecards** — per-carrier volume, on-time %, late count, avg delay, avg cost/shipment, A–D grade, plus plain-language insights (volume-shift and SLA-review suggestions)
 - **Carrier auto-detection** — upload a delivery file with a carrier/courier/transporter/3PL column to unlock scorecards on your own carriers (demo uses fictional carriers, clearly labelled)
 - **Exports** — tracking board + carrier scorecard CSVs
+
+### Freight Cost Audit (v4.4)
+- **Outlier detection** — charges above the carrier's own Q3 + 1.5×IQR band, with estimated overcharge vs the carrier median
+- **Duplicate detection** — same shipment billed twice, or identical (carrier, day, cost) charges repeated
+- **Late-premiums** — above-median rates paid on shipments that still arrived late (ammunition for rate negotiations)
+- **Re-tender opportunity** — total spend sitting above the network-median rate
+- KPI strip + plain-language findings + flagged-charges table, all exportable (CSV/TXT)
+- Works on any delivery upload with a cost/freight/charge column (auto-detected)
+
+### What-If Lab (v4.4)
+- Stress-test sliders: demand ±%, lead time ±%, lead-time variability ±%, service level
+- Live recalculation of safety stock, reorder point, EOQ, order cadence, and total cost — with deltas vs your current baseline
 
 ### Route Optimisation
 - **NVIDIA cuOpt** — real Capacitated Vehicle Routing Problem solver
@@ -266,6 +281,14 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.4.0 — Freight Cost Audit + What-If Lab
+- **NEW**: `modules/cost_audit.py` — deterministic billing checks: per-carrier IQR outliers, potential duplicates, late-delivery premiums, re-tender opportunity vs network-median rate
+- **NEW**: Cost Audit panel in the Control Tower — KPI strip, findings, flagged-charges table, per-carrier cost profile, CSV/TXT exports
+- **NEW**: What-If Lab — demand / lead-time / variability / service-level sliders with live decision-engine recalculation and deltas vs baseline
+- **NEW**: 6th agent tool `freight_cost_audit` + "⚖ Cost audit" quick action
+- **NEW**: Freight-cost column auto-detection in delivery uploads
+- **DEMO**: ~0.4% simulated billing errors injected into demo costs so the outlier detector has realistic anomalies (labelled in UI)
 
 ### v4.3.0 — Agentic Copilot
 - **NEW**: `modules/agent.py` — tool-calling agent loop (Groq LLaMA-3.3-70B function calling, max 4 turns)

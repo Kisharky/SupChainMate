@@ -2,6 +2,7 @@ import os
 import io
 import math
 import time
+from dataclasses import replace as dc_replace
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -10,7 +11,7 @@ import streamlit as st
 
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
-from modules import nvidia_api, groq_ai, control_tower, agent
+from modules import nvidia_api, groq_ai, control_tower, agent, cost_audit
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -943,6 +944,78 @@ with col_dl:
     )
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# WHAT-IF LAB — SCENARIO PLANNER
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+st.markdown("""
+<div style="font-family:'Teko',sans-serif;font-size:1.6rem;letter-spacing:0.12rem;
+            text-transform:uppercase;color:#FFFFFF;padding:8px 0;border-bottom:1px solid #FBC02D;
+            margin-bottom:16px;">
+    🧪 WHAT-IF LAB
+    <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#666;margin-left:12px;">
+        STRESS-TEST THE DECISION ENGINE — LIVE RECALCULATION
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
+wi1, wi2, wi3, wi4 = st.columns(4)
+wi_demand = wi1.slider("DEMAND CHANGE (%)", -50, 100, 0, key="wi_demand",
+                       help="e.g. +30 = a demand spike of 30%")
+wi_lt     = wi2.slider("LEAD TIME CHANGE (%)", -50, 100, 0, key="wi_lt",
+                       help="e.g. +20 = supplier lead times stretch 20%")
+wi_ltvar  = wi3.slider("LEAD TIME VARIABILITY (%)", -50, 200, 0, key="wi_ltvar",
+                       help="How much more erratic deliveries become")
+wi_svc    = wi4.select_slider("SERVICE LEVEL", options=[0.80, 0.85, 0.90, 0.95, 0.98, 0.99],
+                              value=service_level, key="wi_svc",
+                              format_func=lambda x: f"{int(x*100)}%")
+
+_scale_d  = 1 + wi_demand / 100
+_scale_lt = 1 + wi_lt / 100
+scenario_profile = dc_replace(
+    demand_profile,
+    avg_daily_demand=round(demand_profile.avg_daily_demand * _scale_d, 2),
+    std_daily_demand=round(demand_profile.std_daily_demand * _scale_d, 2),
+    avg_lead_time_days=round(demand_profile.avg_lead_time_days * _scale_lt, 2),
+    std_lead_time_days=round(demand_profile.std_lead_time_days * _scale_lt * (1 + wi_ltvar / 100), 2),
+    annual_demand=round(demand_profile.annual_demand * _scale_d, 0),
+    horizon_forecast=round(demand_profile.horizon_forecast * _scale_d, 0),
+)
+scenario_outputs = decisions.run_decision_engine(
+    scenario_profile,
+    service_level=wi_svc,
+    unit_cost=unit_cost,
+    holding_rate=holding_rate,
+    ordering_cost=ordering_cost,
+)
+
+wm1, wm2, wm3, wm4, wm5 = st.columns(5)
+wm1.metric("SAFETY STOCK", f"{scenario_outputs.safety_stock:,.0f}",
+           delta=f"{scenario_outputs.safety_stock - decision_outputs.safety_stock:+,.0f} units",
+           delta_color="inverse")
+wm2.metric("REORDER POINT", f"{scenario_outputs.reorder_point:,.0f}",
+           delta=f"{scenario_outputs.reorder_point - decision_outputs.reorder_point:+,.0f} units",
+           delta_color="inverse")
+wm3.metric("EOQ", f"{scenario_outputs.eoq:,.0f}",
+           delta=f"{scenario_outputs.eoq - decision_outputs.eoq:+,.0f} units/order",
+           delta_color="off")
+wm4.metric("ORDER EVERY", f"{scenario_outputs.order_frequency_days:.0f} days",
+           delta=f"{scenario_outputs.order_frequency_days - decision_outputs.order_frequency_days:+.0f} days",
+           delta_color="off")
+wm5.metric("TOTAL COST / YR", f"${scenario_outputs.total_optimized_cost:,.0f}",
+           delta=f"${scenario_outputs.total_optimized_cost - decision_outputs.total_optimized_cost:+,.0f}",
+           delta_color="inverse")
+
+if wi_demand or wi_lt or wi_ltvar or wi_svc != service_level:
+    _sc_bits = []
+    if wi_demand: _sc_bits.append(f"demand {wi_demand:+d}%")
+    if wi_lt:     _sc_bits.append(f"lead time {wi_lt:+d}%")
+    if wi_ltvar:  _sc_bits.append(f"LT variability {wi_ltvar:+d}%")
+    if wi_svc != service_level: _sc_bits.append(f"service level → {int(wi_svc*100)}%")
+    st.caption(f"Scenario: {', '.join(_sc_bits)} — deltas vs your current sidebar baseline.")
+else:
+    st.caption("Move a slider to stress-test — deltas show vs your current baseline.")
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # FREIGHT CONTROL TOWER — SHIPMENT TRACKING BOARD + CARRIER SCORECARDS
 # ═══════════════════════════════════════════════════════════════════════════════
 st.divider()
@@ -1065,6 +1138,70 @@ with tower_score:
             mime="text/csv",
             use_container_width=True,
         )
+
+# ── Freight Cost Audit ─────────────────────────────────────────────────────────
+with st.expander("⚖ FREIGHT COST AUDIT — BILLING ANOMALY DETECTION", expanded=False):
+    audit = cost_audit.run_audit(shipments_df)
+    if audit is None:
+        st.info(
+            "No freight cost data detected. Add a cost/freight/charge column to your "
+            "delivery file to unlock the audit (the demo dataset includes simulated costs)."
+        )
+    else:
+        if st.session_state.get("carriers_simulated"):
+            st.markdown(
+                "<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#FBC02D;'>"
+                "⚠ DEMO MODE — FREIGHT COSTS ARE SIMULATED</div>",
+                unsafe_allow_html=True,
+            )
+        ak = audit["kpis"]
+        au1, au2, au3, au4, au5 = st.columns(5)
+        au1.markdown(_hp("SPEND AUDITED", f"${ak['total_spend']:,.0f}",
+                         f"{ak['audited_charges']:,} CHARGES"), unsafe_allow_html=True)
+        au2.markdown(_hp("FLAGGED CHARGES", f"{ak['flagged_count']:,}",
+                         f"EST. ${ak['flagged_value']:,.0f}", "#FF003C"), unsafe_allow_html=True)
+        au3.markdown(_hp("COST OUTLIERS", f"${ak['outlier_overcharge']:,.0f}",
+                         "ABOVE CARRIER IQR CAP", "#FF003C"), unsafe_allow_html=True)
+        au4.markdown(_hp("LATE-PREMIUMS", f"${ak['late_premium_value']:,.0f}",
+                         "PAID EXTRA, STILL LATE", "#FBC02D"), unsafe_allow_html=True)
+        au5.markdown(_hp("RE-TENDER OPP.", f"${ak['retender_opportunity']:,.0f}",
+                         "SPEND ABOVE NETWORK MEDIAN", "#00E676"), unsafe_allow_html=True)
+
+        for note in audit["insights"]:
+            st.markdown(f"""
+            <div style="background:#151518;border-left:3px solid #FBC02D;padding:8px 14px;
+                        margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#CCCCCC;">
+                {note}
+            </div>""", unsafe_allow_html=True)
+
+        aud_l, aud_r = st.columns([3, 2])
+        with aud_l:
+            if len(audit["flagged"]):
+                st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>FLAGGED CHARGES (WORST FIRST)</div>", unsafe_allow_html=True)
+                flag_view = audit["flagged"].head(300).copy()
+                if "order_date" in flag_view.columns:
+                    flag_view["order_date"] = pd.to_datetime(flag_view["order_date"]).dt.strftime("%Y-%m-%d")
+                st.dataframe(flag_view, use_container_width=True, hide_index=True, height=280)
+                st.download_button(
+                    "⇩ EXPORT FLAGGED CHARGES (CSV)",
+                    data=audit["flagged"].to_csv(index=False).encode(),
+                    file_name="supchainmate_flagged_charges.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            else:
+                st.success("No anomalous charges detected.")
+        with aud_r:
+            if audit["by_carrier"] is not None:
+                st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>COST PROFILE BY CARRIER ($/SHIPMENT)</div>", unsafe_allow_html=True)
+                st.dataframe(audit["by_carrier"], use_container_width=True, hide_index=True, height=280)
+                st.download_button(
+                    "⇩ EXPORT AUDIT REPORT (TXT)",
+                    data=cost_audit.audit_digest(audit).encode(),
+                    file_name="supchainmate_cost_audit.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                )
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BOTTOM: DEMAND SURGE SIMULATOR

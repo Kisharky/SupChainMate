@@ -127,6 +127,7 @@ def normalise_delivery(df: pd.DataFrame) -> pd.DataFrame:
     status_col   = _find_col(df, _STATUS_PATTERNS)
     lead_col     = _find_col(df, _LEAD_PATTERNS)
     carrier_col  = _find_col(df, _CARRIER_PATTERNS)
+    cost_col     = _find_col(df, _COST_PATTERNS)
 
     # Actual delivery date: first delivery-ish column that isn't the promised one
     delivery_col = None
@@ -145,6 +146,8 @@ def normalise_delivery(df: pd.DataFrame) -> pd.DataFrame:
         result["estimated_date"] = _coerce_datetime(df[promised_col])
     if carrier_col:
         result["carrier"] = df[carrier_col].astype(str).str.strip()
+    if cost_col:
+        result["freight_cost"] = pd.to_numeric(df[cost_col], errors="coerce")
     if status_col:
         result["status"] = df[status_col].astype(str).str.strip().str.title()
     if lead_col:

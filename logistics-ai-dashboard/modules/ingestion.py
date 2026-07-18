@@ -36,6 +36,13 @@ _LEAD_PATTERNS = re.compile(r"(lead|delivery_time|transit|duration|days?_to|eta|
 _DELIVERY_DATE_PATTERNS = re.compile(
     r"(delivery|delivered?|arrival|received?|dispatch|shipped?|estimated)", re.IGNORECASE
 )
+_PROMISED_DATE_PATTERNS = re.compile(
+    r"(estimat|promis|expect|due|eta|sla)", re.IGNORECASE
+)
+_CARRIER_PATTERNS = re.compile(
+    r"(carrier|courier|shipper\b|transporter|freight_?(co|company|partner)|logistics_?(provider|partner)|3pl|lsp)",
+    re.IGNORECASE,
+)
 
 
 def _read_file(uploaded_file) -> pd.DataFrame:
@@ -112,19 +119,35 @@ def normalise_orders(df: pd.DataFrame) -> pd.DataFrame:
 def normalise_delivery(df: pd.DataFrame) -> pd.DataFrame:
     """
     Returns a DataFrame with:
-        order_date (datetime), delivery_date (datetime), status (str), lead_days (float)
+        order_date (datetime), delivery_date (datetime), estimated_date (datetime),
+        status (str), lead_days (float), carrier (str)
     """
     order_col    = _find_col(df, _DATE_PATTERNS)
-    delivery_col = _find_col(df, _DELIVERY_DATE_PATTERNS)
+    promised_col = _find_col(df, _PROMISED_DATE_PATTERNS)
     status_col   = _find_col(df, _STATUS_PATTERNS)
     lead_col     = _find_col(df, _LEAD_PATTERNS)
+    carrier_col  = _find_col(df, _CARRIER_PATTERNS)
+    cost_col     = _find_col(df, _COST_PATTERNS)
+
+    # Actual delivery date: first delivery-ish column that isn't the promised one
+    delivery_col = None
+    for col in df.columns:
+        if _DELIVERY_DATE_PATTERNS.search(str(col)) and col not in (order_col, promised_col):
+            delivery_col = col
+            break
 
     result = pd.DataFrame()
 
     if order_col:
         result["order_date"] = _coerce_datetime(df[order_col])
-    if delivery_col and delivery_col != order_col:
+    if delivery_col:
         result["delivery_date"] = _coerce_datetime(df[delivery_col])
+    if promised_col and promised_col != order_col:
+        result["estimated_date"] = _coerce_datetime(df[promised_col])
+    if carrier_col:
+        result["carrier"] = df[carrier_col].astype(str).str.strip()
+    if cost_col:
+        result["freight_cost"] = pd.to_numeric(df[cost_col], errors="coerce")
     if status_col:
         result["status"] = df[status_col].astype(str).str.strip().str.title()
     if lead_col:
@@ -255,6 +278,23 @@ def delivery_to_tracking(delivery_df: pd.DataFrame, n: int = None) -> pd.DataFra
     return df.reset_index(drop=True)
 
 
+# ── E-commerce store export detection ─────────────────────────────────────────
+
+def detect_store_platform(df: pd.DataFrame) -> Optional[str]:
+    """
+    Recognise standard e-commerce order exports so the UI can confirm support.
+    Shopify orders_export.csv → 'Created at' + 'Lineitem quantity';
+    WooCommerce order exports → order_number/order_id + a product/item column.
+    Either way the generic auto-detection ingests them (date + quantity).
+    """
+    cols = {str(c).strip().lower() for c in df.columns}
+    if "lineitem quantity" in cols and "created at" in cols:
+        return "Shopify"
+    if ({"order_number", "order_id"} & cols) and ({"item_name", "product_name", "product_id", "sku"} & cols):
+        return "WooCommerce"
+    return None
+
+
 # ── Summary Helper ─────────────────────────────────────────────────────────────
 
 def detected_columns_summary(raw_df: pd.DataFrame, file_type: str) -> dict:
@@ -268,6 +308,7 @@ def detected_columns_summary(raw_df: pd.DataFrame, file_type: str) -> dict:
         summary["delivery_date_col"] = _find_col(raw_df, _DELIVERY_DATE_PATTERNS)
         summary["status_col"]        = _find_col(raw_df, _STATUS_PATTERNS)
         summary["lead_col"]          = _find_col(raw_df, _LEAD_PATTERNS)
+        summary["carrier_col"]       = _find_col(raw_df, _CARRIER_PATTERNS)
     elif file_type == "location":
         summary["lat_col"]  = _find_col(raw_df, _LAT_PATTERNS)
         summary["lon_col"]  = _find_col(raw_df, _LON_PATTERNS)

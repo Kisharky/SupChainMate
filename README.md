@@ -6,7 +6,7 @@ Master of Business (Supply Chain & International Business) — Monash University
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Version](https://img.shields.io/badge/version-4.5.0-brightgreen)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-4.6.0-brightgreen)](CHANGELOG)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
@@ -92,7 +92,8 @@ logistics-ai-dashboard/
 │   ├── health_check.py           # Scored supply chain health check (6 dimensions, DIFOT)
 │   ├── tender.py                 # Freight tender / RFP pack + rate-shift simulator
 │   ├── alerts.py                 # Alert digests + optional SMTP email delivery
-│   ├── store.py                  # SQLite persistence (retail tracker, settings)
+│   ├── store.py                  # SQLite persistence (retail tracker, settings, KPI snapshots)
+│   ├── connect.py                # Live store connectors: Shopify Admin API, WooCommerce REST
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -240,6 +241,11 @@ The copilot no longer just answers — it **executes tools on your live data**:
 - **SQLite persistence** — the Small Retailer tracker and alert emails survive restarts (`data/supchainmate.db`, gitignored)
 - **Shopify / WooCommerce** order exports auto-recognised on upload (badge confirms the platform)
 
+### Live Store Connect & Performance History (v4.6)
+- **Connect your store** — pull order history straight from Shopify (Admin API token, `read_orders` scope) or WooCommerce (read-only REST keys); no CSV needed. Credentials are used for the fetch only and never saved
+- **Performance History** — one KPI snapshot (health score, on-time %, late, at-risk) saved per data load; trend chart + table build up across sessions
+- **Test suite** — `python -m pytest tests/ -q` covers the control tower, audits, health check, tender, alerts, persistence, agent routing, and connectors (mocked HTTP)
+
 ### Marketing Site
 - `docs/index.html` — a self-contained dark landing page, ready for GitHub Pages (Settings → Pages → `docs/`)
 
@@ -307,6 +313,12 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.6.0 — Live Store Connect, Performance History, Test Suite
+- **NEW**: `modules/connect.py` — Shopify Admin API + WooCommerce REST connectors with pagination, clear credential errors, and no credential persistence
+- **NEW**: "Connect your store" panel on the upload screen — API import feeds the same pipeline as CSV
+- **NEW**: KPI snapshot history in SQLite + Performance History panel (health score & on-time % trend across sessions)
+- **NEW**: `tests/test_modules.py` — 26 tests across 8 modules (connectors tested against mocked HTTP)
 
 ### v4.5.0 — Health Check, Tender Toolkit, Alerts, Persistence
 - **NEW**: `modules/health_check.py` — 6-dimension scored assessment with DIFOT and priority actions

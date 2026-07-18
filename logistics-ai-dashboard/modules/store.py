@@ -28,6 +28,10 @@ def _conn() -> Optional[sqlite3.Connection]:
         conn.execute("""CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL)""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS kpi_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            payload TEXT NOT NULL)""")
         return conn
     except sqlite3.Error:
         return None
@@ -58,6 +62,46 @@ def load_retail_products() -> list[dict]:
     try:
         rows = conn.execute("SELECT payload FROM retail_products ORDER BY id").fetchall()
         return [json.loads(r[0]) for r in rows]
+    except (sqlite3.Error, json.JSONDecodeError):
+        return []
+    finally:
+        conn.close()
+
+
+def save_kpi_snapshot(kpis: dict) -> bool:
+    """Append a timestamped KPI snapshot (health score, on-time %, etc.)."""
+    from datetime import datetime, timezone
+    conn = _conn()
+    if conn is None:
+        return False
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO kpi_snapshots (ts, payload) VALUES (?, ?)",
+                (datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"), json.dumps(kpis)),
+            )
+        return True
+    except (sqlite3.Error, TypeError):
+        return False
+    finally:
+        conn.close()
+
+
+def load_kpi_snapshots(limit: int = 100) -> list[dict]:
+    """Return snapshots oldest-first, each with its timestamp under 'ts'."""
+    conn = _conn()
+    if conn is None:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT ts, payload FROM kpi_snapshots ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        out = []
+        for ts, payload in reversed(rows):
+            d = json.loads(payload)
+            d["ts"] = ts
+            out.append(d)
+        return out
     except (sqlite3.Error, json.JSONDecodeError):
         return []
     finally:

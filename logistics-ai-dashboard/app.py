@@ -12,7 +12,7 @@ import streamlit as st
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
 from modules import nvidia_api, groq_ai, control_tower, agent, cost_audit
-from modules import health_check, tender, alerts, store
+from modules import health_check, tender, alerts, store, connect
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -101,6 +101,7 @@ _SESSION_KEYS = [
     "daily_df", "forecast_df", "tracking_df", "geo_df",
     "delay_model", "X_test_delay", "summary", "current_cost",
     "data_loaded", "demo_mode", "shipments_df", "carriers_simulated",
+    "kpi_snapshot_saved",
 ]
 
 for key in _SESSION_KEYS:
@@ -551,6 +552,52 @@ if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loa
     with btn_r:
         if st.button("▷ TRY DEMO DATA", use_container_width=True):
             _load_demo()
+
+    # ── Live store connect (no CSV needed) ────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("🔗 CONNECT YOUR STORE — SHOPIFY / WOOCOMMERCE (NO CSV NEEDED)", expanded=False):
+        st.caption(
+            "Read-only API pull of your order history. Credentials are used for this fetch "
+            "only and are never saved. Shopify: create a custom app with the `read_orders` "
+            "scope and paste its Admin API access token. WooCommerce: create a read-only "
+            "REST API key under WooCommerce → Settings → Advanced."
+        )
+        conn_platform = st.radio("Platform", ["Shopify", "WooCommerce"],
+                                 horizontal=True, key="conn_platform")
+        if conn_platform == "Shopify":
+            cs1, cs2 = st.columns(2)
+            shop_url = cs1.text_input("Store URL", placeholder="mystore.myshopify.com", key="conn_shop_url")
+            shop_token = cs2.text_input("Admin API access token", type="password",
+                                        placeholder="shpat_...", key="conn_shop_token")
+            if st.button("⇩ IMPORT ORDERS FROM SHOPIFY", use_container_width=True, key="conn_shop_go"):
+                with st.spinner("Fetching orders from Shopify..."):
+                    conn_df, conn_msg = connect.fetch_shopify_orders(shop_url, shop_token)
+                if conn_df is None:
+                    st.error(conn_msg)
+                else:
+                    st.success(conn_msg)
+                    try:
+                        _process_uploaded(conn_df, None, None, None)
+                    except Exception as e:
+                        st.error(f"Processing failed: {e}")
+        else:
+            cw1, cw2, cw3 = st.columns(3)
+            woo_url = cw1.text_input("Site URL", placeholder="myshop.com", key="conn_woo_url")
+            woo_key = cw2.text_input("Consumer key", type="password",
+                                     placeholder="ck_...", key="conn_woo_key")
+            woo_secret = cw3.text_input("Consumer secret", type="password",
+                                        placeholder="cs_...", key="conn_woo_secret")
+            if st.button("⇩ IMPORT ORDERS FROM WOOCOMMERCE", use_container_width=True, key="conn_woo_go"):
+                with st.spinner("Fetching orders from WooCommerce..."):
+                    conn_df, conn_msg = connect.fetch_woocommerce_orders(woo_url, woo_key, woo_secret)
+                if conn_df is None:
+                    st.error(conn_msg)
+                else:
+                    st.success(conn_msg)
+                    try:
+                        _process_uploaded(conn_df, None, None, None)
+                    except Exception as e:
+                        st.error(f"Processing failed: {e}")
 
     st.stop()  # Don't render dashboard until data is loaded
 
@@ -1281,6 +1328,56 @@ with st.expander("🩺 SUPPLY CHAIN HEALTH CHECK — SCORED ASSESSMENT", expande
         mime="text/plain",
         use_container_width=True,
     )
+
+# One KPI snapshot per data load — builds the performance history over time
+if not st.session_state.get("kpi_snapshot_saved"):
+    store.save_kpi_snapshot({
+        "health_score": hc["score"],
+        "grade": hc["grade"],
+        "on_time_pct": None if math.isnan(ct_kpis["on_time_pct"]) else round(ct_kpis["on_time_pct"], 1),
+        "difot": hc.get("difot"),
+        "late": ct_kpis["late"],
+        "at_risk": ct_kpis["at_risk"],
+        "flagged_value": round(audit["kpis"]["flagged_value"], 0) if audit else None,
+        "total_shipments": ct_kpis["total"],
+        "source": "demo" if st.session_state.demo_mode else "user",
+    })
+    st.session_state.kpi_snapshot_saved = True
+
+# ── Performance History ────────────────────────────────────────────────────────
+with st.expander("📈 PERFORMANCE HISTORY — KPI TREND ACROSS SESSIONS", expanded=False):
+    snapshots = store.load_kpi_snapshots()
+    if len(snapshots) < 2:
+        st.caption(
+            f"{len(snapshots)} snapshot(s) saved so far — one is stored each time you load data. "
+            "Trends appear once there are two or more."
+        )
+    else:
+        hist_df = pd.DataFrame(snapshots)
+        fig_hist = go.Figure()
+        fig_hist.add_trace(go.Scatter(x=hist_df["ts"], y=hist_df["health_score"],
+                                      mode="lines+markers", name="Health score",
+                                      line=dict(color="#00D4FF", width=2)))
+        if hist_df["on_time_pct"].notna().any():
+            fig_hist.add_trace(go.Scatter(x=hist_df["ts"], y=hist_df["on_time_pct"],
+                                          mode="lines+markers", name="On-time %",
+                                          line=dict(color="#00E676", width=2)))
+        fig_hist.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,13,16,1)",
+            margin=dict(l=40, r=20, t=20, b=40), height=280,
+            yaxis_range=[0, 105],
+            legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#888")),
+        )
+        fig_hist.update_xaxes(gridcolor="#222228")
+        fig_hist.update_yaxes(gridcolor="#222228")
+        st.plotly_chart(fig_hist, use_container_width=True)
+        show_hist = hist_df[["ts", "grade", "health_score", "on_time_pct",
+                             "late", "at_risk", "total_shipments", "source"]].rename(columns={
+            "ts": "Timestamp (UTC)", "grade": "Grade", "health_score": "Health",
+            "on_time_pct": "On-Time %", "late": "Late", "at_risk": "At Risk",
+            "total_shipments": "Shipments", "source": "Source"})
+        st.dataframe(show_hist.iloc[::-1], use_container_width=True, hide_index=True, height=200)
 
 # ── Freight Tender / RFP Toolkit ───────────────────────────────────────────────
 with st.expander("📑 FREIGHT TENDER / RFP TOOLKIT", expanded=False):

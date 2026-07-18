@@ -6,14 +6,14 @@
 
 *A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
 
-[![Version](https://img.shields.io/badge/version-4.13.0-brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.0.0-brightgreen)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen)](logistics-ai-dashboard/tests)
+[![Tests](https://img.shields.io/badge/tests-93%20passing-brightgreen)](logistics-ai-dashboard/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 [Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
@@ -103,6 +103,32 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 
 ---
 
+## Agent Orchestrator — eight domain agents, one pipeline
+
+Each business domain is an independent agent with a single responsibility, wrapping the existing deterministic engines — and an **Orchestrator** runs them as multi-step workflows with shared context:
+
+| Agent | Objective | Wraps |
+|---|---|---|
+| 📈 **Demand Forecast** | Predict demand, quantify reliability | Prophet + model tournament |
+| 📦 **Inventory** | Hold exactly enough stock | Decision engine + SKU engine |
+| 🛒 **Procurement** | Buy well: POs, tenders, rates | Tender toolkit + audit |
+| ⛟ **Logistics** | Move goods on time | Control tower + scorecards + audit |
+| ⚠ **Supplier Risk** | See risk before it bites | Concentration (HHI) + reliability variance |
+| 🏭 **Warehouse** | Run an efficient network | Cluster/Haversine metrics |
+| 🌱 **Sustainability** | Cut emissions, keep service | Carbon lens |
+| 🎯 **Executive** | One decision-ready brief | Synthesis of all upstream agents |
+
+**How the orchestration works**
+
+- **Workflows** — ordered pipelines (`planning_chain`: Demand → Inventory → Procurement → Executive; `logistics_review`; `full_control_tower` with all 8), validated so dependencies always run first
+- **Shared context, scoped access** — every agent declares `required_context` and `depends_on`; a `ScopedContext` makes undeclared access a runtime error, so "access only to relevant data" is enforced, not hoped
+- **Inter-agent communication** — each agent's outputs pass downstream (Procurement literally reads Inventory's urgent-SKU list; the Executive reads everyone)
+- **Honest chained confidence** — the Executive's confidence is bounded by the *weakest* upstream agent, and says which one
+- **Human approval** — agent recommendations route into the Decision Center; nothing material executes un-approved
+- **Audit** — workflow start/finish and every agent run land in the immutable audit log
+
+---
+
 ## Decision Center — the trust layer
 
 Every material AI recommendation flows through a human-in-the-loop **Decision Center** before it counts:
@@ -187,7 +213,8 @@ SupChainMate/
 │   │   ├── retail.py             # Small Retailer page
 │   │   ├── upload.py             # Enterprise upload screen + store connect
 │   │   ├── pipeline.py           # Demo loading & upload processing
-│   │   └── decision_center.py    # Human-in-the-loop approval workflow + audit
+│   │   ├── decision_center.py    # Human-in-the-loop approval workflow + audit
+│   │   └── agents_hub.py         # Orchestrator UI: run workflows, per-agent reasoning
 │   ├── modules/
 │   │   ├── ingestion.py          # Column auto-detection, store-export recognition
 │   │   ├── forecast.py           # Prophet + external regressors
@@ -205,6 +232,10 @@ SupChainMate/
 │   │   ├── tender.py             # Tender/RFP pack + rate-shift simulation
 │   │   ├── agent.py              # AI Workers: tool-calling loop + offline router + sweep
 │   │   ├── trust.py              # Decision trust layer: explainable, scored recommendations
+│   │   ├── agents/               # Multi-agent layer
+│   │   │   ├── base.py           #   Agent contracts, scoped context, execution template
+│   │   │   ├── domain.py         #   The 8 domain agents
+│   │   │   └── orchestrator.py   #   Workflow engine + Decision Center routing
 │   │   ├── runbook.py            # Plain-English standing rules engine
 │   │   ├── groq_ai.py            # Groq copilot, auto-insights, column detection
 │   │   ├── nvidia_api.py         # cuOpt VRP solver, DeepSeek fallback
@@ -287,7 +318,7 @@ Upload any CSV or Excel — the ingestion engine auto-detects columns under any 
 
 ```bash
 cd logistics-ai-dashboard
-python -m pytest tests/ -q        # 73 tests
+python -m pytest tests/ -q        # 93 tests
 ```
 
 Coverage spans the decision-engine mathematics (safety stock, EOQ, ROP, monotonicity), network scoring (Haversine, clustering, Isolation Forest), forecasting aggregation, optimisation summaries, shipment classification, carrier scorecards, cost-audit anomaly detection, health-check scoring, tender and rate-shift math, ensemble backtesting, alert digests, SQLite persistence, agent routing and tracing, and the store connectors (exercised against mocked HTTP — no network required).

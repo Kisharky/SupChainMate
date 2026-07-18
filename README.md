@@ -6,7 +6,7 @@ Master of Business (Supply Chain & International Business) — Monash University
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Version](https://img.shields.io/badge/version-4.7.0-brightgreen)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-4.8.0-brightgreen)](CHANGELOG)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
@@ -96,6 +96,7 @@ logistics-ai-dashboard/
 │   ├── connect.py                # Live store connectors: Shopify Admin API, WooCommerce REST
 │   ├── doc_intel.py              # Invoice/BOL scanner: extraction + board reconciliation
 │   ├── carbon.py                 # Carbon Lens: CO2e estimates by carrier, zone, mode
+│   ├── ensemble.py               # Model tournament: LightGBM/RF/GBM/Ridge vs Prophet
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -243,6 +244,28 @@ The copilot no longer just answers — it **executes tools on your live data**:
 - **SQLite persistence** — the Small Retailer tracker and alert emails survive restarts (`data/supchainmate.db`, gitignored)
 - **Shopify / WooCommerce** order exports auto-recognised on upload (badge confirms the platform)
 
+### AI Workers (v4.8) — the agent as a named team
+The copilot's 10 tools are organised as five named workers, each with its own
+remit and one-click actions (Mentium-style "AI Workers", built on the same
+tool registry):
+
+| Worker | Remit | Tools |
+|---|---|---|
+| 🛰 **Tracker** | Track & Trace | at-risk shipments, exception digest |
+| ⚖ **Auditor** | Invoicing & Audit | freight cost audit |
+| 🤝 **Carrier Manager** | Carrier Vetting | scorecards, SLA emails |
+| 📑 **Procurement** | Quoting & Tenders | tender/RFP pack |
+| 📦 **Planner** | Inventory Planning | reorder plans, health check |
+
+- Every reply is attributed to the worker(s) that handled it
+- **Reasoning trace** on every turn: routing decision → LLM turns → tool calls with args and per-step timings → final answer, in an expandable step list
+
+### Model Tournament — Ensemble Forecast (v4.8)
+- Four ML models (LightGBM, Random Forest, Gradient Boosting, Ridge) + their ensemble mean, backtested against **Prophet on the same 28-day holdout**
+- Champion crowned by MAPE — scores come from a real backtest, never in-sample fit
+- Holdout chart (actual vs champion vs Prophet), leaderboard, downloadable champion forecast
+- Trailing tail-off days are trimmed before scoring so partial final weeks can't distort MAPE
+
 ### Invoice / BOL Scanner — Document Intelligence (v4.7)
 - Upload a freight invoice or BOL (PDF/TXT) — fields are extracted (Groq LLM when configured, regex offline) and **reconciled against the shipment board**
 - Checks: carrier known · shipment references resolve · invoice total vs recorded costs (±10% tolerance) or the carrier's audited rate band · already-billed warning
@@ -328,6 +351,12 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.8.0 — AI Workers, Reasoning Trace, Model Tournament
+- **NEW**: AI Workers roster — 5 named workers (Tracker, Auditor, Carrier Manager, Procurement, Planner) over the existing tool registry, with per-worker action buttons and reply attribution
+- **NEW**: Reasoning trace on every agent turn — routing, LLM turns, tool calls with args, per-step timings
+- **NEW**: `modules/ensemble.py` — model tournament (LightGBM/RF/GBM/Ridge + ensemble mean) backtested vs Prophet on a 28-day holdout; champion forecast export; tail-off trimming
+- Tests: +5 (38 total)
 
 ### v4.7.0 — Document Intelligence + Carbon Lens
 - **NEW**: `modules/doc_intel.py` — invoice/BOL scanner: PDF/TXT extraction (Groq LLM or offline regex), reconciliation against the shipment board and audited rate bands, pay/review verdicts, sample-invoice demo

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Callable, Optional
 
 import pandas as pd
@@ -408,14 +409,24 @@ def run_agent(query: str, ctx: dict, client=None) -> dict:
         except Exception:
             pass  # fall through to offline routing
 
+    trace = [{"step": "route", "label": "Offline keyword router",
+              "detail": f"Groq unavailable — deterministic routing for: \"{query[:80]}\""}]
     artifacts, actions, notes = [], [], []
     for name, args in _route_offline(query, ctx):
+        t0 = time.perf_counter()
         summary, arts = _execute(name, args, ctx)
+        trace.append({"step": "tool", "label": name,
+                      "detail": (f"args {json.dumps({k: v for k, v in args.items() if v})} · "
+                                 if any(args.values()) else "")
+                                + f"{summary[:160]}",
+                      "ms": round((time.perf_counter() - t0) * 1000)})
         notes.append(summary)
         artifacts += arts
         actions.append(name)
+    trace.append({"step": "answer", "label": "Compose reply",
+                  "detail": f"{len(artifacts)} artifact(s) attached"})
     return {"reply": " ".join(notes), "artifacts": artifacts,
-            "actions": actions, "engine": "offline"}
+            "actions": actions, "engine": "offline", "trace": trace}
 
 
 def _run_llm_agent(query: str, ctx: dict, client) -> dict:
@@ -426,8 +437,11 @@ def _run_llm_agent(query: str, ctx: dict, client) -> dict:
         {"role": "user", "content": query},
     ]
     artifacts, actions = [], []
+    trace = [{"step": "route", "label": "Groq LLaMA-3.3-70B",
+              "detail": f"Tool-calling agent · {len(TOOLS_SCHEMA)} tools available"}]
 
-    for _ in range(MAX_AGENT_TURNS):
+    for turn in range(MAX_AGENT_TURNS):
+        t0 = time.perf_counter()
         resp = client.chat.completions.create(
             model=groq_ai.MODEL,
             messages=messages,
@@ -436,12 +450,20 @@ def _run_llm_agent(query: str, ctx: dict, client) -> dict:
             max_tokens=600,
             temperature=0.2,
         )
+        llm_ms = round((time.perf_counter() - t0) * 1000)
         msg = resp.choices[0].message
         if not getattr(msg, "tool_calls", None):
             reply = (msg.content or "").strip()
+            trace.append({"step": "answer", "label": "Compose reply",
+                          "detail": f"LLM turn {turn + 1} · {len(artifacts)} artifact(s)",
+                          "ms": llm_ms})
             return {"reply": reply or "Done.", "artifacts": artifacts,
-                    "actions": actions, "engine": "groq"}
+                    "actions": actions, "engine": "groq", "trace": trace}
 
+        trace.append({"step": "think", "label": f"LLM turn {turn + 1}",
+                      "detail": "Decided to call: "
+                                + ", ".join(tc.function.name for tc in msg.tool_calls),
+                      "ms": llm_ms})
         messages.append({
             "role": "assistant",
             "content": msg.content or "",
@@ -457,14 +479,21 @@ def _run_llm_agent(query: str, ctx: dict, client) -> dict:
                 args = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
                 args = {}
+            t1 = time.perf_counter()
             summary, arts = _execute(tc.function.name, args, ctx)
+            trace.append({"step": "tool", "label": tc.function.name,
+                          "detail": (f"args {json.dumps(args)} · " if args else "")
+                                    + f"{summary[:160]}",
+                          "ms": round((time.perf_counter() - t1) * 1000)})
             artifacts += arts
             actions.append(tc.function.name)
             messages.append({"role": "tool", "tool_call_id": tc.id,
                              "name": tc.function.name, "content": summary})
 
+    trace.append({"step": "answer", "label": "Turn limit reached",
+                  "detail": f"{len(actions)} tool call(s) executed"})
     return {"reply": "Executed: " + ", ".join(actions) + ".", "artifacts": artifacts,
-            "actions": actions, "engine": "groq"}
+            "actions": actions, "engine": "groq", "trace": trace}
 
 
 # Quick-action prompts surfaced as buttons in the UI.
@@ -477,3 +506,54 @@ QUICK_ACTIONS = [
     ("🩺 Health check", "Run a supply chain health check."),
     ("📑 Tender pack", "Build a freight tender pack with an RFP draft."),
 ]
+
+# ── AI Workers — the tools organised as a named team ──────────────────────────
+# Purely an organisational layer over the same tool registry: each worker owns
+# a subset of tools and the quick actions that exercise them.
+WORKERS = {
+    "Tracker": {
+        "emoji": "🛰", "role": "Track & Trace",
+        "desc": "Watches every shipment, surfaces exceptions first.",
+        "tools": ["get_at_risk_shipments", "exception_summary"],
+        "actions": [("At-risk", "List the shipments most at risk of delay."),
+                    ("Digest", "Give me a summary of all current exceptions.")],
+    },
+    "Auditor": {
+        "emoji": "⚖", "role": "Invoicing & Audit",
+        "desc": "Audits freight bills: outliers, duplicates, late-premiums.",
+        "tools": ["freight_cost_audit"],
+        "actions": [("Audit bills", "Audit our freight costs for billing anomalies.")],
+    },
+    "Carrier Manager": {
+        "emoji": "🤝", "role": "Carrier Vetting",
+        "desc": "Grades carriers and drafts the difficult emails.",
+        "tools": ["get_carrier_scorecard", "draft_carrier_email"],
+        "actions": [("Scorecard", "Show me the carrier scorecard."),
+                    ("Email worst", "Draft an SLA-review email to our worst-performing carrier.")],
+    },
+    "Procurement": {
+        "emoji": "📑", "role": "Quoting & Tenders",
+        "desc": "Builds data-backed RFPs and rate strategies.",
+        "tools": ["generate_tender_pack"],
+        "actions": [("Tender pack", "Build a freight tender pack with an RFP draft.")],
+    },
+    "Planner": {
+        "emoji": "📦", "role": "Inventory Planning",
+        "desc": "Reorder plans, safety stock, network health.",
+        "tools": ["generate_reorder_plan", "supply_chain_health_check"],
+        "actions": [("Reorder", "Generate the reorder plan."),
+                    ("Health", "Run a supply chain health check.")],
+    },
+}
+
+_TOOL_TO_WORKER = {tool: name for name, w in WORKERS.items() for tool in w["tools"]}
+
+
+def workers_for_actions(actions: list[str]) -> list[str]:
+    """Which named workers handled these executed tools (ordered, deduped)."""
+    seen: list[str] = []
+    for a in actions:
+        w = _TOOL_TO_WORKER.get(a)
+        if w and w not in seen:
+            seen.append(w)
+    return seen

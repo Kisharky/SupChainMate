@@ -12,7 +12,7 @@ import streamlit as st
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
 from modules import nvidia_api, groq_ai, control_tower, agent, cost_audit
-from modules import health_check, tender, alerts, store, connect, carbon, doc_intel
+from modules import health_check, tender, alerts, store, connect, carbon, doc_intel, ensemble
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -1671,6 +1671,88 @@ with exp_chart:
         fig.update_yaxes(gridcolor="#222228", title_text="VOLUME")
         st.plotly_chart(fig, use_container_width=True)
 
+    with st.expander("🏆 MODEL TOURNAMENT — ENSEMBLE FORECAST", expanded=False):
+        _tk = f"tournament_{days}"
+        if _tk not in st.session_state:
+            with st.spinner("Backtesting model ensemble on the last 28 days..."):
+                st.session_state[_tk] = ensemble.run_tournament(
+                    daily_df, forecast_df, horizon_days=days)
+        tourney = st.session_state[_tk]
+        if tourney is None:
+            st.info("The tournament needs at least ~120 days of daily history.")
+        else:
+            champ_note = ""
+            if tourney["prophet_mape"] is not None and tourney["champion"] != "Prophet":
+                edge = tourney["prophet_mape"] - tourney["champion_mape"]
+                champ_note = f"BEATS PROPHET BY {edge:.1f} MAPE PTS ON THE HOLDOUT"
+            elif tourney["champion"] == "Prophet":
+                champ_note = "PROPHET HOLDS THE CROWN — MAIN FORECAST ALREADY OPTIMAL"
+            tc1, tc2 = st.columns([1, 2])
+            with tc1:
+                st.markdown(f"""
+                <div class="hud-panel" style="border-color:#FBC02D;text-align:center;">
+                    <div class="hud-label">CHAMPION MODEL</div>
+                    <div style="font-family:'Teko',sans-serif;font-size:1.6rem;color:#FBC02D;">
+                        🏆 {tourney['champion']}
+                    </div>
+                    <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:#FFF;">
+                        {tourney['champion_mape']:.1f}% MAPE · {tourney['holdout_days']}-DAY BACKTEST
+                    </div>
+                    <div style="font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:#888;margin-top:4px;">
+                        {champ_note}
+                    </div>
+                </div>""", unsafe_allow_html=True)
+                st.dataframe(tourney["leaderboard"], use_container_width=True, hide_index=True)
+            with tc2:
+                hold = tourney["holdout"]
+                fig_t = go.Figure()
+                fig_t.add_trace(go.Scatter(x=hold["ds"], y=hold["actual"], mode="lines",
+                                           name="Actual", line=dict(color="#00D4FF", width=2)))
+                if tourney["champion"] in hold.columns:
+                    fig_t.add_trace(go.Scatter(x=hold["ds"], y=hold[tourney["champion"]],
+                                               mode="lines", name=f"🏆 {tourney['champion']}",
+                                               line=dict(color="#FBC02D", width=2)))
+                if "Prophet" in hold.columns and tourney["champion"] != "Prophet":
+                    fig_t.add_trace(go.Scatter(x=hold["ds"], y=hold["Prophet"], mode="lines",
+                                               name="Prophet", line=dict(color="#FF003C", width=1.5, dash="dot")))
+                fig_t.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,13,16,1)",
+                    hovermode="x unified", height=300,
+                    margin=dict(l=40, r=20, t=20, b=40),
+                    legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#888")),
+                )
+                fig_t.update_xaxes(gridcolor="#222228")
+                fig_t.update_yaxes(gridcolor="#222228", title_text="HOLDOUT VOLUME")
+                st.plotly_chart(fig_t, use_container_width=True)
+                if tourney["forecast"] is not None:
+                    st.download_button(
+                        f"⇩ CHAMPION FORECAST — NEXT {days} DAYS (CSV)",
+                        data=tourney["forecast"].to_csv(index=False).encode(),
+                        file_name="supchainmate_champion_forecast.csv", mime="text/csv",
+                        use_container_width=True,
+                    )
+
+_TRACE_ICONS = {"route": "🧭", "think": "🧠", "tool": "⚙", "answer": "✓"}
+
+
+def _render_trace(trace):
+    if not trace:
+        return
+    total_ms = sum(s.get("ms", 0) for s in trace)
+    with st.expander(f"⚙ REASONING TRACE — {len(trace)} steps"
+                     + (f" · {total_ms:,} ms" if total_ms else ""), expanded=False):
+        for i, s in enumerate(trace):
+            icon = _TRACE_ICONS.get(s.get("step"), "•")
+            ms = f" · {s['ms']:,} ms" if s.get("ms") else ""
+            st.markdown(f"""
+            <div style="border-left:2px solid #333340;padding:4px 12px;margin-left:6px;
+                        font-family:'Share Tech Mono',monospace;font-size:0.68rem;">
+                <span style="color:#00D4FF;">{icon} STEP {i+1} — {s.get('label','')}{ms}</span><br>
+                <span style="color:#999;">{s.get('detail','')}</span>
+            </div>""", unsafe_allow_html=True)
+
+
 def _render_artifact(art, key):
     if art["type"] == "dataframe":
         st.markdown(f"<div class='hud-label'>{art['title']}</div>", unsafe_allow_html=True)
@@ -1693,15 +1775,15 @@ def _render_artifact(art, key):
 
 
 with exp_copilot:
-    with st.expander("🤖 AGENTIC COPILOT — THINKS · DECIDES · ACTS", expanded=False):
+    with st.expander("🤖 AI WORKERS — YOUR AGENTIC OPERATIONS TEAM", expanded=False):
         agent_status = (
             "🟢 GROQ AGENT LIVE · LLaMA-3.3-70B TOOL CALLING"
             if groq_ai.is_available()
-            else "🟡 OFFLINE MODE — actions still run on your live data; set GROQ_API_KEY for reasoning &amp; wording"
+            else "🟡 OFFLINE MODE — workers still act on your live data; set GROQ_API_KEY for reasoning &amp; wording"
         )
         st.markdown(
             f'<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">'
-            f'{agent_status} · 5 TOOLS: shipments, scorecards, emails, reorder plans, digests</div>',
+            f'{agent_status} · {len(agent.WORKERS)} WORKERS · {len(agent.TOOLS_SCHEMA)} TOOLS · FULL REASONING TRACE</div>',
             unsafe_allow_html=True
         )
         live_context = {
@@ -1737,22 +1819,38 @@ with exp_copilot:
             st.session_state.agent_chat = []
 
         pending_query = None
-        for row_start in range(0, len(agent.QUICK_ACTIONS), 4):
-            row_actions = agent.QUICK_ACTIONS[row_start:row_start + 4]
-            qa_cols = st.columns(4)
-            for qa_col, (qa_label, qa_prompt) in zip(qa_cols, row_actions):
-                if qa_col.button(qa_label, key=f"qa_{qa_label}", use_container_width=True):
-                    pending_query = qa_prompt
+        worker_cols = st.columns(len(agent.WORKERS))
+        for w_col, (w_name, w) in zip(worker_cols, agent.WORKERS.items()):
+            with w_col:
+                st.markdown(f"""
+                <div style="background:#151518;border:1px solid #222228;border-top:2px solid #00D4FF;
+                            padding:10px 10px 6px 10px;min-height:96px;">
+                    <div style="font-family:'Teko',sans-serif;font-size:1.05rem;color:#FFF;
+                                letter-spacing:0.06rem;">{w['emoji']} {w_name.upper()}</div>
+                    <div style="font-family:'Share Tech Mono',monospace;font-size:0.55rem;
+                                color:#00D4FF;letter-spacing:0.08rem;">{w['role'].upper()}</div>
+                    <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;
+                                color:#777;margin-top:4px;line-height:1.4;">{w['desc']}</div>
+                </div>""", unsafe_allow_html=True)
+                for a_label, a_prompt in w["actions"]:
+                    if st.button(a_label, key=f"wk_{w_name}_{a_label}", use_container_width=True):
+                        pending_query = a_prompt
 
         typed_query = st.chat_input("Ask the agent to do something — it can act, not just answer...")
         if typed_query:
             pending_query = typed_query
 
+        def _worker_caption(actions):
+            ws = agent.workers_for_actions(actions)
+            tags = " · ".join(f"{agent.WORKERS[w]['emoji']} {w}" for w in ws) if ws else ""
+            return (tags + "  |  " if tags else "") + "⚙ " + " · ".join(actions)
+
         for t_i, turn in enumerate(st.session_state.agent_chat):
             with st.chat_message(turn["role"]):
                 if turn.get("actions"):
-                    st.caption("⚙ EXECUTED: " + " · ".join(turn["actions"]))
+                    st.caption(_worker_caption(turn["actions"]))
                 st.write(turn["content"])
+                _render_trace(turn.get("trace"))
                 for a_i, art in enumerate(turn.get("artifacts", [])):
                     _render_artifact(art, key=f"agent_art_{t_i}_{a_i}")
 
@@ -1766,11 +1864,13 @@ with exp_copilot:
                 "content": agent_result["reply"],
                 "artifacts": agent_result["artifacts"],
                 "actions": agent_result["actions"],
+                "trace": agent_result.get("trace"),
             })
             with st.chat_message("assistant"):
                 if agent_result["actions"]:
-                    st.caption("⚙ EXECUTED: " + " · ".join(agent_result["actions"]))
+                    st.caption(_worker_caption(agent_result["actions"]))
                 st.write(agent_result["reply"])
+                _render_trace(agent_result.get("trace"))
                 for a_i, art in enumerate(agent_result["artifacts"]):
                     _render_artifact(art, key=f"agent_art_new_{a_i}")
 

@@ -19,7 +19,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules import (agent, alerts, carbon, connect, control_tower, cost_audit,
-                     doc_intel, health_check, ingestion, retail, store, tender)
+                     doc_intel, ensemble, health_check, ingestion, retail, store, tender)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -202,6 +202,63 @@ def test_agent_offline_routing(shipments, query, expected):
     result = agent.run_agent(query, ctx, client=False)
     assert result["actions"] == [expected]
     assert result["engine"] == "offline"
+
+
+# ── Ensemble forecasting ──────────────────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def daily_series():
+    """~240 days with weekly seasonality + trend + noise."""
+    rng = np.random.default_rng(3)
+    ds = pd.date_range("2025-01-01", periods=240, freq="D")
+    t = np.arange(240)
+    y = 100 + 0.2 * t + 15 * np.sin(2 * np.pi * t / 7) + rng.normal(0, 5, 240)
+    return pd.DataFrame({"ds": ds, "y": np.clip(y, 0, None)})
+
+
+def test_tournament_runs_and_crowns_champion(daily_series):
+    res = ensemble.run_tournament(daily_series, horizon_days=7)
+    assert res is not None
+    assert len(res["leaderboard"]) >= 4
+    assert res["champion"] == res["leaderboard"].iloc[0]["Model"]
+    assert np.isfinite(res["champion_mape"]) and res["champion_mape"] < 50
+    assert res["forecast"] is not None and len(res["forecast"]) == 7
+    assert (res["forecast"]["yhat"] >= 0).all()
+    assert len(res["holdout"]) == res["holdout_days"]
+
+
+def test_tournament_scores_prophet_on_holdout(daily_series):
+    fake_prophet = daily_series.rename(columns={"y": "yhat"}).copy()
+    fake_prophet["yhat"] = fake_prophet["yhat"] * 1.02  # near-perfect forecast
+    res = ensemble.run_tournament(daily_series, prophet_forecast=fake_prophet)
+    assert "Prophet" in set(res["leaderboard"]["Model"])
+    assert res["prophet_mape"] is not None and res["prophet_mape"] < 5
+
+
+def test_tournament_short_series_returns_none():
+    short = pd.DataFrame({"ds": pd.date_range("2025-01-01", periods=60, freq="D"),
+                          "y": np.ones(60) * 10})
+    assert ensemble.run_tournament(short) is None
+
+
+# ── Reasoning trace + AI Workers ──────────────────────────────────────────────
+
+def test_agent_trace_offline(shipments):
+    ctx = {"shipments": shipments, "kpis": control_tower.shipment_kpis(shipments),
+           "scorecard": control_tower.carrier_scorecard(shipments), "metrics": {}}
+    r = agent.run_agent("summary of exceptions", ctx, client=False)
+    steps = [s["step"] for s in r["trace"]]
+    assert steps[0] == "route" and "tool" in steps and steps[-1] == "answer"
+    tool_step = next(s for s in r["trace"] if s["step"] == "tool")
+    assert tool_step["label"] == "exception_summary" and "ms" in tool_step
+
+
+def test_workers_cover_all_tools():
+    tools_in_workers = {t for w in agent.WORKERS.values() for t in w["tools"]}
+    schema_tools = {t["function"]["name"] for t in agent.TOOLS_SCHEMA}
+    assert tools_in_workers == schema_tools
+    assert agent.workers_for_actions(["freight_cost_audit", "exception_summary"]) == \
+        ["Auditor", "Tracker"]
 
 
 # ── Carbon lens ───────────────────────────────────────────────────────────────

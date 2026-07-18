@@ -80,6 +80,10 @@ def assign_demo_carriers(df: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
     anom_idx = rng.choice(len(df), size=n_anom, replace=False)
     costs[anom_idx] *= rng.uniform(2.2, 4.0, size=n_anom)
     df["freight_cost"] = np.round(costs, 2)
+
+    # Simulated transport mode per fictional carrier (for the Carbon Lens demo)
+    from modules import carbon
+    df["transport_mode"] = df["carrier"].map(carbon.DEMO_CARRIER_MODES).fillna("road")
     return df
 
 
@@ -108,6 +112,8 @@ def prepare_shipments(tracking_df: pd.DataFrame, delay_model=None) -> pd.DataFra
     out["carrier"] = df["carrier"].astype(str) if "carrier" in df.columns else None
     if "freight_cost" in df.columns:
         out["freight_cost"] = pd.to_numeric(df["freight_cost"], errors="coerce")
+    if "transport_mode" in df.columns:
+        out["transport_mode"] = df["transport_mode"].astype(str)
 
     # Prefer the real order_status over the simulated status column when present.
     if "order_status" in df.columns:

@@ -6,7 +6,7 @@ Master of Business (Supply Chain & International Business) — Monash University
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Version](https://img.shields.io/badge/version-4.6.0-brightgreen)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-4.7.0-brightgreen)](CHANGELOG)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
@@ -94,6 +94,8 @@ logistics-ai-dashboard/
 │   ├── alerts.py                 # Alert digests + optional SMTP email delivery
 │   ├── store.py                  # SQLite persistence (retail tracker, settings, KPI snapshots)
 │   ├── connect.py                # Live store connectors: Shopify Admin API, WooCommerce REST
+│   ├── doc_intel.py              # Invoice/BOL scanner: extraction + board reconciliation
+│   ├── carbon.py                 # Carbon Lens: CO2e estimates by carrier, zone, mode
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -241,6 +243,19 @@ The copilot no longer just answers — it **executes tools on your live data**:
 - **SQLite persistence** — the Small Retailer tracker and alert emails survive restarts (`data/supchainmate.db`, gitignored)
 - **Shopify / WooCommerce** order exports auto-recognised on upload (badge confirms the platform)
 
+### Invoice / BOL Scanner — Document Intelligence (v4.7)
+- Upload a freight invoice or BOL (PDF/TXT) — fields are extracted (Groq LLM when configured, regex offline) and **reconciled against the shipment board**
+- Checks: carrier known · shipment references resolve · invoice total vs recorded costs (±10% tolerance) or the carrier's audited rate band · already-billed warning
+- Verdicts: OK TO PAY / REVIEW — RATE MISMATCH / UNKNOWN SHIPMENTS / UNKNOWN CARRIER
+- "Try sample invoice" builds one from real board shipments (with one inflated line) so the scanner is demoable instantly
+- Numbers always come from the data — the LLM only parses text
+
+### Carbon Lens (v4.7)
+- Freight **CO₂e estimates** from your real route distances: `distance × weight × DEFRA-style mode factor` (road/rail/air/sea)
+- Per-carrier footprint with a **greenest-vs-cheapest scatter**, per-zone footprint, network total, adjustable shipment weight
+- Route optimisation savings now shown in **tCO₂e avoided**
+- Honest by construction: carriers only differ when their transport mode differs (add a `transport_mode` column; demo modes are simulated and labelled)
+
 ### Live Store Connect & Performance History (v4.6)
 - **Connect your store** — pull order history straight from Shopify (Admin API token, `read_orders` scope) or WooCommerce (read-only REST keys); no CSV needed. Credentials are used for the fetch only and never saved
 - **Performance History** — one KPI snapshot (health score, on-time %, late, at-risk) saved per data load; trend chart + table build up across sessions
@@ -313,6 +328,12 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.7.0 — Document Intelligence + Carbon Lens
+- **NEW**: `modules/doc_intel.py` — invoice/BOL scanner: PDF/TXT extraction (Groq LLM or offline regex), reconciliation against the shipment board and audited rate bands, pay/review verdicts, sample-invoice demo
+- **NEW**: `modules/carbon.py` — CO₂e estimates (DEFRA-style mode factors) by carrier and zone, greenest-vs-cheapest scatter, route-savings tCO₂e
+- **NEW**: `transport_mode` support in the shipment board (demo modes simulated + labelled)
+- **NEW**: pypdf dependency for PDF text extraction; +7 tests (33 total)
 
 ### v4.6.0 — Live Store Connect, Performance History, Test Suite
 - **NEW**: `modules/connect.py` — Shopify Admin API + WooCommerce REST connectors with pagination, clear credential errors, and no credential persistence

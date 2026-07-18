@@ -12,7 +12,7 @@ import streamlit as st
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
 from modules import nvidia_api, groq_ai, control_tower, agent, cost_audit
-from modules import health_check, tender, alerts, store, connect
+from modules import health_check, tender, alerts, store, connect, carbon, doc_intel
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -859,7 +859,8 @@ with col_map:
                             color:#00E676;padding:6px 0;">
                     TOTAL ROUTE: {opt_result.get('total_cost_km',0):,.0f} KM &nbsp;·&nbsp;
                     NAIVE BASELINE: {opt_result.get('naive_cost_km',0):,.0f} KM &nbsp;·&nbsp;
-                    SAVINGS: {opt_result.get('savings_km',0):,.0f} KM ({opt_result.get('savings_pct',0):.1f}%)
+                    SAVINGS: {opt_result.get('savings_km',0):,.0f} KM ({opt_result.get('savings_pct',0):.1f}%) &nbsp;·&nbsp;
+                    ≈ {carbon.route_savings_co2(opt_result.get('savings_km',0)):,.1f} tCO₂e AVOIDED
                 </div>
                 """, unsafe_allow_html=True)
         else:
@@ -1286,6 +1287,139 @@ with st.expander("⚖ FREIGHT COST AUDIT — BILLING ANOMALY DETECTION", expande
                     mime="text/plain",
                     use_container_width=True,
                 )
+
+# ── Invoice / BOL Scanner — Document Intelligence ──────────────────────────────
+with st.expander("📄 INVOICE / BOL SCANNER — DOCUMENT INTELLIGENCE", expanded=False):
+    di_engine = "🟢 GROQ EXTRACTION" if groq_ai.is_available() else "🟡 OFFLINE EXTRACTION (regex) — set GROQ_API_KEY for LLM-grade parsing"
+    st.markdown(
+        f"<div style='font-family:Share Tech Mono,monospace;font-size:0.65rem;color:#888;'>"
+        f"{di_engine} · PDF / TXT · RECONCILED AGAINST THE SHIPMENT BOARD & AUDITED RATE BANDS</div>",
+        unsafe_allow_html=True)
+    di_col1, di_col2 = st.columns([2, 1])
+    with di_col1:
+        di_file = st.file_uploader("Upload a freight invoice or BOL", type=["pdf", "txt"],
+                                   key="di_upload", label_visibility="collapsed")
+    with di_col2:
+        di_sample = st.button("▷ TRY SAMPLE INVOICE", key="di_sample", use_container_width=True,
+                              help="Generates an invoice from real board shipments with one inflated line")
+
+    di_text = None
+    if di_file is not None:
+        di_text, di_msg = doc_intel.extract_text(di_file.read(), di_file.name)
+        if di_text is None:
+            st.error(di_msg)
+    elif di_sample:
+        di_text = doc_intel.sample_invoice(shipments_df)
+        if di_text is None:
+            st.info("Sample invoice needs shipments with freight costs.")
+
+    if di_text:
+        known_carriers = (shipments_df["carrier"].dropna().unique().tolist()
+                          if "carrier" in shipments_df.columns else [])
+        with st.spinner("Extracting fields..."):
+            di_fields, di_used = doc_intel.extract_fields(di_text, known_carriers)
+        di_result = doc_intel.reconcile(di_fields, shipments_df,
+                                        audit["by_carrier"] if audit else None)
+        v_color = {"OK TO PAY": "#00E676", "INSUFFICIENT DATA": "#888"}.get(
+            di_result["verdict"], "#FF003C" if "UNKNOWN" in di_result["verdict"] else "#FBC02D")
+        st.markdown(f"""
+        <div class="hud-panel" style="border-color:{v_color};">
+            <div class="hud-label">VERDICT · EXTRACTION: {di_used.upper()}</div>
+            <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:{v_color};">
+                {di_result['verdict']}
+            </div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:#888;">
+                INVOICE {di_fields.get('invoice_number') or '?'} ·
+                {di_fields.get('carrier') or 'carrier unknown'} ·
+                TOTAL {f"${di_fields['total_amount']:,.2f}" if di_fields.get('total_amount') else 'not found'}
+            </div>
+        </div>""", unsafe_allow_html=True)
+        for f_txt in di_result["findings"]:
+            f_color = "#FF003C" if f_txt.startswith("⚠") else "#00D4FF"
+            st.markdown(f"""
+            <div style="background:#151518;border-left:3px solid {f_color};padding:8px 14px;
+                        margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#CCCCCC;">
+                {f_txt}
+            </div>""", unsafe_allow_html=True)
+        if len(di_result["matched"]):
+            with st.expander("Matched shipments", expanded=False):
+                mv = di_result["matched"][[c for c in ["shipment_id", "carrier", "order_date",
+                                                       "health", "freight_cost"]
+                                           if c in di_result["matched"].columns]]
+                st.dataframe(mv, use_container_width=True, hide_index=True)
+        with st.expander("Document text", expanded=False):
+            st.code(di_text[:3000], language=None)
+
+# ── Carbon Lens ────────────────────────────────────────────────────────────────
+with st.expander("🌱 CARBON LENS — FREIGHT CO₂e ESTIMATES", expanded=False):
+    cl_avg_dist = carbon.network_avg_distance_km(centroid_stats)
+    if cl_avg_dist is None:
+        st.info("Carbon estimates need the network's cluster distance metrics.")
+    else:
+        st.markdown(
+            "<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#888;'>"
+            "ESTIMATES: distance × weight × DEFRA-style mode factor (road 0.107 / rail 0.028 / "
+            "air 1.13 / sea 0.016 kg CO₂e per tonne-km). Distances from your network's Haversine "
+            "cluster metrics." + (" DEMO MODE — carrier transport modes are simulated."
+                                  if st.session_state.get("carriers_simulated") else "") + "</div>",
+            unsafe_allow_html=True)
+        cl_weight = st.slider("AVG SHIPMENT WEIGHT (KG)", 1, 500, 20, key="cl_weight")
+        cl_carriers = carbon.carrier_emissions(shipments_df, cl_avg_dist, cl_weight, scorecard)
+        cl_zones = carbon.zone_emissions(centroid_stats, cl_weight)
+
+        total_t = float(cl_carriers["Total tCO2e"].sum()) if cl_carriers is not None else (
+            float(cl_zones["Total tCO2e"].sum()) if cl_zones is not None else 0.0)
+        cb1, cb2, cb3 = st.columns(3)
+        cb1.markdown(_hp("NETWORK FOOTPRINT", f"{total_t:,.1f} tCO₂e",
+                         f"@ {cl_weight}KG/SHIPMENT · {cl_avg_dist:,.0f}KM AVG", "#00E676"), unsafe_allow_html=True)
+        if cl_carriers is not None and len(cl_carriers):
+            cb2.markdown(_hp("GREENEST CARRIER", str(cl_carriers.iloc[0]["Carrier"]),
+                             f"{cl_carriers.iloc[0]['kg CO2e/shipment']:.2f} KG/SHIPMENT ({cl_carriers.iloc[0]['Mode'].upper()})",
+                             "#00E676"), unsafe_allow_html=True)
+            cb3.markdown(_hp("HIGHEST EMITTER", str(cl_carriers.iloc[-1]["Carrier"]),
+                             f"{cl_carriers.iloc[-1]['kg CO2e/shipment']:.2f} KG/SHIPMENT ({cl_carriers.iloc[-1]['Mode'].upper()})",
+                             "#FF003C"), unsafe_allow_html=True)
+
+        ccl, ccr = st.columns([1, 1])
+        with ccl:
+            if cl_carriers is not None:
+                st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>CO₂e BY CARRIER</div>", unsafe_allow_html=True)
+                st.dataframe(cl_carriers, use_container_width=True, hide_index=True)
+                if "Avg Cost/Shipment ($)" in cl_carriers.columns and cl_carriers["Avg Cost/Shipment ($)"].notna().any():
+                    fig_co2 = px.scatter(
+                        cl_carriers, x="Avg Cost/Shipment ($)", y="kg CO2e/shipment",
+                        text="Carrier", color="Mode", size="Shipments",
+                        color_discrete_map={"road": "#00D4FF", "rail": "#00E676",
+                                            "air": "#FF003C", "sea": "#FBC02D"},
+                        height=300,
+                    )
+                    fig_co2.update_traces(textposition="top center",
+                                          textfont=dict(color="#AAAAAA", size=10))
+                    fig_co2.update_layout(
+                        template="plotly_dark",
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,13,16,1)",
+                        margin=dict(l=40, r=20, t=10, b=40),
+                        legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#888")),
+                    )
+                    fig_co2.update_xaxes(gridcolor="#222228", title="$/shipment (cheapest →)")
+                    fig_co2.update_yaxes(gridcolor="#222228", title="kg CO₂e/shipment (greenest ↓)")
+                    st.plotly_chart(fig_co2, use_container_width=True)
+        with ccr:
+            if cl_zones is not None:
+                st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>CO₂e BY DELIVERY ZONE</div>", unsafe_allow_html=True)
+                st.dataframe(cl_zones, use_container_width=True, hide_index=True)
+                st.download_button(
+                    "⇩ EXPORT CARBON REPORT (CSV)",
+                    data=(cl_carriers if cl_carriers is not None else cl_zones).to_csv(index=False).encode(),
+                    file_name="supchainmate_carbon.csv", mime="text/csv",
+                    use_container_width=True,
+                )
+        for note in carbon.carbon_insights(cl_carriers):
+            st.markdown(f"""
+            <div style="background:#151518;border-left:3px solid #00E676;padding:8px 14px;
+                        margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#CCCCCC;">
+                {note}
+            </div>""", unsafe_allow_html=True)
 
 # ── Supply Chain Health Check ──────────────────────────────────────────────────
 with st.expander("🩺 SUPPLY CHAIN HEALTH CHECK — SCORED ASSESSMENT", expanded=False):

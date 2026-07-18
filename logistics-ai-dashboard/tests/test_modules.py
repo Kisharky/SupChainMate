@@ -18,8 +18,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from modules import (agent, alerts, connect, control_tower, cost_audit,
-                     health_check, ingestion, retail, store, tender)
+from modules import (agent, alerts, carbon, connect, control_tower, cost_audit,
+                     doc_intel, health_check, ingestion, retail, store, tender)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -202,6 +202,76 @@ def test_agent_offline_routing(shipments, query, expected):
     result = agent.run_agent(query, ctx, client=False)
     assert result["actions"] == [expected]
     assert result["engine"] == "offline"
+
+
+# ── Carbon lens ───────────────────────────────────────────────────────────────
+
+def test_carbon_mode_factors_ordering():
+    d = 100.0
+    assert (carbon.shipment_co2_kg(d, 20, "sea")
+            < carbon.shipment_co2_kg(d, 20, "rail")
+            < carbon.shipment_co2_kg(d, 20, "road")
+            < carbon.shipment_co2_kg(d, 20, "air"))
+    # unknown mode falls back to road
+    assert carbon.shipment_co2_kg(d, 20, "hoverboard") == carbon.shipment_co2_kg(d, 20, "road")
+
+
+def test_carrier_emissions(shipments):
+    df = shipments.copy()
+    df["transport_mode"] = np.where(df["carrier"] == "Alpha", "rail", "air")
+    out = carbon.carrier_emissions(df, avg_distance_km=200, weight_kg=20)
+    assert list(out["Carrier"]) == ["Alpha", "Beta"]  # rail sorts greener than air
+    assert out["Shipments"].sum() == len(df)
+    notes = carbon.carbon_insights(out)
+    assert any("more CO2e" in n for n in notes)
+
+
+def test_zone_emissions_and_route_savings():
+    cent = pd.DataFrame({"cluster": [0, 1], "customers": [100, 50],
+                         "avg_dist_km": [120.0, 300.0]})
+    zones = carbon.zone_emissions(cent, weight_kg=20)
+    assert len(zones) == 2 and (zones["Total tCO2e"] > 0).all()
+    assert carbon.network_avg_distance_km(cent) == pytest.approx(180.0)
+    assert carbon.route_savings_co2(1000) == pytest.approx(0.85)
+
+
+# ── Document intelligence ─────────────────────────────────────────────────────
+
+def test_doc_intel_sample_roundtrip(shipments, monkeypatch):
+    monkeypatch.setattr(doc_intel.groq_ai, "is_available", lambda: False)
+    text = doc_intel.sample_invoice(shipments, inflate=False)
+    fields, engine = doc_intel.extract_fields(
+        text, shipments["carrier"].dropna().unique().tolist())
+    assert engine == "offline"
+    assert fields["invoice_number"] and fields["total_amount"] > 0
+    assert fields["carrier"] in {"Alpha", "Beta"}
+    result = doc_intel.reconcile(fields, shipments)
+    assert result["verdict"] == "OK TO PAY"
+    assert len(result["matched"]) == 3
+
+
+def test_doc_intel_flags_inflated_invoice(shipments, monkeypatch):
+    monkeypatch.setattr(doc_intel.groq_ai, "is_available", lambda: False)
+    text = doc_intel.sample_invoice(shipments, inflate=True)
+    fields, _ = doc_intel.extract_fields(
+        text, shipments["carrier"].dropna().unique().tolist())
+    result = doc_intel.reconcile(fields, shipments)
+    assert result["verdict"] == "REVIEW — RATE MISMATCH"
+    assert any("tolerance" in f for f in result["findings"])
+
+
+def test_doc_intel_unknown_carrier(shipments, monkeypatch):
+    monkeypatch.setattr(doc_intel.groq_ai, "is_available", lambda: False)
+    text = "Ghost Logistics\nInvoice Number: INV-1\nTOTAL DUE: $500.00\n"
+    fields, _ = doc_intel.extract_fields(text, ["Alpha", "Beta"])
+    fields["carrier"] = "Ghost Logistics"
+    result = doc_intel.reconcile(fields, shipments)
+    assert result["verdict"] == "REVIEW — UNKNOWN CARRIER"
+
+
+def test_doc_intel_pdf_text_extraction(tmp_path):
+    txt, msg = doc_intel.extract_text(b"Invoice Number: INV-9\nTOTAL: $10.00", "inv.txt")
+    assert txt and "INV-9" in txt
 
 
 # ── Store connectors (mocked HTTP) ────────────────────────────────────────────

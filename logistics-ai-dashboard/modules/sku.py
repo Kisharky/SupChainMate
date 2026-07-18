@@ -21,9 +21,10 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+import config
 from modules import decisions
 
-MAX_SKUS = 200  # cap the engine at the top-N SKUs by volume
+MAX_SKUS = config.MAX_SKUS  # cap the engine at the top-N SKUs by volume
 
 # Fictional demo catalogue: (sku, weight, unit_price)
 DEMO_CATALOG = [

@@ -23,75 +23,10 @@ st.set_page_config(
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from views import helpers as vh
+from views import landing as v_landing, retail as v_retail, upload as v_upload
 
-def load_css(file_name):
-    path = os.path.join(BASE_DIR, file_name)
-    if os.path.exists(path):
-        with open(path) as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-load_css("style.css")
-
-# ── Inline upload-screen CSS ───────────────────────────────────────────────────
-st.markdown("""
-<style>
-.upload-hero {
-    text-align: center;
-    padding: 40px 0 20px 0;
-}
-.upload-hero h1 {
-    font-family: 'Teko', sans-serif !important;
-    font-size: 3.5rem !important;
-    color: #FFFFFF !important;
-    letter-spacing: 0.15rem;
-    text-transform: uppercase;
-    margin-bottom: 6px !important;
-}
-.upload-hero .subtitle {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 0.85rem;
-    color: #666666;
-    letter-spacing: 0.08rem;
-    margin-bottom: 40px;
-}
-.upload-card {
-    background: #151518;
-    border: 1px solid #222228;
-    border-top: 2px solid #FF003C;
-    padding: 20px;
-    margin-bottom: 8px;
-    border-radius: 0px;
-}
-.upload-card-label {
-    font-family: 'Teko', sans-serif;
-    font-size: 1.1rem;
-    color: #FFFFFF;
-    text-transform: uppercase;
-    letter-spacing: 0.08rem;
-    margin-bottom: 4px;
-}
-.upload-card-sub {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 0.65rem;
-    color: #555555;
-    letter-spacing: 0.06rem;
-    margin-bottom: 12px;
-}
-.detected-badge {
-    background: rgba(0, 230, 118, 0.1);
-    border: 1px solid #00E676;
-    color: #00E676;
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 0.65rem;
-    padding: 2px 8px;
-    display: inline-block;
-    margin: 2px 3px;
-}
-.mode-card-retail {
-    border-top: 2px solid #00E676;
-}
-</style>
-""", unsafe_allow_html=True)
+vh.apply_theme()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SESSION STATE INITIALISATION
@@ -132,482 +67,25 @@ def _reset_enterprise_session_preserve_retail():
     st.session_state.data_loaded = False
 
 
-def _render_small_retailer_page():
-    st.markdown("""
-    <div class="upload-hero">
-        <h1>⬡ SupChainMate</h1>
-        <div class="subtitle">SMALL RETAILER MODE — NO SPREADSHEETS REQUIRED</div>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("← Change mode", key="retail_change_mode"):
-        st.session_state.entry_mode = "landing"
-        st.rerun()
-
-    st.caption(
-        "Answer a few questions per product. The same inventory math as Enterprise runs underneath "
-        "(reorder point, EOQ, safety stock, cost trade-offs)."
-    )
-
-    with st.expander("Advanced costs (optional)", expanded=False):
-        r_order_cost = st.number_input(
-            "Cost per purchase order ($)",
-            min_value=10.0,
-            value=retail.DEFAULT_ORDERING_COST,
-            step=5.0,
-            key="retail_ordering_cost",
-        )
-        r_hold_pct = st.slider("Holding cost (% of unit value / year)", 10, 40, 25, key="retail_holding_pct")
-    r_holding_rate = r_hold_pct / 100.0
-
-    st.subheader("Add a product")
-    with st.form("retail_add_product", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            pname = st.text_input("Product name", placeholder="e.g. Blue Jeans (S)")
-            p_weekly = st.number_input("How many do you sell per week (average)?", min_value=0.01, value=20.0, step=1.0)
-            p_lead = st.number_input("Supplier lead time (days)", min_value=0.5, value=14.0, step=0.5)
-        with c2:
-            p_cost = st.number_input("Your cost per unit ($)", min_value=0.01, value=25.0, step=1.0)
-            p_tier = st.selectbox(
-                "Safety buffer",
-                options=["Low", "Medium", "High"],
-                index=1,
-                help="Higher buffer → higher service level target in the engine.",
-            )
-            p_stock = st.number_input("Current stock (units)", min_value=0.0, value=0.0, step=1.0)
-        add_sub = st.form_submit_button("Add to tracker")
-    st.caption(
-        "Lead time variability is estimated at 15% of your supplier's average — "
-        "adjust the safety buffer if your supplier is unpredictable."
-    )
-    if add_sub and pname and pname.strip():
-        st.session_state.retail_products.append(
-            retail.product_dict(pname.strip(), p_weekly, p_lead, p_cost, p_tier, p_stock)
-        )
-        store.save_retail_products(st.session_state.retail_products)
-        st.rerun()
-
-    products = st.session_state.retail_products
-    if not products:
-        st.info("Add at least one product to see reorder guidance and the tracker.")
-        return
-
-    st.subheader("Your answers — instant guidance")
-    focus_labels = [p["name"] for p in products]
-    pick = st.selectbox("Product to show", range(len(products)), format_func=lambda i: focus_labels[i])
-    p_focus = products[pick]
-    _, out_focus = retail.run_retail_decisions(
-        p_focus["units_per_week"],
-        p_focus["lead_time_days"],
-        p_focus["unit_cost"],
-        p_focus["safety_tier"],
-        ordering_cost=r_order_cost,
-        holding_rate=r_holding_rate,
-    )
-    rop_i = int(math.ceil(out_focus.reorder_point))
-    eoq_i = int(round(out_focus.eoq))
-    ss_i = int(round(out_focus.safety_stock))
-    save_yr = out_focus.savings_vs_current
-
-    st.success(f"REORDER ALERT: Reorder **{p_focus['name']}** when you have **{rop_i}** units left.")
-    st.info(f"ORDER QUANTITY: Order **{eoq_i}** units at a time.")
-    st.warning(f"SAFETY BUFFER: Keep at least **{ss_i}** units as emergency stock.")
-    if save_yr > 0:
-        st.error(
-            f"YOU ARE LEAVING MONEY ON THE TABLE: Aligning to this pattern could save "
-            f"**~${save_yr:,.0f}/year** on inventory-related costs (vs. a naive ordering baseline)."
-        )
-    else:
-        st.info("Cost outlook: your parameters are already close to the model baseline.")
-
-    st.subheader("Multi-product tracker")
-    tbl_rows = [
-        retail.tracker_row(p, ordering_cost=r_order_cost, holding_rate=r_holding_rate)
-        for p in products
-    ]
-    df_track = pd.DataFrame(tbl_rows)
-    edited = st.data_editor(
-        df_track,
-        width="stretch",
-        hide_index=True,
-        disabled=[
-            "Product",
-            "Reorder when (units left)",
-            "Order qty",
-            "Est. savings/yr ($)",
-            "Status",
-        ],
-        key="retail_tracker_editor",
-    )
-    st.download_button(
-        "⇩ DOWNLOAD REORDER CHECKLIST (CSV)",
-        data=df_track.to_csv(index=False).encode(),
-        file_name="reorder_checklist.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-    if st.button("Apply stock levels from table", key="retail_apply_stock"):
-        try:
-            for i in range(len(st.session_state.retail_products)):
-                st.session_state.retail_products[i]["current_stock"] = float(
-                    edited.iloc[i]["Current stock"]
-                )
-        except (ValueError, KeyError, TypeError, IndexError):
-            st.error("Could not read stock values; use numbers only.")
-        else:
-            store.save_retail_products(st.session_state.retail_products)
-            st.rerun()
-
-    del_idx = st.selectbox(
-        "Remove a product",
-        range(len(products)),
-        format_func=lambda i: products[i]["name"],
-        key="retail_del_select",
-    )
-    if st.button("Remove selected product", key="retail_del_btn"):
-        st.session_state.retail_products.pop(del_idx)
-        store.save_retail_products(st.session_state.retail_products)
-        st.rerun()
-
-    st.subheader("Alerts")
-    digest_text, n_alerts = alerts.build_retail_digest(products, tbl_rows)
-    if n_alerts:
-        st.warning(f"{n_alerts} product(s) need attention — see the digest below.")
-    else:
-        st.success("Nothing needs ordering right now.")
-    smtp_ok = alerts.smtp_configured()
-    ral1, ral2 = st.columns([2, 1])
-    with ral1:
-        r_email = st.text_input("Email for reorder alerts", key="retail_email",
-                                value=store.load_setting("retail_alert_email", "") or "")
-    with ral2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Send digest now", key="retail_send_digest",
-                     disabled=not (smtp_ok and r_email), use_container_width=True):
-            ok, send_msg = alerts.send_email(r_email, "SupChainMate — Reorder Digest", digest_text)
-            (st.success if ok else st.error)(send_msg)
-            if ok:
-                store.save_setting("retail_alert_email", r_email)
-    if r_email:
-        store.save_setting("retail_alert_email", r_email)
-    if not smtp_ok:
-        st.caption("Email sending needs SMTP settings in .env (SMTP_HOST, SMTP_FROM, SMTP_USER, SMTP_PASS). "
-                   "You can always download the digest below.")
-    with st.expander("Preview digest"):
-        st.code(digest_text, language=None)
-    st.download_button(
-        "⇩ Download reorder digest (TXT)",
-        data=digest_text.encode(),
-        file_name="reorder_digest.txt", mime="text/plain",
-        use_container_width=True,
-    )
-    st.caption("Your products and email are saved locally (SQLite) and restored next time you open the app.")
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # LANDING — CHOOSE ENTERPRISE VS SMALL RETAILER
 # ═══════════════════════════════════════════════════════════════════════════════
 if st.session_state.entry_mode == "landing":
-    st.markdown("""
-    <div class="upload-hero">
-        <h1>⬡ SupChainMate</h1>
-        <div class="subtitle">CHOOSE HOW YOU WANT TO WORK</div>
-    </div>
-    """, unsafe_allow_html=True)
-    ec, rc = st.columns(2)
-    with ec:
-        st.markdown("""
-        <div class="upload-card">
-            <div class="upload-card-label">ENTERPRISE MODE</div>
-            <div class="upload-card-sub">FOR SUPPLY CHAIN TEAMS WITH DATA<br><br>
-            Upload orders, delivery, locations, costs — full mission control, maps, and AI insights.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("OPEN ENTERPRISE MODE", use_container_width=True, type="primary", key="btn_enterprise"):
-            st.session_state.entry_mode = "enterprise"
-            st.rerun()
-    with rc:
-        st.markdown("""
-        <div class="upload-card mode-card-retail">
-            <div class="upload-card-label">SMALL RETAILER MODE</div>
-            <div class="upload-card-sub">FOR SMALL SHOPS — NO CSV<br><br>
-            Answer five quick questions per product. Same decision engine, plain-English answers.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("OPEN SMALL RETAILER MODE", use_container_width=True, key="btn_retail"):
-            st.session_state.entry_mode = "retail"
-            st.rerun()
-    st.stop()
+    v_landing.render()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SMALL RETAILER — STANDALONE FLOW (NO ENTERPRISE DATA)
 # ═══════════════════════════════════════════════════════════════════════════════
 if st.session_state.entry_mode == "retail":
-    _render_small_retailer_page()
+    v_retail.render()
     st.stop()
-
-
-# ── Demo data loader ───────────────────────────────────────────────────────────
-DEMO_ORDERS    = os.path.join(BASE_DIR, "data", "olist_orders.csv")
-DEMO_DELIVERY  = os.path.join(BASE_DIR, "data", "olist_orders_dataset.csv")
-DEMO_CUSTOMERS = os.path.join(BASE_DIR, "data", "olist_customers_dataset.csv")
-
-
-def _load_demo():
-    """Load and process the built-in Olist demo dataset."""
-    with st.spinner("LOADING DEMO DATA..."):
-        raw_orders = forecast.load_orders(DEMO_ORDERS)
-        daily      = forecast.daily_demand(raw_orders)
-        model      = forecast.fit_prophet_model(daily)
-        st.session_state.daily_df = daily
-
-        future                   = model.make_future_dataframe(periods=7)
-        future                   = future.merge(daily[["ds", "external_signal"]], on="ds", how="left")
-        future["external_signal"]= future["external_signal"].fillna(0)
-        st.session_state.forecast_df   = model.predict(future)
-        st.session_state._prophet_model = model
-
-        raw_delivery = pd.read_csv(DEMO_DELIVERY)
-        tdf          = tracking.simulate_tracking(raw_delivery)
-        tdf          = control_tower.assign_demo_carriers(tdf)
-        st.session_state.carriers_simulated = True
-
-        # Per-SKU intelligence: simulated catalogue over the real order dates
-        _sku_orders = pd.DataFrame({
-            "order_date": raw_orders["order_purchase_timestamp"],
-            "quantity": 1.0,
-        })
-        st.session_state.orders_sku_df = sku.assign_demo_skus(_sku_orders)
-        m, X_test, _ = tracking.train_delay_model(tdf)
-        st.session_state.tracking_df   = tdf
-        st.session_state.delay_model   = m
-        st.session_state.X_test_delay  = X_test
-
-        customers = pd.read_csv(DEMO_CUSTOMERS)
-        geo_lookup = network.get_geo_lookup()
-        geo_df    = network.prepare_customer_data(customers, geo_lookup=geo_lookup)
-        st.session_state.geo_df = network.run_clustering(geo_df)
-
-        st.session_state.summary       = optimization.network_summary(raw_orders)
-
-        rng = np.random.default_rng(42)
-        cost_arr = rng.uniform(5, 20, size=len(tdf))
-        st.session_state.current_cost  = float(cost_arr.sum())
-
-        st.session_state.data_loaded   = True
-        st.session_state.demo_mode     = True
-        st.session_state.entry_mode    = "enterprise"
-    st.rerun()
-
-
-def _process_uploaded(raw_orders, raw_delivery, raw_location, raw_cost):
-    """Normalise and process user-uploaded files."""
-    with st.spinner("PROCESSING YOUR DATA..."):
-        # ── Orders ────────────────────────────────────────────────────────────
-        orders_norm  = ingestion.normalise_orders(raw_orders)
-        st.session_state.orders_sku_df = orders_norm if "sku" in orders_norm.columns else None
-        daily        = ingestion.orders_to_daily_demand(orders_norm)
-        model        = forecast.fit_prophet_model(daily)
-        st.session_state.daily_df = daily
-
-        future                    = model.make_future_dataframe(periods=7)
-        future                    = future.merge(daily[["ds", "external_signal"]], on="ds", how="left")
-        future["external_signal"] = future["external_signal"].fillna(0)
-        st.session_state.forecast_df    = model.predict(future)
-        st.session_state._prophet_model  = model
-
-        # ── Delivery (optional) ───────────────────────────────────────────────
-        if raw_delivery is not None:
-            delivery_norm = ingestion.normalise_delivery(raw_delivery)
-            tdf           = ingestion.delivery_to_tracking(delivery_norm)
-            st.session_state.carriers_simulated = False
-        else:
-            # Simulate from orders if no delivery file provided
-            tdf           = tracking.simulate_tracking(orders_norm.rename(columns={"order_date": "order_purchase_timestamp"}))
-
-        # Train delay model using the proper LightGBM pipeline from tracking.py
-        m, X_test, _ = tracking.train_delay_model(tdf)
-        st.session_state.tracking_df   = tdf
-        st.session_state.delay_model   = m
-        st.session_state.X_test_delay  = X_test
-
-        # ── Location (optional) ───────────────────────────────────────────────
-        if raw_location is not None:
-            loc_norm = ingestion.normalise_location(raw_location)
-        else:
-            # Synthesise from orders count
-            np.random.seed(42)
-            n = min(len(orders_norm), 500)
-            loc_norm = pd.DataFrame({
-                "lat":   np.random.uniform(-33, 5, n),
-                "lon":   np.random.uniform(-73, -35, n),
-                "label": "Node",
-            })
-
-        loc_norm["cluster"] = pd.qcut(loc_norm["lat"], q=5, labels=False, duplicates="drop")
-        st.session_state.geo_df = loc_norm
-
-        # ── Cost (optional) ───────────────────────────────────────────────────
-        if raw_cost is not None:
-            cost_norm = ingestion.normalise_cost(raw_cost)
-            st.session_state.current_cost = float(cost_norm["cost"].sum())
-        else:
-            rng = np.random.default_rng(42)
-            st.session_state.current_cost = float(rng.uniform(5, 20, len(tdf)).sum())
-
-        st.session_state.summary     = None  # Network summary needs olist shape
-        st.session_state.data_loaded = True
-        st.session_state.demo_mode   = False
-        st.session_state.entry_mode  = "enterprise"
-    st.rerun()
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # UPLOAD SCREEN (ENTERPRISE ONLY)
 # ═══════════════════════════════════════════════════════════════════════════════
 if st.session_state.entry_mode == "enterprise" and not st.session_state.data_loaded:
+    v_upload.render()
 
-    if st.button("← Change mode", key="enterprise_upload_back"):
-        st.session_state.entry_mode = "landing"
-        st.rerun()
-
-    st.markdown("""
-    <div class="upload-hero">
-        <h1>⬡ SupChainMate</h1>
-        <div class="subtitle">
-            UPLOAD YOUR SUPPLY CHAIN DATA → AI ANALYSES → INSTANT INTELLIGENCE
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    u1, u2, u3, u4 = st.columns(4)
-
-    with u1:
-        st.markdown("""
-        <div class="upload-card">
-            <div class="upload-card-label">📦 Orders Data</div>
-            <div class="upload-card-sub">ORDER DATE · PRODUCT · QUANTITY · REGION<br><br>AUTO-DETECTED: date, quantity, sku</div>
-        </div>""", unsafe_allow_html=True)
-        orders_file = st.file_uploader("Orders file", type=["csv", "xlsx", "xls"], key="orders",
-                                        label_visibility="collapsed")
-
-    with u2:
-        st.markdown("""
-        <div class="upload-card">
-            <div class="upload-card-label">🚚 Delivery Data</div>
-            <div class="upload-card-sub">DELIVERY DATE · STATUS · ROUTE · LEAD TIME<br><br>AUTO-DETECTED: status, lead days</div>
-        </div>""", unsafe_allow_html=True)
-        delivery_file = st.file_uploader("Delivery file", type=["csv", "xlsx", "xls"], key="delivery",
-                                          label_visibility="collapsed")
-
-    with u3:
-        st.markdown("""
-        <div class="upload-card">
-            <div class="upload-card-label">📍 Location Data</div>
-            <div class="upload-card-sub">CUSTOMER LOCATIONS · WAREHOUSES · ZIP<br><br>AUTO-DETECTED: lat/lon or postal code</div>
-        </div>""", unsafe_allow_html=True)
-        location_file = st.file_uploader("Location file", type=["csv", "xlsx", "xls"], key="location",
-                                          label_visibility="collapsed")
-
-    with u4:
-        st.markdown("""
-        <div class="upload-card">
-            <div class="upload-card-label">💰 Cost Data</div>
-            <div class="upload-card-sub">COST PER DELIVERY · FUEL · WAREHOUSE<br><br>AUTO-DETECTED: cost, price, fee columns</div>
-        </div>""", unsafe_allow_html=True)
-        cost_file = st.file_uploader("Cost file", type=["csv", "xlsx", "xls"], key="cost",
-                                      label_visibility="collapsed")
-
-    # Auto-detect preview
-    if orders_file:
-        try:
-            raw   = ingestion._read_file(orders_file)
-            meta  = ingestion.detected_columns_summary(raw, "orders")
-            badges = ""
-            if meta["date_col"]:  badges += f'<span class="detected-badge">✓ DATE: {meta["date_col"]}</span>'
-            if meta["qty_col"]:   badges += f'<span class="detected-badge">✓ QTY: {meta["qty_col"]}</span>'
-            badges += f'<span class="detected-badge">✓ {meta["rows"]:,} ROWS</span>'
-            platform = ingestion.detect_store_platform(raw)
-            if platform:
-                badges += f'<span class="detected-badge">🛒 {platform.upper()} EXPORT DETECTED</span>'
-            st.markdown(f"<div style='margin:8px 0;'>{badges}</div>", unsafe_allow_html=True)
-            orders_file.seek(0)
-        except Exception as e:
-            st.error(f"Error reading orders file: {e}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    btn_l, btn_m, btn_r = st.columns([1, 1, 1])
-
-    with btn_m:
-        if orders_file:
-            if st.button("⚡ ANALYSE MY DATA", use_container_width=True):
-                try:
-                    raw_orders   = ingestion._read_file(orders_file)
-                    raw_delivery = ingestion._read_file(delivery_file) if delivery_file else None
-                    raw_location = ingestion._read_file(location_file) if location_file else None
-                    raw_cost     = ingestion._read_file(cost_file)     if cost_file     else None
-                    _process_uploaded(raw_orders, raw_delivery, raw_location, raw_cost)
-                except Exception as e:
-                    st.error(f"Processing failed: {e}")
-        else:
-            st.markdown("""
-            <div style='text-align:center; font-family:Share Tech Mono,monospace;
-                        font-size:0.7rem; color:#444; padding:12px;'>
-                ▲ UPLOAD ORDERS FILE TO ENABLE ANALYSIS
-            </div>""", unsafe_allow_html=True)
-
-    with btn_r:
-        if st.button("▷ TRY DEMO DATA", use_container_width=True):
-            _load_demo()
-
-    # ── Live store connect (no CSV needed) ────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    with st.expander("🔗 CONNECT YOUR STORE — SHOPIFY / WOOCOMMERCE (NO CSV NEEDED)", expanded=False):
-        st.caption(
-            "Read-only API pull of your order history. Credentials are used for this fetch "
-            "only and are never saved. Shopify: create a custom app with the `read_orders` "
-            "scope and paste its Admin API access token. WooCommerce: create a read-only "
-            "REST API key under WooCommerce → Settings → Advanced."
-        )
-        conn_platform = st.radio("Platform", ["Shopify", "WooCommerce"],
-                                 horizontal=True, key="conn_platform")
-        if conn_platform == "Shopify":
-            cs1, cs2 = st.columns(2)
-            shop_url = cs1.text_input("Store URL", placeholder="mystore.myshopify.com", key="conn_shop_url")
-            shop_token = cs2.text_input("Admin API access token", type="password",
-                                        placeholder="shpat_...", key="conn_shop_token")
-            if st.button("⇩ IMPORT ORDERS FROM SHOPIFY", use_container_width=True, key="conn_shop_go"):
-                with st.spinner("Fetching orders from Shopify..."):
-                    conn_df, conn_msg = connect.fetch_shopify_orders(shop_url, shop_token)
-                if conn_df is None:
-                    st.error(conn_msg)
-                else:
-                    st.success(conn_msg)
-                    try:
-                        _process_uploaded(conn_df, None, None, None)
-                    except Exception as e:
-                        st.error(f"Processing failed: {e}")
-        else:
-            cw1, cw2, cw3 = st.columns(3)
-            woo_url = cw1.text_input("Site URL", placeholder="myshop.com", key="conn_woo_url")
-            woo_key = cw2.text_input("Consumer key", type="password",
-                                     placeholder="ck_...", key="conn_woo_key")
-            woo_secret = cw3.text_input("Consumer secret", type="password",
-                                        placeholder="cs_...", key="conn_woo_secret")
-            if st.button("⇩ IMPORT ORDERS FROM WOOCOMMERCE", use_container_width=True, key="conn_woo_go"):
-                with st.spinner("Fetching orders from WooCommerce..."):
-                    conn_df, conn_msg = connect.fetch_woocommerce_orders(woo_url, woo_key, woo_secret)
-                if conn_df is None:
-                    st.error(conn_msg)
-                else:
-                    st.success(conn_msg)
-                    try:
-                        _process_uploaded(conn_df, None, None, None)
-                    except Exception as e:
-                        st.error(f"Processing failed: {e}")
-
-    st.stop()  # Don't render dashboard until data is loaded
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2065,46 +1543,6 @@ with exp_chart:
                         use_container_width=True,
                     )
 
-_TRACE_ICONS = {"route": "🧭", "think": "🧠", "tool": "⚙", "answer": "✓"}
-
-
-def _render_trace(trace):
-    if not trace:
-        return
-    total_ms = sum(s.get("ms", 0) for s in trace)
-    with st.expander(f"⚙ REASONING TRACE — {len(trace)} steps"
-                     + (f" · {total_ms:,} ms" if total_ms else ""), expanded=False):
-        for i, s in enumerate(trace):
-            icon = _TRACE_ICONS.get(s.get("step"), "•")
-            ms = f" · {s['ms']:,} ms" if s.get("ms") else ""
-            st.markdown(f"""
-            <div style="border-left:2px solid #333340;padding:4px 12px;margin-left:6px;
-                        font-family:'Share Tech Mono',monospace;font-size:0.68rem;">
-                <span style="color:#00D4FF;">{icon} STEP {i+1} — {s.get('label','')}{ms}</span><br>
-                <span style="color:#999;">{s.get('detail','')}</span>
-            </div>""", unsafe_allow_html=True)
-
-
-def _render_artifact(art, key):
-    if art["type"] == "dataframe":
-        st.markdown(f"<div class='hud-label'>{art['title']}</div>", unsafe_allow_html=True)
-        st.dataframe(art["data"], use_container_width=True, hide_index=True, height=240)
-        st.download_button(
-            f"⇩ {art['title'].upper()} (CSV)",
-            data=art["data"].to_csv(index=False).encode(),
-            file_name=art["filename"], mime="text/csv",
-            key=key, use_container_width=True,
-        )
-    elif art["type"] == "text":
-        st.markdown(f"<div class='hud-label'>{art['title']}</div>", unsafe_allow_html=True)
-        st.code(art["data"], language=None)
-        st.download_button(
-            f"⇩ {art['title'].upper()} (TXT)",
-            data=art["data"].encode(),
-            file_name=art["filename"], mime="text/plain",
-            key=key, use_container_width=True,
-        )
-
 
 with exp_copilot:
     with st.expander("🤖 AI WORKERS — YOUR AGENTIC OPERATIONS TEAM", expanded=False):
@@ -2183,9 +1621,9 @@ with exp_copilot:
                 if turn.get("actions"):
                     st.caption(_worker_caption(turn["actions"]))
                 st.write(turn["content"])
-                _render_trace(turn.get("trace"))
+                vh.render_trace(turn.get("trace"))
                 for a_i, art in enumerate(turn.get("artifacts", [])):
-                    _render_artifact(art, key=f"agent_art_{t_i}_{a_i}")
+                    vh.render_artifact(art, key=f"agent_art_{t_i}_{a_i}")
 
         if pending_query:
             st.chat_message("user").write(pending_query)
@@ -2203,9 +1641,9 @@ with exp_copilot:
                 if agent_result["actions"]:
                     st.caption(_worker_caption(agent_result["actions"]))
                 st.write(agent_result["reply"])
-                _render_trace(agent_result.get("trace"))
+                vh.render_trace(agent_result.get("trace"))
                 for a_i, art in enumerate(agent_result["artifacts"]):
-                    _render_artifact(art, key=f"agent_art_new_{a_i}")
+                    vh.render_artifact(art, key=f"agent_art_new_{a_i}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENTERPRISE REPORTING LAYER

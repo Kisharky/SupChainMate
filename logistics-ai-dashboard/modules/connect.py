@@ -20,9 +20,12 @@ from typing import Optional
 import pandas as pd
 import requests
 
-SHOPIFY_API_VERSION = "2024-01"
+import config
+
+SHOPIFY_API_VERSION = config.SHOPIFY_API_VERSION
 _MAX_PAGES = 20          # 250 orders/page → up to 5,000 orders per sync
-_TIMEOUT = 30
+_TIMEOUT = config.HTTP_TIMEOUT
+_log = config.get_logger(__name__)
 
 
 def _clean_domain(url: str) -> str:

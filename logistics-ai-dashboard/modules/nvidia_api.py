@@ -16,27 +16,14 @@ import numpy as np
 import pandas as pd
 import requests
 
-# ── Load keys from environment / .env file ────────────────────────────────────
-def _get_key(env_var: str) -> Optional[str]:
-    val = os.environ.get(env_var)
-    if val:
-        return val
-    # Try loading from a .env file in the same directory as this module or cwd
-    for path in [".env", "logistics-ai-dashboard/.env"]:
-        if os.path.exists(path):
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith(env_var + "="):
-                        return line.split("=", 1)[1].strip()
-    return None
+import config
 
+CUOPT_KEY    = config.get_env("NVIDIA_CUOPT_API_KEY")
+LLAMA_KEY    = config.get_env("NVIDIA_LLAMA_API_KEY")
+DEEPSEEK_KEY = config.get_env("NVIDIA_DEEPSEEK_API_KEY")
 
-CUOPT_KEY    = _get_key("NVIDIA_CUOPT_API_KEY")
-LLAMA_KEY    = _get_key("NVIDIA_LLAMA_API_KEY")
-DEEPSEEK_KEY = _get_key("NVIDIA_DEEPSEEK_API_KEY")
-
-NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NVIDIA_BASE_URL = config.NVIDIA_CHAT_URL
+_log = config.get_logger(__name__)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -93,7 +80,7 @@ def deepseek_copilot(
     payload = {
         # Note: Requires NVIDIA NIM access with DeepSeek V4 Pro deployed.
         # Free alternative: Groq AI (LLaMA-3.3-70B) works out of the box via groq_ai.py
-        "model": "deepseek-ai/deepseek-v4-pro",
+        "model": config.NVIDIA_DEEPSEEK_MODEL,
         "messages": [
             {"role": "system", "content": system_with_ctx},
             {"role": "user",   "content": user_query},
@@ -246,7 +233,7 @@ def cuopt_optimize(
     }
 
     # cuOpt NIM endpoint
-    cuopt_nim_url = "https://integrate.api.nvidia.com/v1/nvidia/cuopt"
+    cuopt_nim_url = config.NVIDIA_CUOPT_URL
     payload = {"action": "cuOpt_OptimizedRouting", "data": cuopt_data, "client_version": "24.03"}
 
     try:

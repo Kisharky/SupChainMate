@@ -15,24 +15,12 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-# ── Load Groq key ──────────────────────────────────────────────────────────────
-def _get_key() -> Optional[str]:
-    val = os.environ.get("GROQ_API_KEY")
-    if val:
-        return val
-    for path in [".env", "logistics-ai-dashboard/.env"]:
-        if os.path.exists(path):
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("GROQ_API_KEY="):
-                        return line.split("=", 1)[1].strip()
-    return None
+import config
 
-
-GROQ_KEY  = _get_key()
-MODEL     = "llama-3.3-70b-versatile"   # Best quality/speed ratio on Groq
-MODEL_FAST = "llama-3.1-8b-instant"     # For non-critical fast calls
+GROQ_KEY   = config.get_env("GROQ_API_KEY")
+MODEL      = config.GROQ_MODEL        # Best quality/speed ratio on Groq
+MODEL_FAST = config.GROQ_MODEL_FAST   # For non-critical fast calls
+_log = config.get_logger(__name__)
 
 
 def _groq_client():
@@ -65,6 +53,7 @@ def _call(
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
+        _log.warning("Groq call failed: %s", e)
         return f"[Groq error: {e}]"
 
 

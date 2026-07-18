@@ -18,18 +18,13 @@ from email.message import EmailMessage
 from typing import Optional
 
 
+import config
+
+_log = config.get_logger(__name__)
+
+
 def _env(name: str) -> Optional[str]:
-    val = os.environ.get(name)
-    if val:
-        return val
-    for path in [".env", "logistics-ai-dashboard/.env"]:
-        if os.path.exists(path):
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith(name + "="):
-                        return line.split("=", 1)[1].strip()
-    return None
+    return config.get_env(name)
 
 
 def smtp_configured() -> bool:
@@ -57,6 +52,7 @@ def send_email(to_addr: str, subject: str, body: str) -> tuple[bool, str]:
             server.send_message(msg)
         return True, f"Sent to {to_addr}"
     except Exception as e:
+        _log.warning("SMTP send to %s failed: %s", to_addr, e)
         return False, f"Email send failed: {e}"
 
 

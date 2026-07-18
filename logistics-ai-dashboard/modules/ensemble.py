@@ -32,9 +32,12 @@ try:
 except ImportError:
     _HAS_LGBM = False
 
+import config
+
 _LAGS = [1, 7, 14]
 _ROLLS = [7, 28]
 _MIN_HISTORY = 90  # days needed before the tournament makes sense
+DEFAULT_HOLDOUT_DAYS = config.HOLDOUT_DAYS
 
 
 def _make_features(y: pd.Series, ds: pd.Series) -> pd.DataFrame:
@@ -78,7 +81,7 @@ def _rmse(actual: np.ndarray, pred: np.ndarray) -> float:
 def run_tournament(
     daily_df: pd.DataFrame,
     prophet_forecast: Optional[pd.DataFrame] = None,
-    holdout_days: int = 28,
+    holdout_days: int = DEFAULT_HOLDOUT_DAYS,
     horizon_days: int = 7,
     factors_df: Optional[pd.DataFrame] = None,
 ) -> Optional[dict]:

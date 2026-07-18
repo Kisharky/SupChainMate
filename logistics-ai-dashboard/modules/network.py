@@ -19,6 +19,10 @@ from sklearn.cluster import KMeans
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+import config
+
+_log = config.get_logger(__name__)
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 GEOLOCATION_PATH = "data/olist_geolocation_dataset.csv"
 FALLBACK_GEO_URL = (
@@ -80,11 +84,11 @@ def _load_geo_lookup() -> Optional[pd.DataFrame]:
     if not os.path.exists(path):
         try:
             import urllib.request
-            print(f"[network] Downloading geolocation dataset from GitHub…")
+            _log.info("Downloading geolocation dataset from GitHub…")
             os.makedirs("data", exist_ok=True)
             urllib.request.urlretrieve(FALLBACK_GEO_URL, path)
         except Exception as e:
-            print(f"[network] Could not download geolocation dataset: {e}")
+            _log.warning("Could not download geolocation dataset: %s", e)
             return None
 
     geo = pd.read_csv(path, usecols=[

@@ -2,6 +2,20 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v5.0.0 — Agent Orchestrator: Eight Domain Agents
+- **NEW**: `modules/agents/` — multi-agent layer: `base.py` (typed contracts, ScopedContext enforcing declared-only data access, execution template with timing/containment), `domain.py` (8 single-responsibility agents wrapping existing engines), `orchestrator.py` (validated workflows, context passing, Decision Center routing, audit logging)
+- **NEW**: Agents: Demand Forecast, Inventory, Procurement, Logistics, Supplier Risk (HHI concentration + reliability variance — new analysis), Warehouse, Sustainability, Executive (chained confidence bounded by the weakest upstream agent)
+- **NEW**: Built-in workflows: planning_chain, logistics_review, full_control_tower — inter-agent communication (Demand → Inventory → Procurement → Executive)
+- **NEW**: `views/agents_hub.py` — run workflows, per-agent reasoning cards, downstream handoffs, executive brief export
+- Tests: +13 (93 total) — scoping enforcement, per-agent runs, dependency validation, full-pipeline context passing, audit verification
+
+## v4.13.0 — Decision Center: the Trust Layer
+- **NEW**: `modules/trust.py` — typed Recommendation records with WHY drivers (evidence-backed), transparent confidence scores (data support + signal strength, with stated basis), and quantified impact (savings $/yr, stockout risk %, service level %)
+- **NEW**: Builders wrap the deterministic engines — inventory policy (Planner), urgent SKU reorders, carrier volume shifts (with rate-simulator savings), billing disputes
+- **NEW**: `views/decision_center.py` — pending-recommendation cards with Approve / Reject / Modify (with note), decision history, and an immutable audit trail (all CSV-exportable)
+- **NEW**: SQLite `recommendations` + `audit_log` tables with dedupe-by-key and full event logging
+- Tests: +7 (80 total)
+
 ## v4.12.0 — Engineering Hardening
 - **NEW**: `config.py` — central paths, .env lookup (de-duplicated from 3 modules), model IDs, API endpoints, tunable thresholds, logging setup
 - **REFACTOR**: `app.py` reduced 2,438 → 1,872 lines; landing/retail/upload pages, data pipeline, and shared render helpers extracted into a `views/` package

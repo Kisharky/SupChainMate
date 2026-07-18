@@ -39,6 +39,12 @@ _DELIVERY_DATE_PATTERNS = re.compile(
 _PROMISED_DATE_PATTERNS = re.compile(
     r"(estimat|promis|expect|due|eta|sla)", re.IGNORECASE
 )
+_SKU_PATTERNS = re.compile(
+    r"(sku|product|item(?!s? per)|part.?(?:no|num)|material|lineitem name|article)", re.IGNORECASE
+)
+_PRICE_PATTERNS = re.compile(
+    r"(unit.?(price|cost|value)|price|item.?cost)", re.IGNORECASE
+)
 _CARRIER_PATTERNS = re.compile(
     r"(carrier|courier|shipper\b|transporter|freight_?(co|company|partner)|logistics_?(provider|partner)|3pl|lsp)",
     re.IGNORECASE,
@@ -112,6 +118,15 @@ def normalise_orders(df: pd.DataFrame) -> pd.DataFrame:
     result = pd.DataFrame()
     result["order_date"] = _coerce_datetime(df[date_col])
     result["quantity"]   = pd.to_numeric(df[qty_col], errors="coerce").fillna(1.0)
+
+    # Optional per-product columns for SKU-level intelligence
+    sku_col = _find_col(df, _SKU_PATTERNS)
+    if sku_col and sku_col not in (date_col, qty_col):
+        result["sku"] = df[sku_col].astype(str).str.strip()
+    price_col = _find_col(df, _PRICE_PATTERNS)
+    if price_col and price_col not in (date_col, qty_col, sku_col):
+        result["unit_price"] = pd.to_numeric(df[price_col], errors="coerce")
+
     result = result.dropna(subset=["order_date"])
     return result.sort_values("order_date").reset_index(drop=True)
 

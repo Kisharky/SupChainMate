@@ -174,8 +174,16 @@ def _tool_reorder_plan(ctx: dict) -> tuple[str, list]:
            f"reorder at {outputs.reorder_point:,.0f} units, keep "
            f"{outputs.safety_stock:,.0f} units safety stock. "
            f"{len(plan)} execution actions in the plan.")
-    return txt, [{"type": "dataframe", "title": "Reorder / execution plan",
+    artifacts = [{"type": "dataframe", "title": "Reorder / execution plan",
                   "data": plan, "filename": "reorder_plan.csv"}]
+    sku_plan = ctx.get("sku_plan")
+    if sku_plan is not None and len(sku_plan):
+        artifacts.append({"type": "dataframe", "title": "Per-SKU reorder plan",
+                          "data": sku_plan, "filename": "sku_reorder_plan.csv"})
+        need = int(sku_plan["Status"].str.contains("ORDER NOW").sum()) if "Status" in sku_plan.columns else 0
+        txt += (f" Per-SKU: {len(sku_plan)} SKUs planned"
+                + (f", {need} at/below reorder point." if need else "."))
+    return txt, artifacts
 
 
 def _tool_exception_summary(ctx: dict) -> tuple[str, list]:

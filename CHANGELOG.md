@@ -2,6 +2,14 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v4.11.0 — SKU Intelligence: Per-Product Decisions
+- **NEW**: `modules/sku.py` — per-SKU demand profiling, ABC classification (revenue Pareto), differentiated service levels by class (A = target, B −3 pts, C −8 pts), per-SKU safety stock / ROP / EOQ via the shared decision engine
+- **NEW**: SKU Intelligence section — KPI strip, editable per-SKU decision table with ORDER NOW / SOON / OK status, ABC Pareto chart, CSV export
+- **NEW**: SKU/product + unit-price column auto-detection in orders uploads
+- **NEW**: Planner's reorder tool now attaches the per-SKU plan
+- **DEMO**: simulated 12-SKU catalogue over real Olist order dates (labelled)
+- Tests: +4 (57 total)
+
 ## v4.10.0 — Autonomous Workforce: Runbook + Status Board
 - **NEW**: `modules/runbook.py` — plain-English standing rules ("flag any shipment over $50", "alert me when SwiftLine on-time drops below 95%") parsed deterministically, auto-assigned to the right AI Worker, persisted in SQLite, evaluated on every data load
 - **NEW**: `agent.autonomous_sweep()` — background monitoring; every worker reports live status without being asked

@@ -12,7 +12,7 @@ import streamlit as st
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
 from modules import nvidia_api, groq_ai, control_tower, agent, cost_audit
-from modules import health_check, tender, alerts, store, connect, carbon, doc_intel, ensemble, factors, runbook
+from modules import health_check, tender, alerts, store, connect, carbon, doc_intel, ensemble, factors, runbook, sku
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -101,7 +101,7 @@ _SESSION_KEYS = [
     "daily_df", "forecast_df", "tracking_df", "geo_df",
     "delay_model", "X_test_delay", "summary", "current_cost",
     "data_loaded", "demo_mode", "shipments_df", "carriers_simulated",
-    "kpi_snapshot_saved",
+    "kpi_snapshot_saved", "orders_sku_df", "sku_stock",
 ]
 
 for key in _SESSION_KEYS:
@@ -371,6 +371,13 @@ def _load_demo():
         tdf          = tracking.simulate_tracking(raw_delivery)
         tdf          = control_tower.assign_demo_carriers(tdf)
         st.session_state.carriers_simulated = True
+
+        # Per-SKU intelligence: simulated catalogue over the real order dates
+        _sku_orders = pd.DataFrame({
+            "order_date": raw_orders["order_purchase_timestamp"],
+            "quantity": 1.0,
+        })
+        st.session_state.orders_sku_df = sku.assign_demo_skus(_sku_orders)
         m, X_test, _ = tracking.train_delay_model(tdf)
         st.session_state.tracking_df   = tdf
         st.session_state.delay_model   = m
@@ -398,6 +405,7 @@ def _process_uploaded(raw_orders, raw_delivery, raw_location, raw_cost):
     with st.spinner("PROCESSING YOUR DATA..."):
         # ── Orders ────────────────────────────────────────────────────────────
         orders_norm  = ingestion.normalise_orders(raw_orders)
+        st.session_state.orders_sku_df = orders_norm if "sku" in orders_norm.columns else None
         daily        = ingestion.orders_to_daily_demand(orders_norm)
         model        = forecast.fit_prophet_model(daily)
         st.session_state.daily_df = daily
@@ -1027,6 +1035,131 @@ with col_dl:
         mime="text/csv",
         use_container_width=True,
     )
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SKU INTELLIGENCE — PER-PRODUCT DECISIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+st.markdown("""
+<div style="font-family:'Teko',sans-serif;font-size:1.6rem;letter-spacing:0.12rem;
+            text-transform:uppercase;color:#FFFFFF;padding:8px 0;border-bottom:1px solid #FF003C;
+            margin-bottom:16px;">
+    🗃 SKU INTELLIGENCE
+    <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#666;margin-left:12px;">
+        PER-PRODUCT SAFETY STOCK · ROP · EOQ · ABC CLASSIFICATION
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
+sku_plan_with_status = None
+if st.session_state.get("orders_sku_df") is None:
+    st.info("Per-SKU decisions need a product/SKU column in your orders file "
+            "(auto-detected: sku, product, item, material...). The demo dataset includes "
+            "a simulated catalogue.")
+else:
+    if st.session_state.demo_mode:
+        st.markdown(
+            "<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#FBC02D;'>"
+            "⚠ DEMO MODE — SKU CATALOGUE &amp; PRICES ARE SIMULATED (over real Olist order dates)</div>",
+            unsafe_allow_html=True)
+    if "sku_profiles" not in st.session_state or st.session_state.get("sku_profiles") is None:
+        with st.spinner("Profiling SKUs..."):
+            _prof = sku.sku_demand_profiles(st.session_state.orders_sku_df)
+            st.session_state.sku_profiles = sku.abc_classify(_prof) if _prof is not None else None
+    sku_classified = st.session_state.sku_profiles
+
+    if sku_classified is None or not len(sku_classified):
+        st.info("No usable SKU rows found in the orders file.")
+    else:
+        sku_plan = sku.run_sku_engine(
+            sku_classified,
+            service_level=service_level,
+            avg_lead_time_days=avg_lead_time,
+            std_lead_time_days=std_lead_time,
+            ordering_cost=ordering_cost,
+            holding_rate=holding_rate,
+            default_unit_cost=unit_cost,
+        )
+        # restore any previously entered stock levels
+        if st.session_state.get("sku_stock"):
+            sku_plan["Current Stock"] = sku_plan["SKU"].map(
+                st.session_state.sku_stock).fillna(0.0)
+        sku_plan_with_status = sku.stock_status(sku_plan)
+        skpi = sku.sku_kpis(sku_classified, sku_plan_with_status)
+
+        sk1, sk2, sk3, sk4 = st.columns(4)
+        sk1.markdown(f"""
+        <div class="hud-panel" style="border-color:#333340;">
+            <div class="hud-label">SKUS UNDER MANAGEMENT</div>
+            <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:#00D4FF;">{skpi['n_skus']}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#666;">TOP {sku.MAX_SKUS} BY VOLUME</div>
+        </div>""", unsafe_allow_html=True)
+        sk2.markdown(f"""
+        <div class="hud-panel" style="border-color:#333340;">
+            <div class="hud-label">A-CLASS SKUS</div>
+            <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:#00E676;">{skpi['a_class']}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#666;">DRIVE 80% OF {skpi['basis'].upper()}</div>
+        </div>""", unsafe_allow_html=True)
+        sk3.markdown(f"""
+        <div class="hud-panel" style="border-color:#333340;">
+            <div class="hud-label">CATALOGUE REVENUE</div>
+            <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:#FFF;">
+                {f"${skpi['total_revenue']:,.0f}" if skpi['total_revenue'] else "N/A"}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#666;">OVER THE DATA PERIOD</div>
+        </div>""", unsafe_allow_html=True)
+        sk4.markdown(f"""
+        <div class="hud-panel" style="border-color:#333340;">
+            <div class="hud-label">NEED ORDERING NOW</div>
+            <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:#FF003C;">{skpi.get('order_now', 0)}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#666;">STOCK AT/BELOW ROP</div>
+        </div>""", unsafe_allow_html=True)
+
+        skl, skr = st.columns([3, 2])
+        with skl:
+            st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>PER-SKU DECISION TABLE — ENTER CURRENT STOCK</div>", unsafe_allow_html=True)
+            sku_edited = st.data_editor(
+                sku_plan_with_status,
+                use_container_width=True, hide_index=True, height=330,
+                disabled=[c for c in sku_plan_with_status.columns if c != "Current Stock"],
+                key="sku_editor",
+            )
+            ska, skb = st.columns(2)
+            with ska:
+                if st.button("APPLY STOCK LEVELS", key="sku_apply", use_container_width=True):
+                    try:
+                        st.session_state.sku_stock = dict(zip(
+                            sku_edited["SKU"],
+                            pd.to_numeric(sku_edited["Current Stock"], errors="coerce").fillna(0.0)))
+                    except (KeyError, TypeError):
+                        st.error("Could not read stock values.")
+                    else:
+                        st.rerun()
+            with skb:
+                st.download_button(
+                    "⇩ PER-SKU REORDER PLAN (CSV)",
+                    data=sku_plan_with_status.to_csv(index=False).encode(),
+                    file_name="supchainmate_sku_plan.csv", mime="text/csv",
+                    use_container_width=True,
+                )
+        with skr:
+            st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>ABC ANALYSIS — PARETO BY " + skpi["basis"].upper() + "</div>", unsafe_allow_html=True)
+            _abc_basis = skpi["basis"]
+            fig_abc = px.bar(
+                sku_classified.head(20), x=_abc_basis, y="SKU", orientation="h",
+                color="ABC", color_discrete_map={"A": "#00E676", "B": "#FBC02D", "C": "#FF003C"},
+                height=330,
+            )
+            fig_abc.update_layout(
+                template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(13,13,16,1)",
+                margin=dict(l=10, r=10, t=10, b=30),
+                yaxis=dict(autorange="reversed"),
+                legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#888")),
+            )
+            fig_abc.update_xaxes(gridcolor="#222228")
+            st.plotly_chart(fig_abc, use_container_width=True)
+            st.caption("Service levels step down by class: A = your sidebar target, "
+                       "B −3 pts, C −8 pts — concentrate capital where it earns.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # WHAT-IF LAB — SCENARIO PLANNER
@@ -2012,6 +2145,7 @@ with exp_copilot:
             "exec_plan":        exec_plan_df,
             "delay_risk":       delay_risk,
             "centroid_stats":   centroid_stats,
+            "sku_plan":         sku_plan_with_status,
         }
 
         if "agent_chat" not in st.session_state:

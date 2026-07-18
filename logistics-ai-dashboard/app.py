@@ -10,7 +10,7 @@ import streamlit as st
 
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
-from modules import nvidia_api, groq_ai, control_tower
+from modules import nvidia_api, groq_ai, control_tower, agent
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -1101,7 +1101,7 @@ if st.button("▶ RUN SCENARIO", key="run_scenario"):
 # SECONDARY: Forecast Chart + AI Copilot
 # ═══════════════════════════════════════════════════════════════════════════════
 st.divider()
-exp_chart, exp_copilot = st.columns([2, 1])
+exp_chart, exp_copilot = st.columns([1, 1])
 
 with exp_chart:
     with st.expander("📈 DEMAND FORECAST — PROPHET ENGINE", expanded=False):
@@ -1128,12 +1128,37 @@ with exp_chart:
         fig.update_yaxes(gridcolor="#222228", title_text="VOLUME")
         st.plotly_chart(fig, use_container_width=True)
 
+def _render_artifact(art, key):
+    if art["type"] == "dataframe":
+        st.markdown(f"<div class='hud-label'>{art['title']}</div>", unsafe_allow_html=True)
+        st.dataframe(art["data"], use_container_width=True, hide_index=True, height=240)
+        st.download_button(
+            f"⇩ {art['title'].upper()} (CSV)",
+            data=art["data"].to_csv(index=False).encode(),
+            file_name=art["filename"], mime="text/csv",
+            key=key, use_container_width=True,
+        )
+    elif art["type"] == "text":
+        st.markdown(f"<div class='hud-label'>{art['title']}</div>", unsafe_allow_html=True)
+        st.code(art["data"], language=None)
+        st.download_button(
+            f"⇩ {art['title'].upper()} (TXT)",
+            data=art["data"].encode(),
+            file_name=art["filename"], mime="text/plain",
+            key=key, use_container_width=True,
+        )
+
+
 with exp_copilot:
-    with st.expander("🧠 SUPPLY CHAIN COPILOT — Groq AI (LLaMA-3.3-70B)", expanded=False):
-        groq_status = "🟢 GROQ LIVE" if groq_ai.is_available() else "🟡 GROQ OFFLINE → NVIDIA FALLBACK (configure NVIDIA_DEEPSEEK_API_KEY)"
+    with st.expander("🤖 AGENTIC COPILOT — THINKS · DECIDES · ACTS", expanded=False):
+        agent_status = (
+            "🟢 GROQ AGENT LIVE · LLaMA-3.3-70B TOOL CALLING"
+            if groq_ai.is_available()
+            else "🟡 OFFLINE MODE — actions still run on your live data; set GROQ_API_KEY for reasoning &amp; wording"
+        )
         st.markdown(
             f'<div style="font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#888;margin-bottom:8px;">'
-            f'{groq_status} · LLaMA-3.3-70B · CONTEXT-AWARE · REAL-TIME</div>',
+            f'{agent_status} · 5 TOOLS: shipments, scorecards, emails, reorder plans, digests</div>',
             unsafe_allow_html=True
         )
         live_context = {
@@ -1150,16 +1175,57 @@ with exp_copilot:
             "Critical Zones":          len(agreed_critical),
             "Service Level Target":    f"{service_level*100:.0f}%",
             "Total Orders Analysed":   total_orders,
+            "Shipments On-Time %":     f"{ct_kpis['on_time_pct']:.1f}%" if not math.isnan(ct_kpis["on_time_pct"]) else "N/A",
+            "Shipments At Risk":       ct_kpis["at_risk"],
+            "Shipments Late":          ct_kpis["late"],
         }
-        query = st.chat_input("Ask the AI about your supply chain...")
-        if query:
-            st.chat_message("user").write(query)
-            with st.spinner("Groq LLaMA-3.3 analysing..."):
-                if groq_ai.is_available():
-                    ai_response = groq_ai.supply_chain_copilot(query, live_context)
-                else:
-                    ai_response = nvidia_api.deepseek_copilot(query, live_context, stream=True)
-            st.chat_message("assistant").write(ai_response)
+        agent_ctx = {
+            "shipments":        shipments_df,
+            "scorecard":        scorecard,
+            "kpis":             ct_kpis,
+            "metrics":          live_context,
+            "decision_outputs": decision_outputs,
+            "exec_plan":        exec_plan_df,
+        }
+
+        if "agent_chat" not in st.session_state:
+            st.session_state.agent_chat = []
+
+        qa_cols = st.columns(len(agent.QUICK_ACTIONS))
+        pending_query = None
+        for qa_col, (qa_label, qa_prompt) in zip(qa_cols, agent.QUICK_ACTIONS):
+            if qa_col.button(qa_label, key=f"qa_{qa_label}", use_container_width=True):
+                pending_query = qa_prompt
+
+        typed_query = st.chat_input("Ask the agent to do something — it can act, not just answer...")
+        if typed_query:
+            pending_query = typed_query
+
+        for t_i, turn in enumerate(st.session_state.agent_chat):
+            with st.chat_message(turn["role"]):
+                if turn.get("actions"):
+                    st.caption("⚙ EXECUTED: " + " · ".join(turn["actions"]))
+                st.write(turn["content"])
+                for a_i, art in enumerate(turn.get("artifacts", [])):
+                    _render_artifact(art, key=f"agent_art_{t_i}_{a_i}")
+
+        if pending_query:
+            st.chat_message("user").write(pending_query)
+            with st.spinner("Agent thinking → acting..."):
+                agent_result = agent.run_agent(pending_query, agent_ctx)
+            st.session_state.agent_chat.append({"role": "user", "content": pending_query})
+            st.session_state.agent_chat.append({
+                "role": "assistant",
+                "content": agent_result["reply"],
+                "artifacts": agent_result["artifacts"],
+                "actions": agent_result["actions"],
+            })
+            with st.chat_message("assistant"):
+                if agent_result["actions"]:
+                    st.caption("⚙ EXECUTED: " + " · ".join(agent_result["actions"]))
+                st.write(agent_result["reply"])
+                for a_i, art in enumerate(agent_result["artifacts"]):
+                    _render_artifact(art, key=f"agent_art_new_{a_i}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENTERPRISE REPORTING LAYER

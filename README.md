@@ -6,7 +6,7 @@ Master of Business (Supply Chain & International Business) — Monash University
 > **Beyond dashboards. Beyond visualisation. A multi-signal AI engine that detects risk, calculates decisions, and generates execution-ready outputs.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Version](https://img.shields.io/badge/version-4.2.0-brightgreen)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-4.3.0-brightgreen)](CHANGELOG)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
@@ -85,6 +85,8 @@ logistics-ai-dashboard/
 │   ├── retail.py                 # Small Retailer helpers (tier → service level, tracker rows, status)
 │   ├── control_tower.py          # Freight Control Tower: shipment board, carrier scorecards,
 │   │                             #   on-time KPIs, exception insights
+│   ├── agent.py                  # Agentic Copilot: LLaMA-3.3 tool calling + offline router,
+│   │                             #   5 tools acting on live data
 │   ├── ingestion.py              # Auto-detect CSV/Excel column mapping
 │   ├── groq_ai.py                # Groq: copilot, auto-insights, executive narrative,
 │   │                             #   smart column detection (LLaMA-3.3-70B)
@@ -175,11 +177,22 @@ else                →  ✅ SAFE
 - **Zone Risk Alerts** — per-cluster consulting-grade narratives with decomposed signal breakdown
 - **Decision Engine HUD** — Safety Stock, EOQ, ROP, Annual Savings — dynamically recalculated
 
-### AI Copilot
-- **Groq LLaMA-3.3-70B** — primary copilot, sub-second inference
-- **13 live metrics** injected into every system prompt (delay risk, EOQ, breaches, etc.)
-- **NVIDIA LLaMA-4-Scout** — automatic fallback if Groq unavailable
-- Shows 🟢 LIVE / 🟡 OFFLINE status indicator
+### Agentic Copilot (v4.3) — thinks, decides, acts
+The copilot no longer just answers — it **executes tools on your live data**:
+
+| Tool | What it does |
+|---|---|
+| `get_at_risk_shipments` | Lists open shipments flagged AT RISK / LATE, worst ML risk first |
+| `get_carrier_scorecard` | Full scorecard or a single carrier's stats by name |
+| `draft_carrier_email` | Writes an SLA-review email citing the carrier's real scorecard numbers |
+| `generate_reorder_plan` | Produces the EOQ / ROP / safety-stock execution plan (CSV) |
+| `exception_summary` | Builds a digest: late + at-risk counts, weak carriers, top risks |
+
+- **Groq LLaMA-3.3-70B function calling** picks and chains tools, then answers citing tool results
+- **Offline mode** — with no API key, a deterministic router still runs every action on live data (LLM adds reasoning + wording, never the numbers)
+- **Quick actions** — one-click buttons: Exception digest · At-risk shipments · Email worst carrier · Reorder plan
+- Chat history with per-turn "EXECUTED: tool" trace and downloadable artifacts (CSV / TXT)
+- **16 live metrics** injected into the agent's system prompt
 
 ### Freight Control Tower (v4.2)
 - **Shipment Tracking Board** — every shipment classified as ON TRACK / AT RISK / LATE / DELIVERED ON TIME / DELIVERED LATE / CANCELLED, exceptions surfaced first
@@ -253,6 +266,13 @@ Upload any CSV or Excel. The auto-detection engine handles any naming convention
 ---
 
 ## 🔄 Changelog
+
+### v4.3.0 — Agentic Copilot
+- **NEW**: `modules/agent.py` — tool-calling agent loop (Groq LLaMA-3.3-70B function calling, max 4 turns)
+- **NEW**: 5 tools acting on live data: at-risk shipments, carrier scorecards, SLA-review email drafts, reorder plans, exception digests
+- **NEW**: Offline deterministic router — every action works with zero API keys; numbers always come from the dataframes, never the LLM
+- **NEW**: Copilot UI rebuilt: quick-action buttons, chat history, executed-tool trace, downloadable artifacts
+- **UPGRADE**: Agent context now includes Control Tower KPIs (on-time %, at-risk, late)
 
 ### v4.2.0 — Freight Control Tower
 - **NEW**: `modules/control_tower.py` — shipment board, carrier scorecards, on-time KPIs

@@ -80,6 +80,7 @@ def run_tournament(
     prophet_forecast: Optional[pd.DataFrame] = None,
     holdout_days: int = 28,
     horizon_days: int = 7,
+    factors_df: Optional[pd.DataFrame] = None,
 ) -> Optional[dict]:
     """
     Backtest all candidates on the last `holdout_days`, crown a champion,
@@ -105,6 +106,21 @@ def run_tournament(
 
     y = df["y"].astype(float)
     X = _make_features(y, df["ds"])
+
+    # External factors (market / calendar / analytics) join as extra features.
+    # For the recursive future forecast their last known values carry forward.
+    factor_cols: list[str] = []
+    if factors_df is not None and len(factors_df):
+        fmerge = pd.DataFrame({"ds": pd.to_datetime(df["ds"]).values}).merge(
+            factors_df.assign(ds=pd.to_datetime(factors_df["ds"])), on="ds", how="left")
+        for col in fmerge.columns:
+            if col == "ds":
+                continue
+            series = pd.to_numeric(fmerge[col], errors="coerce").ffill().bfill()
+            if series.notna().all() and series.nunique() > 1:
+                X[f"f_{col}"] = series.values
+                factor_cols.append(f"f_{col}")
+
     valid = X.notna().all(axis=1)
     X, y_v, ds_v = X[valid], y[valid], df["ds"][valid]
     if len(X) < holdout_days + 30:
@@ -159,6 +175,8 @@ def run_tournament(
             for w in _ROLLS:
                 feat[f"roll_{w}"] = hist.iloc[-w:].mean()
             feat["dow"], feat["month"], feat["day"] = next_date.dayofweek, next_date.month, next_date.day
+            for fc in factor_cols:
+                feat[fc] = float(X[fc].iloc[-1])  # carry last known factor value
             row = pd.DataFrame([feat])[X_train.columns]
             val = float(np.mean([np.clip(m.predict(row)[0], 0, None) for m in models_to_use]))
             out.append({"ds": next_date, "yhat": round(val, 1)})
@@ -186,4 +204,5 @@ def run_tournament(
         "forecast": future,
         "holdout": holdout,
         "holdout_days": holdout_days,
+        "factor_cols": factor_cols,
     }

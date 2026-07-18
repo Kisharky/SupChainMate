@@ -10,3 +10,4 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 groq>=0.9.0
 pypdf>=4.0.0
+holidays>=0.40

@@ -6,14 +6,14 @@
 
 *A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
 
-[![Version](https://img.shields.io/badge/version-4.8.0-brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.10.0-brightgreen)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-38%20passing-brightgreen)](logistics-ai-dashboard/tests)
+[![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen)](logistics-ai-dashboard/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 [Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
@@ -27,6 +27,10 @@
 ![SupChainMate Mission Control](docs/dashboard_preview.png)
 
 *Mission Control — multi-signal disruption radar, AI auto-insights, and the decision engine on 99k live orders.*
+
+![Autonomous Workforce](docs/workforce_preview.png)
+
+*The Autonomous Workforce — five AI workers reporting live status on every load, with plain-English runbook rules.*
 
 ---
 
@@ -78,6 +82,7 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 |---|---|
 | **Decision Engine** | Safety stock (combined variance formula), EOQ, reorder point, lead-time buffer, and annual savings — reference inventory mathematics (Nahmias) |
 | **Demand Forecasting** | Prophet with external regressors, plus a **model tournament**: LightGBM / Random Forest / Gradient Boosting / Ridge and their ensemble, backtested against Prophet on a 28-day holdout with the champion crowned by MAPE |
+| **Market Signals** | External factor engine: keyless FX (frankfurter/ECB), Brent crude (Stooq), weather (Open-Meteo), offline holiday calendar, and PostHog/GA daily-events imports — with a terminal-style ticker, factor↔demand correlations (incl. 7-day leading), and factor uplift **proven on the forecast holdout** |
 | **Disruption Radar** | Isolation Forest spatial anomalies fused 50/50 with LightGBM delay probabilities into a single risk signal with signal-agreement zone alerts |
 | **Route Optimisation** | NVIDIA cuOpt capacitated VRP over a Haversine distance matrix from KMeans cluster centroids, with an honest local fallback |
 | **Health Check** | Scored assessment (0–100, A–F) across delivery, risk, cost, inventory, network, and data-quality dimensions, with DIFOT and priority actions |
@@ -90,7 +95,8 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 |---|---|
 | **Live Store Connect** | Order sync from Shopify (Admin API) and WooCommerce (REST v3); credentials are used per-fetch and never persisted |
 | **Smart Ingestion** | Column auto-detection (regex + optional LLM) for any CSV/Excel naming convention; Shopify/WooCommerce export recognition |
-| **Alert Digests** | Enterprise (exceptions + audit + health) and retail (per-product reorder) digests, delivered by SMTP email or download |
+| **Autonomous Runbook** | Standing rules in plain English, parsed deterministically, auto-assigned to the right AI Worker, persisted, and enforced on every data load — triggered rules lead the alert digest |
+| **Alert Digests** | Enterprise (runbook + exceptions + audit + health) and retail (per-product reorder) digests, delivered by SMTP email or download |
 | **Reporting Layer** | Six structured CSV exports — forecast, KPI summary, inventory plan, zone risk, execution plan, executive report — ready for Power BI, Excel, or ERP import |
 | **Persistence** | SQLite-backed retail tracker, settings, and KPI history that survive restarts |
 
@@ -107,6 +113,11 @@ The agentic copilot organises its **10 tools** as five named workers — each wi
 | 🤝 **Carrier Manager** | Carrier Vetting | `get_carrier_scorecard` · `draft_carrier_email` |
 | 📑 **Procurement** | Quoting & Tenders | `generate_tender_pack` |
 | 📦 **Planner** | Inventory Planning | `generate_reorder_plan` · `supply_chain_health_check` |
+
+**Autonomous operation**
+
+- **Workforce Status Board** — every data load triggers a background sweep; each worker reports live status (at-risk counts, flagged spend, worst carrier, re-tender opportunity, network health) with green/yellow/red indicators.
+- **Runbook** — standing rules in plain English (*"flag any shipment over $50"*, *"alert me when SwiftLine on-time drops below 95%"*, *"health below 70"*). Rules are parsed deterministically, auto-assigned to the right worker, persisted in SQLite, re-evaluated on every load, and included in the alert digest.
 
 **How it works**
 
@@ -158,6 +169,7 @@ SupChainMate/
 │   │   ├── ingestion.py          # Column auto-detection, store-export recognition
 │   │   ├── forecast.py           # Prophet + external regressors
 │   │   ├── ensemble.py           # Model tournament (LightGBM/RF/GBM/Ridge vs Prophet)
+│   │   ├── factors.py            # External factor engine (FX, oil, weather, holidays, analytics)
 │   │   ├── tracking.py           # LightGBM delay model, feature engineering
 │   │   ├── network.py            # Geolocation, KMeans, Isolation Forest, risk fusion
 │   │   ├── decisions.py          # Decision engine (SS, EOQ, ROP, savings)
@@ -167,7 +179,8 @@ SupChainMate/
 │   │   ├── carbon.py             # CO2e estimates by carrier, zone, mode
 │   │   ├── health_check.py       # Scored 6-dimension assessment, DIFOT
 │   │   ├── tender.py             # Tender/RFP pack + rate-shift simulation
-│   │   ├── agent.py              # AI Workers: tool-calling loop + offline router
+│   │   ├── agent.py              # AI Workers: tool-calling loop + offline router + sweep
+│   │   ├── runbook.py            # Plain-English standing rules engine
 │   │   ├── groq_ai.py            # Groq copilot, auto-insights, column detection
 │   │   ├── nvidia_api.py         # cuOpt VRP solver, DeepSeek fallback
 │   │   ├── connect.py            # Shopify / WooCommerce connectors
@@ -264,10 +277,9 @@ Coverage spans shipment classification, carrier scorecards, cost-audit anomaly d
 
 ## Roadmap
 
-- Standing rules — plain-text SOPs the workers apply automatically on every data load
-- Worker status surfaced on the main dashboard (live counts per worker)
 - Real carrier tracking API integrations
 - OAuth-based store connections and hosted multi-tenant deployment
+- Scheduled background runs (workers acting between sessions, not just on load)
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history (v1.0 → v4.8).
 

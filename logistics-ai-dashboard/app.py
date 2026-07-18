@@ -12,7 +12,7 @@ import streamlit as st
 
 from modules import forecast, network, optimization, tracking, ingestion, decisions, retail
 from modules import nvidia_api, groq_ai, control_tower, agent, cost_audit
-from modules import health_check, tender, alerts, store, connect, carbon, doc_intel, ensemble
+from modules import health_check, tender, alerts, store, connect, carbon, doc_intel, ensemble, factors, runbook
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -1101,6 +1101,119 @@ else:
     st.caption("Move a slider to stress-test — deltas show vs your current baseline.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# MARKET SIGNALS — EXTERNAL FACTOR ENGINE
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+with st.expander("📡 MARKET SIGNALS — EXTERNAL FACTOR ENGINE", expanded=False):
+    st.markdown(
+        "<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#888;'>"
+        "KEYLESS SOURCES: FRANKFURTER FX · STOOQ BRENT · OPEN-METEO WEATHER · OFFLINE HOLIDAY CALENDAR · "
+        "OPTIONAL POSTHOG/GA EVENTS UPLOAD — EVERY FACTOR'S VALUE IS PROVEN ON THE FORECAST HOLDOUT</div>",
+        unsafe_allow_html=True)
+
+    fs1, fs2, fs3, fs4 = st.columns([1, 1, 2, 1])
+    f_country = fs1.text_input("HOLIDAY COUNTRY", "BR", max_chars=2, key="f_country").upper()
+    f_fx = fs2.text_input("LOCAL CURRENCY", "BRL", max_chars=3, key="f_fx").upper()
+    f_analytics_file = fs3.file_uploader("PostHog / GA daily events export (date, count)",
+                                         type=["csv"], key="f_analytics")
+    with fs4:
+        st.markdown("<br>", unsafe_allow_html=True)
+        f_refresh = st.button("⟳ REFRESH SIGNALS", key="f_refresh", use_container_width=True)
+
+    f_analytics_df = None
+    if f_analytics_file is not None:
+        try:
+            f_analytics_df = pd.read_csv(f_analytics_file)
+        except Exception as e:
+            st.error(f"Could not read analytics file: {e}")
+
+    _geo_lat = float(geo_df["lat"].mean()) if "lat" in geo_df.columns else None
+    _geo_lon = float(geo_df["lon"].mean()) if "lon" in geo_df.columns else None
+    _fkey = f"factors_{f_country}_{f_fx}_{len(f_analytics_df) if f_analytics_df is not None else 0}"
+    if f_refresh:
+        st.session_state.pop(_fkey, None)
+    if _fkey not in st.session_state:
+        with st.spinner("Fetching market signals (FX · oil · weather · holidays)..."):
+            st.session_state[_fkey] = factors.build_factor_frame(
+                daily_df, lat=_geo_lat, lon=_geo_lon, country=f_country,
+                fx_symbol=f_fx, analytics_df=f_analytics_df)
+    f_bundle = st.session_state[_fkey]
+    factors_df = f_bundle["factors"]
+
+    # ── Ticker strip ──────────────────────────────────────────────────────────
+    readings = factors.latest_readings(factors_df)
+    if readings:
+        ticker_html = "".join(
+            f"<span style='margin-right:26px;'>"
+            f"<span style='color:#FBC02D;'>{r['label']}</span> "
+            f"<span style='color:#FFF;'>{r['value']}</span> "
+            f"<span style='color:{'#00E676' if r['delta'] >= 0 else '#FF003C'};font-size:0.62rem;'>"
+            f"{'▲' if r['delta'] >= 0 else '▼'}{abs(r['delta']):.2f} vs -7d</span></span>"
+            for r in readings)
+        st.markdown(
+            f"<div style='background:#0D0D10;border:1px solid #FBC02D;padding:10px 16px;"
+            f"font-family:Share Tech Mono,monospace;font-size:0.8rem;overflow-x:auto;"
+            f"white-space:nowrap;'>{ticker_html}</div>",
+            unsafe_allow_html=True)
+    st.caption("Sources: " + " · ".join(f_bundle["sources"])
+               + (("  |  Skipped: " + " · ".join(f_bundle["errors"])) if f_bundle["errors"] else ""))
+
+    fcl, fcr = st.columns([1, 1])
+    with fcl:
+        st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>FACTOR ↔ DEMAND CORRELATION</div>", unsafe_allow_html=True)
+        corr = factors.factor_correlations(daily_df, factors_df)
+        if len(corr):
+            st.dataframe(corr, use_container_width=True, hide_index=True)
+            fig_corr = px.bar(corr, x="Corr (same-day)", y="Factor", orientation="h", height=260,
+                              color="Corr (same-day)", color_continuous_scale=["#FF003C", "#222228", "#00E676"],
+                              range_color=[-1, 1])
+            fig_corr.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+                                   plot_bgcolor="rgba(13,13,16,1)", coloraxis_showscale=False,
+                                   margin=dict(l=10, r=10, t=10, b=30))
+            fig_corr.update_xaxes(gridcolor="#222228", range=[-1, 1])
+            st.plotly_chart(fig_corr, use_container_width=True)
+        else:
+            st.info("No overlapping factor data for the demand window.")
+
+    with fcr:
+        st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>FACTOR UPLIFT — PROVEN ON THE HOLDOUT</div>", unsafe_allow_html=True)
+        _bk, _fk2 = f"tournament_{days}", f"tournament_factors_{days}_{_fkey}"
+        if _bk not in st.session_state:
+            with st.spinner("Baseline backtest..."):
+                st.session_state[_bk] = ensemble.run_tournament(daily_df, forecast_df, horizon_days=days)
+        if _fk2 not in st.session_state:
+            with st.spinner("Factor-aware backtest..."):
+                st.session_state[_fk2] = ensemble.run_tournament(
+                    daily_df, forecast_df, horizon_days=days, factors_df=factors_df)
+        t_base, t_fact = st.session_state[_bk], st.session_state[_fk2]
+        if t_base is None or t_fact is None:
+            st.info("Uplift needs ~120+ days of daily history.")
+        else:
+            uplift = t_base["champion_mape"] - t_fact["champion_mape"]
+            up_color = "#00E676" if uplift > 0 else ("#FBC02D" if uplift == 0 else "#FF003C")
+            st.markdown(f"""
+            <div class="hud-panel" style="border-color:{up_color};">
+                <div class="hud-label">CHAMPION MAPE — {t_base['holdout_days']}-DAY BACKTEST</div>
+                <div style="font-family:'Teko',sans-serif;font-size:1.7rem;color:#FFF;">
+                    {t_base['champion_mape']:.1f}% → <span style="color:{up_color};">{t_fact['champion_mape']:.1f}%</span>
+                </div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:{up_color};">
+                    {"FACTORS IMPROVE THE FORECAST BY " + f"{uplift:.1f} MAPE PTS" if uplift > 0
+                     else "NO IMPROVEMENT FROM FACTORS ON THIS SERIES" if uplift <= 0 else ""}
+                </div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#888;margin-top:4px;">
+                    {len(t_fact.get('factor_cols', []))} FACTOR FEATURES · CHAMPION: {t_fact['champion']}
+                </div>
+            </div>""", unsafe_allow_html=True)
+            st.dataframe(t_fact["leaderboard"], use_container_width=True, hide_index=True)
+        st.download_button(
+            "⇩ EXPORT FACTOR FRAME (CSV)",
+            data=factors_df.to_csv(index=False).encode(),
+            file_name="supchainmate_factors.csv", mime="text/csv",
+            use_container_width=True,
+        )
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # FREIGHT CONTROL TOWER — SHIPMENT TRACKING BOARD + CARRIER SCORECARDS
 # ═══════════════════════════════════════════════════════════════════════════════
 st.divider()
@@ -1513,6 +1626,92 @@ with st.expander("📈 PERFORMANCE HISTORY — KPI TREND ACROSS SESSIONS", expan
             "total_shipments": "Shipments", "source": "Source"})
         st.dataframe(show_hist.iloc[::-1], use_container_width=True, hide_index=True, height=200)
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTONOMOUS WORKFORCE — STATUS BOARD + RUNBOOK (STANDING RULES)
+# ═══════════════════════════════════════════════════════════════════════════════
+st.divider()
+st.markdown("""
+<div style="font-family:'Teko',sans-serif;font-size:1.6rem;letter-spacing:0.12rem;
+            text-transform:uppercase;color:#FFFFFF;padding:8px 0;border-bottom:1px solid #00E676;
+            margin-bottom:16px;">
+    🤖 AUTONOMOUS WORKFORCE
+    <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#666;margin-left:12px;">
+        WORKERS MONITOR EVERY LOAD · RUNBOOK RULES IN PLAIN ENGLISH
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
+_sweep_ctx = {"kpis": ct_kpis, "audit": audit, "scorecard": scorecard,
+              "health": hc, "shipments": shipments_df}
+sweep = agent.autonomous_sweep(_sweep_ctx)
+runbook_rules = runbook.load_rules()
+runbook_results = runbook.evaluate_all(runbook_rules, _sweep_ctx)
+_fired_by_worker = {}
+for rr in runbook_results:
+    if rr["triggered"]:
+        _fired_by_worker[rr["worker"]] = _fired_by_worker.get(rr["worker"], 0) + 1
+
+_level_color = {"green": "#00E676", "yellow": "#FBC02D", "red": "#FF003C", "grey": "#555"}
+sw_cols = st.columns(len(sweep))
+for sw_col, s in zip(sw_cols, sweep):
+    w = agent.WORKERS.get(s["worker"], {})
+    color = _level_color[s["level"]]
+    fired = _fired_by_worker.get(s["worker"], 0)
+    badge = (f"<span style='background:#FF003C;color:#FFF;font-size:0.55rem;"
+             f"padding:1px 6px;margin-left:6px;'>{fired} RULE{'S' if fired > 1 else ''} FIRED</span>"
+             if fired else "")
+    sw_col.markdown(f"""
+    <div style="background:#151518;border:1px solid #222228;border-top:2px solid {color};
+                padding:10px 12px;min-height:86px;">
+        <div style="font-family:'Teko',sans-serif;font-size:1rem;color:#FFF;letter-spacing:0.06rem;">
+            {w.get('emoji','•')} {s['worker'].upper()}
+            <span style="color:{color};font-size:0.8rem;">●</span>{badge}
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:#AAA;
+                    margin-top:6px;line-height:1.5;">{s['status']}</div>
+    </div>""", unsafe_allow_html=True)
+
+with st.expander("📓 RUNBOOK — STANDING RULES IN PLAIN ENGLISH", expanded=bool(_fired_by_worker)):
+    st.caption(
+        'Write a rule the way you\'d tell a colleague — e.g. "flag any shipment over $50", '
+        '"alert me when SwiftLine on-time drops below 95%", "flag deliveries more than 5 days late", '
+        '"health below 70". Rules are parsed, assigned to the right worker, saved, and '
+        "re-evaluated on every data load."
+    )
+    rb1, rb2 = st.columns([3, 1])
+    new_rule_text = rb1.text_input("New rule", key="rb_new_rule",
+                                   placeholder='e.g. flag any shipment over $50',
+                                   label_visibility="collapsed")
+    with rb2:
+        if st.button("＋ ADD RULE", key="rb_add", use_container_width=True) and new_rule_text.strip():
+            added = runbook.add_rule(new_rule_text.strip())
+            if added is None:
+                st.error("Couldn't parse that rule — try phrasing like the examples above.")
+            else:
+                st.rerun()
+
+    if not runbook_results:
+        st.info("No standing rules yet — add one above and the workers will enforce it on every load.")
+    else:
+        for i, rr in enumerate(runbook_results):
+            r_color = "#FF003C" if rr["triggered"] else "#00E676"
+            w_emoji = agent.WORKERS.get(rr["worker"], {}).get("emoji", "•")
+            st.markdown(f"""
+            <div style="background:#151518;border-left:3px solid {r_color};padding:8px 14px;
+                        margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;">
+                <span style="color:{r_color};font-weight:bold;">
+                    {'⚠ TRIGGERED' if rr['triggered'] else '✓ CLEAR'}</span>
+                <span style="color:#888;"> · {w_emoji} {rr['worker']}</span><br>
+                <span style="color:#FFF;">"{rr['text']}"</span><br>
+                <span style="color:#999;">{rr['detail']}</span>
+            </div>""", unsafe_allow_html=True)
+        del_idx = st.selectbox("Remove a rule", range(len(runbook_rules)),
+                               format_func=lambda i: runbook_rules[i]["text"],
+                               key="rb_del_select")
+        if st.button("Remove selected rule", key="rb_del_btn"):
+            runbook.remove_rule(del_idx)
+            st.rerun()
+
 # ── Freight Tender / RFP Toolkit ───────────────────────────────────────────────
 with st.expander("📑 FREIGHT TENDER / RFP TOOLKIT", expanded=False):
     tender_pack = tender.build_tender_pack(shipments_df, scorecard)
@@ -1578,7 +1777,7 @@ with st.expander("🔔 ALERT DIGEST — EMAIL / DOWNLOAD", expanded=False):
     _, exc_arts = agent._TOOL_FUNCS["exception_summary"](_digest_ctx)
     exc_text = exc_arts[0]["data"] if exc_arts else "No exception data."
     digest_body = alerts.build_enterprise_digest(
-        exc_text,
+        runbook.runbook_digest(runbook_results) + "\n\n" + exc_text,
         audit_text=cost_audit.audit_digest(audit) if audit else None,
         health_text=health_check.health_report(hc),
     )

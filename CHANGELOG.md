@@ -2,6 +2,13 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v4.9.0 — Market Signals: External Factor Engine
+- **NEW**: `modules/factors.py` — keyless factor sources: FX (frankfurter/ECB), Brent crude (Stooq), weather (Open-Meteo), offline holiday calendar (`holidays`), PostHog/GA daily-events CSV import
+- **NEW**: Market Signals panel — Bloomberg-style ticker strip, factor↔demand correlations (same-day + 7-day leading), factor frame export
+- **NEW**: Factor-aware model tournament — factors join the feature set and their uplift is measured on the same 28-day holdout (baseline vs factor-aware champion MAPE)
+- Every online source degrades gracefully; offline calendar factors always available
+- Tests: +5 (43 total); requirements: `holidays`
+
 ## v4.8.0 — AI Workers, Reasoning Trace, Model Tournament
 - **NEW**: AI Workers roster — 5 named workers (Tracker, Auditor, Carrier Manager, Procurement, Planner) over the existing tool registry, with per-worker action buttons and reply attribution
 - **NEW**: Reasoning trace on every agent turn — routing, LLM turns, tool calls with args, per-step timings

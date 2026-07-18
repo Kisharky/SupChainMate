@@ -19,7 +19,8 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules import (agent, alerts, carbon, connect, control_tower, cost_audit,
-                     doc_intel, ensemble, health_check, ingestion, retail, store, tender)
+                     doc_intel, ensemble, factors, health_check, ingestion, retail,
+                     store, tender)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -259,6 +260,67 @@ def test_workers_cover_all_tools():
     assert tools_in_workers == schema_tools
     assert agent.workers_for_actions(["freight_cost_audit", "exception_summary"]) == \
         ["Auditor", "Tracker"]
+
+
+# ── External factors ──────────────────────────────────────────────────────────
+
+def test_calendar_factors_offline():
+    ds = pd.Series(pd.date_range("2025-12-20", "2026-01-05", freq="D"))
+    cal = factors.calendar_factors(ds, country="BR")
+    assert set(["is_holiday", "is_weekend", "is_month_end", "is_payday"]) <= set(cal.columns)
+    # Christmas and New Year are Brazilian public holidays
+    assert cal.loc[cal["ds"] == "2025-12-25", "is_holiday"].iloc[0] == 1
+    assert cal.loc[cal["ds"] == "2026-01-01", "is_holiday"].iloc[0] == 1
+    assert cal["is_weekend"].sum() >= 4
+
+
+def test_parse_analytics_csv():
+    good = pd.DataFrame({"Date": ["2025-06-01", "2025-06-02", "2025-06-02"],
+                         "Pageviews": [120, 90, 10]})
+    out = factors.parse_analytics_csv(good)
+    assert list(out.columns) == ["ds", "web_events"]
+    assert len(out) == 2 and out["web_events"].sum() == 220
+    assert factors.parse_analytics_csv(pd.DataFrame({"a": ["x"], "b": ["y"]})) is None
+
+
+def test_build_factor_frame_offline(daily_series):
+    bundle = factors.build_factor_frame(daily_series, enable_online=False)
+    f = bundle["factors"]
+    assert len(f) == len(daily_series)
+    assert "is_holiday" in f.columns and not bundle["errors"]
+    corr = factors.factor_correlations(daily_series, f)
+    assert "is_weekend" in set(corr["Factor"])
+
+
+def test_online_factor_fetchers_mocked():
+    fx_payload = {"rates": {"2025-06-02": {"BRL": 5.1}, "2025-06-03": {"BRL": 5.2}}}
+    with patch.object(factors.requests, "get", return_value=_FakeResp(fx_payload)):
+        df, msg = factors.fx_factor("2025-06-01", "2025-06-05")
+    assert df is not None and len(df) == 2 and "frankfurter" in msg
+
+    weather_payload = {"daily": {"time": ["2025-06-01", "2025-06-02"],
+                                 "temperature_2m_mean": [21.5, 22.0],
+                                 "precipitation_sum": [0.0, 4.2]}}
+    with patch.object(factors.requests, "get", return_value=_FakeResp(weather_payload)):
+        df, msg = factors.weather_factor("2025-06-01", "2025-06-02", -15.0, -47.0)
+    assert df is not None and float(df["precip_mm"].iloc[1]) == 4.2
+
+    def _boom(*a, **k):
+        raise factors.requests.exceptions.ConnectionError("offline")
+    with patch.object(factors.requests, "get", side_effect=_boom):
+        df, msg = factors.oil_factor("2025-06-01", "2025-06-05")
+    assert df is None and "unavailable" in msg
+
+
+def test_tournament_with_factors(daily_series):
+    rng = np.random.default_rng(5)
+    f = pd.DataFrame({"ds": daily_series["ds"],
+                      "fx_rate": 5 + rng.normal(0, 0.1, len(daily_series)),
+                      "is_weekend": (pd.to_datetime(daily_series["ds"]).dt.dayofweek >= 5).astype(int)})
+    res = ensemble.run_tournament(daily_series, horizon_days=7, factors_df=f)
+    assert res is not None
+    assert set(res["factor_cols"]) == {"f_fx_rate", "f_is_weekend"}
+    assert res["forecast"] is not None and len(res["forecast"]) == 7
 
 
 # ── Carbon lens ───────────────────────────────────────────────────────────────

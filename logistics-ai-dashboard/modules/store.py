@@ -14,8 +14,10 @@ import os
 import sqlite3
 from typing import Optional
 
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(_BASE_DIR, "data", "supchainmate.db")
+import config
+
+DB_PATH = config.DB_PATH
+_log = config.get_logger(__name__)
 
 
 def _conn() -> Optional[sqlite3.Connection]:
@@ -33,7 +35,8 @@ def _conn() -> Optional[sqlite3.Connection]:
             ts TEXT NOT NULL,
             payload TEXT NOT NULL)""")
         return conn
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        _log.warning("SQLite unavailable at %s: %s", DB_PATH, e)
         return None
 
 

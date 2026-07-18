@@ -30,9 +30,10 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+import config
 from modules import groq_ai
 
-RATE_TOLERANCE = 0.10  # 10% over recorded/expected cost triggers a mismatch
+RATE_TOLERANCE = config.RATE_TOLERANCE  # deviation that triggers a rate mismatch
 
 
 # ── Text extraction ────────────────────────────────────────────────────────────

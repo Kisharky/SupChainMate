@@ -40,10 +40,12 @@ _ORDER_DATE_CANDIDATES = ["order_purchase_timestamp", "order_date", "date", "ds"
 _ACTUAL_DATE_CANDIDATES = ["order_delivered_customer_date", "delivery_date", "delivered_date"]
 _PROMISED_DATE_CANDIDATES = ["order_estimated_delivery_date", "estimated_date", "promised_date", "eta"]
 
+import config
+
 # An open shipment is "AT RISK" when its ML delay probability lands in the top
-# decile of the fleet (with a 15% floor so a uniformly low-risk fleet flags nothing).
-AT_RISK_PERCENTILE = 90
-AT_RISK_FLOOR_PCT = 15.0
+# decile of the fleet (with a floor so a uniformly low-risk fleet flags nothing).
+AT_RISK_PERCENTILE = config.AT_RISK_PERCENTILE
+AT_RISK_FLOOR_PCT = config.AT_RISK_FLOOR_PCT
 
 
 def _first_col(df: pd.DataFrame, candidates: list[str]) -> Optional[str]:

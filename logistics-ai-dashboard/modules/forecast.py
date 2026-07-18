@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 from prophet import Prophet
 
@@ -9,7 +11,14 @@ DEFAULT_DATA_PATH = "data/olist_orders.csv"
 
 
 def load_orders(path: str = DEFAULT_DATA_PATH) -> pd.DataFrame:
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Orders dataset not found at {path}. Re-clone the repository or "
+            f"restore the demo CSVs under logistics-ai-dashboard/data/."
+        )
     df = pd.read_csv(path)
+    if "order_purchase_timestamp" not in df.columns:
+        raise ValueError(f"{path} is missing the order_purchase_timestamp column.")
     df["order_purchase_timestamp"] = pd.to_datetime(df["order_purchase_timestamp"])
     return df
 

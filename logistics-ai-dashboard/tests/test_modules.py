@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules import (agent, alerts, carbon, connect, control_tower, cost_audit,
                      doc_intel, ensemble, factors, health_check, ingestion, retail,
-                     runbook, store, tender)
+                     runbook, sku, store, tender)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -260,6 +260,66 @@ def test_workers_cover_all_tools():
     assert tools_in_workers == schema_tools
     assert agent.workers_for_actions(["freight_cost_audit", "exception_summary"]) == \
         ["Auditor", "Tracker"]
+
+
+# ── SKU intelligence ──────────────────────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def sku_orders():
+    rng = np.random.default_rng(9)
+    n = 3000
+    dates = pd.to_datetime("2025-01-01") + pd.to_timedelta(rng.integers(0, 180, n), unit="D")
+    skus = rng.choice(["Widget", "Gadget", "Gizmo"], n, p=[0.6, 0.3, 0.1])
+    prices = pd.Series(skus).map({"Widget": 10.0, "Gadget": 50.0, "Gizmo": 5.0})
+    return pd.DataFrame({"order_date": dates, "quantity": 1.0,
+                         "sku": skus, "unit_price": prices})
+
+
+def test_sku_profiles_and_abc(sku_orders):
+    prof = sku.sku_demand_profiles(sku_orders)
+    assert len(prof) == 3 and prof.iloc[0]["SKU"] == "Widget"  # highest volume first
+    classified = sku.abc_classify(prof)
+    assert classified["ABC Basis"].iloc[0] == "Revenue"
+    # Gadget (0.3 share x $50) out-earns Widget (0.6 x $10) → Gadget is A
+    assert classified.loc[classified["SKU"] == "Gadget", "ABC"].iloc[0] == "A"
+    assert set(classified["ABC"]) <= {"A", "B", "C"}
+
+
+def test_sku_engine_and_status(sku_orders):
+    classified = sku.abc_classify(sku.sku_demand_profiles(sku_orders))
+    plan = sku.run_sku_engine(classified, service_level=0.95)
+    assert len(plan) == 3
+    assert (plan["Reorder Point"] > 0).all() and (plan["EOQ"] > 0).all()
+    # differentiated service levels: A keeps 95%, C steps down
+    a_svc = plan.loc[plan["ABC"] == "A", "Svc Level"].iloc[0]
+    c_rows = plan.loc[plan["ABC"] == "C", "Svc Level"]
+    assert a_svc == "95%"
+    if len(c_rows):
+        assert c_rows.iloc[0] != "95%"
+    plan.loc[0, "Current Stock"] = 0
+    plan.loc[1, "Current Stock"] = 1e9
+    status = sku.stock_status(plan)
+    assert "ORDER NOW" in status.loc[0, "Status"] and "OK" in status.loc[1, "Status"]
+    kpis = sku.sku_kpis(classified, status)
+    assert kpis["n_skus"] == 3 and kpis["order_now"] >= 1
+
+
+def test_sku_demo_assignment():
+    orders = pd.DataFrame({"order_date": pd.date_range("2025-01-01", periods=500, freq="h"),
+                           "quantity": 1.0})
+    out = sku.assign_demo_skus(orders)
+    assert out["sku"].nunique() == len(sku.DEMO_CATALOG)
+    assert out["unit_price"].notna().all()
+
+
+def test_ingestion_detects_sku_and_price():
+    raw = pd.DataFrame({"Order Date": ["2025-01-01", "2025-01-02"],
+                        "Qty": [2, 3],
+                        "Product Name": ["Widget", "Gadget"],
+                        "Unit Price": [9.99, 49.5]})
+    norm = ingestion.normalise_orders(raw)
+    assert "sku" in norm.columns and "unit_price" in norm.columns
+    assert list(norm["sku"]) == ["Widget", "Gadget"]
 
 
 # ── Runbook + autonomous sweep ────────────────────────────────────────────────

@@ -6,14 +6,14 @@
 
 *A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
 
-[![Version](https://img.shields.io/badge/version-5.0.0-brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.1.0-brightgreen)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-93%20passing-brightgreen)](logistics-ai-dashboard/tests)
+[![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen)](logistics-ai-dashboard/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 [Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
@@ -94,8 +94,11 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 
 | Capability | Description |
 |---|---|
-| **Live Store Connect** | Order sync from Shopify (Admin API) and WooCommerce (REST v3); credentials are used per-fetch and never persisted |
+| **Live Data Connectors** | Shopify (Admin API), WooCommerce (REST v3), **ERPNext** (token auth), and a **generic REST adapter** for SAP/Oracle/D365 gateways or any JSON API (endpoint + records path + field mapping); credentials are used per-fetch and never persisted |
 | **Smart Ingestion** | Column auto-detection (regex + optional LLM) for any CSV/Excel naming convention; Shopify/WooCommerce export recognition |
+| **Event-Driven Automation** | Conditions in the data trigger agent workflows automatically: supplier grading D → logistics review; SKUs below reorder point or a demand spike → planning chain; at-risk surge → logistics review — each with the full audit chain |
+| **Agent Memory** | Every agent run persists its outputs; the Executive reports run-over-run deltas and the copilot answers "what changed since last time?" |
+| **Knowledge Base (RAG)** | Upload SOPs, policies, contracts, manuals (PDF/TXT); TF-IDF + character-n-gram retrieval works fully offline, Groq composes cited answers when configured — every answer shows its source passages |
 | **Autonomous Runbook** | Standing rules in plain English, parsed deterministically, auto-assigned to the right AI Worker, persisted, and enforced on every data load — triggered rules lead the alert digest |
 | **Alert Digests** | Enterprise (runbook + exceptions + audit + health) and retail (per-product reorder) digests, delivered by SMTP email or download |
 | **Reporting Layer** | Six structured CSV exports — forecast, KPI summary, inventory plan, zone risk, execution plan, executive report — ready for Power BI, Excel, or ERP import |
@@ -145,7 +148,7 @@ This adapts the design patterns common across enterprise control towers (action 
 
 ## AI Workers
 
-The agentic copilot organises its **10 tools** as five named workers — each with a defined remit, one-click actions, and reply attribution:
+The agentic copilot organises its **13 tools** as six named workers — each with a defined remit, one-click actions, and reply attribution:
 
 | Worker | Remit | Tools |
 |---|---|---|
@@ -154,6 +157,7 @@ The agentic copilot organises its **10 tools** as five named workers — each wi
 | 🤝 **Carrier Manager** | Carrier Vetting | `get_carrier_scorecard` · `draft_carrier_email` |
 | 📑 **Procurement** | Quoting & Tenders | `generate_tender_pack` |
 | 📦 **Planner** | Inventory Planning | `generate_reorder_plan` · `supply_chain_health_check` |
+| 🎯 **Executive** | Executive Copilot | `get_pending_decisions` · `business_deltas` · `ask_knowledge_base` |
 
 **Autonomous operation**
 
@@ -318,7 +322,7 @@ Upload any CSV or Excel — the ingestion engine auto-detects columns under any 
 
 ```bash
 cd logistics-ai-dashboard
-python -m pytest tests/ -q        # 93 tests
+python -m pytest tests/ -q        # 107 tests
 ```
 
 Coverage spans the decision-engine mathematics (safety stock, EOQ, ROP, monotonicity), network scoring (Haversine, clustering, Isolation Forest), forecasting aggregation, optimisation summaries, shipment classification, carrier scorecards, cost-audit anomaly detection, health-check scoring, tender and rate-shift math, ensemble backtesting, alert digests, SQLite persistence, agent routing and tracing, and the store connectors (exercised against mocked HTTP — no network required).

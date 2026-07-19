@@ -305,10 +305,26 @@ class SustainabilityAgent(BaseAgent):
         return res
 
 
+def _memory_deltas(memory: dict, upstream: dict[str, dict]) -> list[str]:
+    """Run-over-run changes: compare current upstream outputs vs each
+    agent's previous persisted run (numeric keys only)."""
+    notes: list[str] = []
+    for agent_name, current in upstream.items():
+        prev = (memory.get(agent_name) or {}).get("outputs", {})
+        for key, now_val in current.items():
+            if not isinstance(now_val, (int, float)) or key not in prev:
+                continue
+            then_val = prev[key]
+            if not isinstance(then_val, (int, float)) or then_val == now_val:
+                continue
+            notes.append(f"{agent_name}.{key}: {then_val:,.1f} → {now_val:,.1f}")
+    return notes[:6]
+
+
 class ExecutiveAgent(BaseAgent):
     name = "executive"
     objective = "Synthesize everything into one decision-ready brief."
-    required_context = ["health"]
+    required_context = ["health", "memory"]
     depends_on = ["demand_forecast", "inventory", "procurement", "logistics",
                   "supplier_risk", "warehouse", "sustainability"]
 
@@ -349,6 +365,11 @@ class ExecutiveAgent(BaseAgent):
         if su:
             res.findings.append(f"Sustainability: {su.get('total_tco2e', 0):,.1f} tCO₂e; "
                                 f"greenest {su.get('greenest')}, highest {su.get('dirtiest')}.")
+
+        # Memory: run-over-run movement (only when a previous run exists)
+        deltas = _memory_deltas(ctx.get("memory") or {}, up)
+        if deltas:
+            res.findings.append("Since the last run: " + "; ".join(deltas) + ".")
 
         # Chain confidence honestly: an executive summary is only as reliable
         # as its weakest upstream input.

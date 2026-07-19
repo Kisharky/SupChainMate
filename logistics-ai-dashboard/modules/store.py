@@ -49,6 +49,18 @@ def _conn() -> Optional[sqlite3.Connection]:
             event TEXT NOT NULL,
             rec_key TEXT,
             details TEXT)""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS agent_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            workflow TEXT NOT NULL,
+            agent TEXT NOT NULL,
+            confidence REAL,
+            outputs TEXT NOT NULL)""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            name TEXT NOT NULL,
+            content TEXT NOT NULL)""")
         return conn
     except sqlite3.Error as e:
         _log.warning("SQLite unavailable at %s: %s", DB_PATH, e)
@@ -234,6 +246,99 @@ def load_audit_log(limit: int = 300) -> list[dict]:
     except sqlite3.Error as e:
         _log.warning("load_audit_log failed: %s", e)
         return []
+    finally:
+        conn.close()
+
+
+def save_agent_run(workflow: str, agent: str, confidence: float, outputs: dict) -> bool:
+    """Persist one agent's run outputs (the agents' long-term memory)."""
+    conn = _conn()
+    if conn is None:
+        return False
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO agent_runs (ts, workflow, agent, confidence, outputs) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (_utcnow(), workflow, agent, float(confidence), json.dumps(outputs, default=str)))
+        return True
+    except (sqlite3.Error, TypeError) as e:
+        _log.warning("save_agent_run failed: %s", e)
+        return False
+    finally:
+        conn.close()
+
+
+def last_agent_runs(before_latest: bool = False) -> dict[str, dict]:
+    """
+    Most recent persisted outputs per agent. With before_latest=True, skip
+    each agent's newest run and return the one before it (for run-over-run
+    comparisons after the current run was saved).
+    """
+    conn = _conn()
+    if conn is None:
+        return {}
+    try:
+        rows = conn.execute(
+            "SELECT agent, ts, confidence, outputs FROM agent_runs "
+            "ORDER BY id DESC LIMIT 400").fetchall()
+        out: dict[str, dict] = {}
+        skipped: set[str] = set()
+        for agent, ts, confidence, outputs in rows:
+            if before_latest and agent not in skipped:
+                skipped.add(agent)
+                continue
+            if agent not in out:
+                out[agent] = {"ts": ts, "confidence": confidence,
+                              "outputs": json.loads(outputs)}
+        return out
+    except (sqlite3.Error, json.JSONDecodeError) as e:
+        _log.warning("last_agent_runs failed: %s", e)
+        return {}
+    finally:
+        conn.close()
+
+
+def add_document(name: str, content: str) -> bool:
+    conn = _conn()
+    if conn is None:
+        return False
+    try:
+        with conn:
+            conn.execute("INSERT INTO documents (ts, name, content) VALUES (?, ?, ?)",
+                         (_utcnow(), name, content))
+        return True
+    except sqlite3.Error as e:
+        _log.warning("add_document failed: %s", e)
+        return False
+    finally:
+        conn.close()
+
+
+def load_documents() -> list[dict]:
+    conn = _conn()
+    if conn is None:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT id, ts, name, content FROM documents ORDER BY id").fetchall()
+        return [{"id": r[0], "ts": r[1], "name": r[2], "content": r[3]} for r in rows]
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+
+
+def delete_document(doc_id: int) -> bool:
+    conn = _conn()
+    if conn is None:
+        return False
+    try:
+        with conn:
+            conn.execute("DELETE FROM documents WHERE id=?", (doc_id,))
+        return True
+    except sqlite3.Error:
+        return False
     finally:
         conn.close()
 

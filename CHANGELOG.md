@@ -2,6 +2,14 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v5.1.0 — Memory, Events, RAG, Executive Copilot, ERP Connectors
+- **NEW**: Agent memory — every orchestrator agent run persists its outputs (`agent_runs`); the Executive reports run-over-run deltas; `business_deltas` copilot tool answers "what changed?"
+- **NEW**: `modules/events.py` — event-driven automation: supplier-delay, inventory-below-threshold, demand-spike, and at-risk-surge detectors auto-run the mapped workflows on data load with full audit chain
+- **NEW**: `modules/knowledge.py` — RAG knowledge base: upload SOPs/policies/contracts (PDF/TXT), TF-IDF + char-n-gram retrieval (offline), Groq-composed cited answers when configured
+- **NEW**: Executive Copilot — 6th worker with `get_pending_decisions` ("what should I approve today?"), `business_deltas`, `ask_knowledge_base` (13 tools total)
+- **NEW**: ERPNext connector (token auth, Sales Orders) + generic REST adapter (endpoint + records path + field mapping) for SAP/Oracle/D365 gateways
+- Tests: +14 (107 total)
+
 ## v5.0.0 — Agent Orchestrator: Eight Domain Agents
 - **NEW**: `modules/agents/` — multi-agent layer: `base.py` (typed contracts, ScopedContext enforcing declared-only data access, execution template with timing/containment), `domain.py` (8 single-responsibility agents wrapping existing engines), `orchestrator.py` (validated workflows, context passing, Decision Center routing, audit logging)
 - **NEW**: Agents: Demand Forecast, Inventory, Procurement, Logistics, Supplier Risk (HHI concentration + reliability variance — new analysis), Warehouse, Sustainability, Executive (chained confidence bounded by the weakest upstream agent)

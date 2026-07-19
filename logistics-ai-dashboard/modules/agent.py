@@ -293,6 +293,74 @@ def _tool_tender_pack(ctx: dict) -> tuple[str, list]:
     return summary, artifacts
 
 
+def _tool_pending_decisions(ctx: dict) -> tuple[str, list]:
+    """'What should I approve today?' — the Decision Center queue."""
+    from modules import trust as trust_mod
+    pend = trust_mod.pending()
+    if not pend:
+        return "Nothing is awaiting approval — the decision queue is clear.", []
+    df = pd.DataFrame([{
+        "Recommendation": p.get("title"),
+        "Source": p.get("source"),
+        "Confidence %": p.get("confidence"),
+        "Savings ($/yr)": (p.get("impact") or {}).get("cost_savings_yr"),
+        "Stockout Risk %": (p.get("impact") or {}).get("stockout_risk_pct"),
+        "Created (UTC)": p.get("created_ts"),
+    } for p in pend])
+    total_savings = float(df["Savings ($/yr)"].fillna(0).sum())
+    top = pend[0]
+    summary = (f"{len(pend)} recommendation(s) await approval worth "
+               f"${total_savings:,.0f}/yr combined. Highest priority: "
+               f"\"{top.get('title')}\" ({top.get('confidence', 0):.0f}% confidence). "
+               f"Decide in the Decision Center.")
+    return summary, [{"type": "dataframe", "title": "Pending decisions",
+                      "data": df, "filename": "pending_decisions.csv"}]
+
+
+def _tool_business_deltas(ctx: dict) -> tuple[str, list]:
+    """'Why did X change?' — run-over-run movement from agent memory."""
+    from modules import store as store_mod
+    latest = store_mod.last_agent_runs()
+    prev = store_mod.last_agent_runs(before_latest=True)
+    if not latest:
+        return ("No agent runs in memory yet — run an orchestrator workflow "
+                "first to build run-over-run history."), []
+    if not prev:
+        return (f"Memory holds one run per agent ({len(latest)} agents) — "
+                f"a second run is needed before changes can be compared."), []
+    lines = []
+    for agent_name, cur in latest.items():
+        before = (prev.get(agent_name) or {}).get("outputs", {})
+        for key, now_val in cur.get("outputs", {}).items():
+            if isinstance(now_val, (int, float)) and isinstance(before.get(key), (int, float)):
+                then_val = before[key]
+                if then_val != now_val:
+                    lines.append(f"{agent_name}.{key}: {then_val:,.1f} -> {now_val:,.1f}")
+    if not lines:
+        return "No numeric movement between the last two recorded runs.", []
+    body = "RUN-OVER-RUN CHANGES\n" + "=" * 24 + "\n" + "\n".join(f"  {l}" for l in lines)
+    return (f"{len(lines)} metric(s) moved since the previous run — e.g. {lines[0]}.",
+            [{"type": "text", "title": "Business deltas", "data": body,
+              "filename": "business_deltas.txt"}])
+
+
+def _tool_knowledge_base(ctx: dict, question: Optional[str] = None) -> tuple[str, list]:
+    """Answer from uploaded SOPs / policies / contracts (RAG)."""
+    from modules import knowledge as kb
+    q = (question or "").strip()
+    if not q:
+        return "Ask a specific question for the knowledge base.", []
+    result = kb.answer(q)
+    if not result["passages"]:
+        return result["answer"], []
+    sources = "\n\n".join(
+        f"[{i+1}] {p['doc']} (similarity {p['score']:.2f}):\n{p['text'][:600]}"
+        for i, p in enumerate(result["passages"]))
+    return (result["answer"],
+            [{"type": "text", "title": f"Source passages ({result['engine']})",
+              "data": sources, "filename": "kb_sources.txt"}])
+
+
 _TOOL_FUNCS: dict[str, Callable] = {
     "get_at_risk_shipments": _tool_at_risk,
     "get_carrier_scorecard": _tool_scorecard,
@@ -302,6 +370,9 @@ _TOOL_FUNCS: dict[str, Callable] = {
     "freight_cost_audit": _tool_cost_audit,
     "supply_chain_health_check": _tool_health_check,
     "generate_tender_pack": _tool_tender_pack,
+    "get_pending_decisions": _tool_pending_decisions,
+    "business_deltas": _tool_business_deltas,
+    "ask_knowledge_base": _tool_knowledge_base,
 }
 
 TOOLS_SCHEMA = [
@@ -347,6 +418,23 @@ TOOLS_SCHEMA = [
         "description": "Build a freight tender / RFP pack: monthly lane volumes, incumbent "
                        "carrier summary, and a ready-to-edit RFP document from real data.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "get_pending_decisions",
+        "description": "List the recommendations awaiting human approval in the Decision "
+                       "Center — 'what should I approve today?'",
+        "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "business_deltas",
+        "description": "Compare the latest agent run against the previous one — 'why did "
+                       "X change?', 'what moved since last time?'",
+        "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "ask_knowledge_base",
+        "description": "Answer a question from the uploaded SOPs, policies, contracts, "
+                       "and manuals (retrieval-augmented, with source passages).",
+        "parameters": {"type": "object", "properties": {
+            "question": {"type": "string", "description": "The question to answer"}},
+            "required": ["question"]}}},
 ]
 
 
@@ -380,6 +468,12 @@ def _extract_carrier(query: str, ctx: dict) -> Optional[str]:
 def _route_offline(query: str, ctx: dict) -> list[tuple[str, dict]]:
     q = query.lower()
     carrier = _extract_carrier(query, ctx)
+    if re.search(r"\b(polic(y|ies)|sop|contract|manual|procedure|guideline|according to|knowledge base)\b", q):
+        return [("ask_knowledge_base", {"question": query})]
+    if re.search(r"\b(approve|pending|decisions? (today|queue)|awaiting)\b", q):
+        return [("get_pending_decisions", {})]
+    if re.search(r"\b(why did|what (changed|moved)|since (the )?last|last run|month.over|run.over)\b", q):
+        return [("business_deltas", {})]
     if re.search(r"\b(tender|rfp|bid|proposal|procurement)\b", q):
         return [("generate_tender_pack", {})]
     if re.search(r"\b(health|assessment|scorecard of (the )?(chain|network)|how healthy|grade (the|my))\b", q):
@@ -394,7 +488,7 @@ def _route_offline(query: str, ctx: dict) -> list[tuple[str, dict]]:
         return [("exception_summary", {})]
     if re.search(r"\b(at.risk|late|delayed|exception|flag)\b", q):
         return [("get_at_risk_shipments", {})]
-    if re.search(r"\b(carrier|scorecard|performance|on.time|grade)\b", q) or carrier:
+    if re.search(r"\b(carrier|scorecard|underperform\w*|performance|on.time|grade|supplier)\b", q) or carrier:
         return [("get_carrier_scorecard", {"carrier": carrier})]
     return [("exception_summary", {})]
 
@@ -551,6 +645,13 @@ WORKERS = {
         "tools": ["generate_reorder_plan", "supply_chain_health_check"],
         "actions": [("Reorder", "Generate the reorder plan."),
                     ("Health", "Run a supply chain health check.")],
+    },
+    "Executive": {
+        "emoji": "🎯", "role": "Executive Copilot",
+        "desc": "Approvals, run-over-run changes, policy answers.",
+        "tools": ["get_pending_decisions", "business_deltas", "ask_knowledge_base"],
+        "actions": [("Approve today", "What actions should I approve today?"),
+                    ("What changed", "What changed since the last run?")],
     },
 }
 

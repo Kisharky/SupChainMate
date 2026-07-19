@@ -117,8 +117,9 @@ def render():
             "scope and paste its Admin API access token. WooCommerce: create a read-only "
             "REST API key under WooCommerce → Settings → Advanced."
         )
-        conn_platform = st.radio("Platform", ["Shopify", "WooCommerce"],
-                                 horizontal=True, key="conn_platform")
+        conn_platform = st.radio(
+            "Platform", ["Shopify", "WooCommerce", "ERPNext", "Generic REST API"],
+            horizontal=True, key="conn_platform")
         if conn_platform == "Shopify":
             cs1, cs2 = st.columns(2)
             shop_url = cs1.text_input("Store URL", placeholder="mystore.myshopify.com", key="conn_shop_url")
@@ -127,6 +128,52 @@ def render():
             if st.button("⇩ IMPORT ORDERS FROM SHOPIFY", use_container_width=True, key="conn_shop_go"):
                 with st.spinner("Fetching orders from Shopify..."):
                     conn_df, conn_msg = connect.fetch_shopify_orders(shop_url, shop_token)
+                if conn_df is None:
+                    st.error(conn_msg)
+                else:
+                    st.success(conn_msg)
+                    try:
+                        pipeline.process_uploaded(conn_df, None, None, None)
+                    except Exception as e:
+                        st.error(f"Processing failed: {e}")
+        elif conn_platform == "ERPNext":
+            ce1, ce2, ce3 = st.columns(3)
+            erp_url = ce1.text_input("ERPNext site URL", placeholder="erp.mycompany.com",
+                                     key="conn_erp_url")
+            erp_key = ce2.text_input("API key", type="password", key="conn_erp_key")
+            erp_secret = ce3.text_input("API secret", type="password", key="conn_erp_secret")
+            if st.button("⇩ IMPORT SALES ORDERS FROM ERPNEXT",
+                         use_container_width=True, key="conn_erp_go"):
+                with st.spinner("Fetching sales orders from ERPNext..."):
+                    conn_df, conn_msg = connect.fetch_erpnext_orders(erp_url, erp_key, erp_secret)
+                if conn_df is None:
+                    st.error(conn_msg)
+                else:
+                    st.success(conn_msg)
+                    try:
+                        pipeline.process_uploaded(conn_df, None, None, None)
+                    except Exception as e:
+                        st.error(f"Processing failed: {e}")
+        elif conn_platform == "Generic REST API":
+            st.caption("For SAP / Oracle Fusion / Dynamics 365 gateways or any custom JSON "
+                       "API: point at the endpoint, name the records array and fields.")
+            cr1, cr2 = st.columns([2, 1])
+            rest_url = cr1.text_input("Endpoint URL",
+                                      placeholder="https://api.mycompany.com/v1/orders",
+                                      key="conn_rest_url")
+            rest_token = cr2.text_input("Bearer token (optional)", type="password",
+                                        key="conn_rest_token")
+            cr3, cr4, cr5 = st.columns(3)
+            rest_path = cr3.text_input("Records path", placeholder="data.orders (blank = root)",
+                                       key="conn_rest_path")
+            rest_date = cr4.text_input("Date field", placeholder="order_date",
+                                       key="conn_rest_date")
+            rest_qty = cr5.text_input("Quantity field (optional)", placeholder="qty",
+                                      key="conn_rest_qty")
+            if st.button("⇩ IMPORT FROM REST API", use_container_width=True, key="conn_rest_go"):
+                with st.spinner("Fetching from the REST endpoint..."):
+                    conn_df, conn_msg = connect.fetch_rest_orders(
+                        rest_url, rest_path, rest_date, rest_qty, rest_token)
                 if conn_df is None:
                     st.error(conn_msg)
                 else:

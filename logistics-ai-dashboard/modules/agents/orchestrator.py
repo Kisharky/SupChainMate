@@ -81,6 +81,11 @@ class Orchestrator:
         upstream: dict[str, dict[str, Any]] = {}
         upstream_conf: dict[str, float] = {}
 
+        # Agent memory: expose every agent's previous persisted outputs so
+        # downstream reasoning can compare run-over-run.
+        shared = dict(shared)
+        shared["memory"] = store.last_agent_runs()
+
         store.log_event("orchestrator", "workflow_started", details=name)
         _log.info("Workflow '%s': %s", name, " -> ".join(self._workflows[name]))
 
@@ -90,6 +95,8 @@ class Orchestrator:
             run.results.append(result)
             upstream[agent_name] = result.outputs
             upstream_conf[agent_name] = result.confidence
+            if result.ok and result.outputs:
+                store.save_agent_run(name, agent_name, result.confidence, result.outputs)
             store.log_event(
                 "orchestrator", "agent_run",
                 details=(f"{name}/{agent_name}: confidence {result.confidence:.0f}%, "

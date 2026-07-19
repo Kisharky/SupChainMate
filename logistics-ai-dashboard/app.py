@@ -27,7 +27,7 @@ from views import helpers as vh
 from views import landing as v_landing, retail as v_retail, upload as v_upload
 from views import decision_center as v_decisions
 from views import agents_hub as v_agents
-from modules import trust, events, knowledge
+from modules import trust, events, knowledge, allocation, disputes
 
 vh.apply_theme()
 
@@ -1148,6 +1148,146 @@ with st.expander("🌱 CARBON LENS — FREIGHT CO₂e ESTIMATES", expanded=False
                         margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#CCCCCC;">
                 {note}
             </div>""", unsafe_allow_html=True)
+
+# ── Auto Carrier Allocation ────────────────────────────────────────────────────
+with st.expander("🎛 CARRIER ALLOCATION — MULTI-CRITERIA AUTO-BALANCE", expanded=False):
+    _alloc_carbon = None
+    _alloc_dist = carbon.network_avg_distance_km(centroid_stats)
+    if _alloc_dist is not None:
+        _alloc_carbon = carbon.carrier_emissions(shipments_df, _alloc_dist, 20.0, scorecard)
+    alloc_profiles = allocation.build_carrier_profiles(scorecard, _alloc_carbon)
+    if alloc_profiles is None:
+        st.info("Allocation needs at least two carriers on the scorecard.")
+    else:
+        st.markdown(
+            "<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#888;'>"
+            "SCORE = COST + SERVICE + EMISSIONS + RELIABILITY (YOUR WEIGHTS) · "
+            f"CONCENTRATION CAP {allocation.MAX_SHARE_PCT:.0f}% PER CARRIER · "
+            "PROPOSALS ROUTE THROUGH THE DECISION CENTER</div>", unsafe_allow_html=True)
+        aw1, aw2, aw3, aw4 = st.columns(4)
+        w_cost = aw1.slider("COST", 0, 100, 35, key="alloc_w_cost")
+        w_service = aw2.slider("SERVICE", 0, 100, 35, key="alloc_w_service")
+        w_emissions = aw3.slider("EMISSIONS", 0, 100, 15, key="alloc_w_emissions")
+        w_reliab = aw4.slider("RELIABILITY", 0, 100, 15, key="alloc_w_reliab")
+        alloc_weights = {"cost": w_cost, "service": w_service,
+                         "emissions": w_emissions, "reliability": w_reliab}
+        scored = allocation.allocation_scores(alloc_profiles, alloc_weights)
+        alloc_imp = allocation.allocation_impact(scored, int(scored["Shipments"].sum()))
+
+        al_l, al_r = st.columns([3, 2])
+        with al_l:
+            show_cols = [c for c in ["Carrier", "Allocation Score", "Current Share %",
+                                     "Recommended Share %", "Shift (pts)", "Cost ($)",
+                                     "On-Time %", "kg CO2e/shipment"] if c in scored.columns]
+            st.dataframe(scored[show_cols], use_container_width=True, hide_index=True)
+        with al_r:
+            _share_df = pd.concat([
+                scored.assign(Mix="Current", Share=scored["Current Share %"]),
+                scored.assign(Mix="Recommended", Share=scored["Recommended Share %"]),
+            ])
+            fig_alloc = px.bar(_share_df, x="Carrier", y="Share", color="Mix",
+                               barmode="group", height=260,
+                               color_discrete_map={"Current": "#555",
+                                                   "Recommended": "#00D4FF"})
+            fig_alloc.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+                                    plot_bgcolor="rgba(13,13,16,1)",
+                                    margin=dict(l=30, r=10, t=10, b=30),
+                                    legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#888")))
+            fig_alloc.update_xaxes(gridcolor="#222228")
+            fig_alloc.update_yaxes(gridcolor="#222228", title="Share %")
+            st.plotly_chart(fig_alloc, use_container_width=True)
+
+        _imp_bits = [f"VOLUME TO MOVE: {alloc_imp['total_shift_pts']:.0f} PTS"]
+        if "on_time_current" in alloc_imp:
+            _imp_bits.append(f"BLENDED ON-TIME: {alloc_imp['on_time_current']:.1f}% → "
+                             f"{alloc_imp['on_time_recommended']:.1f}%")
+        if "cost_current" in alloc_imp:
+            _imp_bits.append(f"COST/SHIPMENT: ${alloc_imp['cost_current']:.2f} → "
+                             f"${alloc_imp['cost_recommended']:.2f}")
+        if "co2_current" in alloc_imp:
+            _imp_bits.append(f"CO₂e: {alloc_imp['co2_current']:.2f} → "
+                             f"{alloc_imp['co2_recommended']:.2f} KG")
+        st.markdown(
+            f"<div style='background:#151518;border-left:3px solid #00D4FF;padding:8px 14px;"
+            f"font-family:Share Tech Mono,monospace;font-size:0.72rem;color:#CCC;'>"
+            + " &nbsp;·&nbsp; ".join(_imp_bits) + "</div>", unsafe_allow_html=True)
+
+        alloc_rec = allocation.build_recommendation(
+            scored, alloc_imp, {k: v / max(sum(alloc_weights.values()), 1)
+                                for k, v in alloc_weights.items()})
+        if alloc_rec is None:
+            st.caption("Recommended mix is within "
+                       f"{allocation.MIN_SHIFT_PCT:.0f} pts of the current mix — no proposal needed.")
+        elif st.button("⇪ PROPOSE ALLOCATION TO THE DECISION CENTER",
+                       key="alloc_propose", use_container_width=True):
+            created = trust.sync_recommendations([alloc_rec])
+            (st.success if created else st.info)(
+                "Allocation proposal routed for approval." if created
+                else "An identical proposal is already pending in the Decision Center.")
+
+# ── Dispute Manager ────────────────────────────────────────────────────────────
+with st.expander("🧾 DISPUTE MANAGER — RAISE · TRACK · RECOVER", expanded=False):
+    dk = disputes.dispute_kpis()
+    dm1, dm2, dm3, dm4 = st.columns(4)
+    dm1.markdown(_hp("OPEN DISPUTES", f"${dk['open_value']:,.0f}", "AWAITING SEND", "#FBC02D"),
+                 unsafe_allow_html=True)
+    dm2.markdown(_hp("WITH CARRIERS", f"${dk['sent_value']:,.0f}", "SENT, AWAITING RESPONSE", "#00D4FF"),
+                 unsafe_allow_html=True)
+    dm3.markdown(_hp("RECOVERED", f"${dk['recovered']:,.0f}", "CASH BACK FROM CARRIERS", "#00E676"),
+                 unsafe_allow_html=True)
+    dm4.markdown(_hp("RECOVERY RATE", f"{dk['recovery_rate_pct']:.0f}%" if dk["recovery_rate_pct"] is not None else "—",
+                     "OF CLOSED DISPUTE VALUE", "#00E676"), unsafe_allow_html=True)
+
+    if audit is not None and len(audit["flagged"]):
+        if st.button(f"⚑ RAISE DISPUTES FROM THE AUDIT "
+                     f"(TOP {min(25, len(audit['flagged']))} FLAGGED CHARGES)",
+                     key="disp_raise", use_container_width=True):
+            n_new = disputes.open_disputes_from_audit(audit["flagged"])
+            (st.success if n_new else st.info)(
+                f"{n_new} new dispute(s) opened." if n_new
+                else "All of those charges are already under dispute.")
+            if n_new:
+                st.rerun()
+
+    disp_rows = disputes.list_disputes()
+    if not disp_rows:
+        st.caption("No disputes yet — run the cost audit and raise them from the flagged charges.")
+    else:
+        disp_df = pd.DataFrame(disp_rows)[
+            ["shipment_id", "carrier", "reason", "amount", "status", "recovered", "created_ts"]]
+        disp_df.columns = ["Shipment", "Carrier", "Reason", "Amount ($)",
+                           "Status", "Recovered ($)", "Opened (UTC)"]
+        st.dataframe(disp_df, use_container_width=True, hide_index=True, height=240)
+
+        actionable = [r for r in disp_rows if r["status"] in ("OPEN", "SENT")]
+        if actionable:
+            da1, da2, da3, da4 = st.columns([2, 1, 1, 1])
+            pick = da1.selectbox(
+                "Dispute", range(len(actionable)),
+                format_func=lambda i: (f"{actionable[i]['shipment_id']} · "
+                                       f"${actionable[i]['amount']:,.2f} · "
+                                       f"{actionable[i]['status']}"),
+                key="disp_pick")
+            chosen = actionable[pick]
+            if chosen["status"] == "OPEN":
+                if da2.button("SEND", key="disp_send", use_container_width=True):
+                    disputes.transition(chosen["dispute_key"], "SENT")
+                    st.rerun()
+            rec_amt = da3.number_input("Recovered ($)", min_value=0.0,
+                                       value=float(chosen["amount"]), step=1.0,
+                                       key="disp_amt")
+            if chosen["status"] == "SENT":
+                if da2.button("RESOLVE", key="disp_resolve", use_container_width=True):
+                    disputes.transition(chosen["dispute_key"], "RESOLVED", recovered=rec_amt)
+                    st.rerun()
+            if da4.button("WRITE OFF", key="disp_wo", use_container_width=True):
+                disputes.transition(chosen["dispute_key"], "WRITTEN_OFF")
+                st.rerun()
+        st.download_button(
+            "⇩ EXPORT DISPUTES (CSV)",
+            data=disp_df.to_csv(index=False).encode(),
+            file_name="supchainmate_disputes.csv", mime="text/csv",
+            use_container_width=True)
 
 # ── Supply Chain Health Check ──────────────────────────────────────────────────
 with st.expander("🩺 SUPPLY CHAIN HEALTH CHECK — SCORED ASSESSMENT", expanded=False):

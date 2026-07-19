@@ -2,6 +2,12 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v5.2.0 — Auto Carrier Allocation + Dispute Manager
+- **NEW**: `modules/allocation.py` — multi-criteria carrier allocation: cost/service/emissions/reliability scoring under user weights, score-proportional shares with a 50% concentration cap, blended-mix impact (cost, on-time, CO₂e), Decision Center proposal builder
+- **NEW**: `modules/disputes.py` — dispute lifecycle: raise from audit-flagged charges (deduped), validated OPEN → SENT → RESOLVED / WRITTEN_OFF transitions, recovered amounts, recovery-rate KPIs, audit events
+- **NEW**: Carrier Allocation panel (weight sliders, score table, current-vs-recommended chart) + Dispute Manager panel (KPIs, table, transition controls, CSV export)
+- Tests: +5 (112 total)
+
 ## v5.1.0 — Memory, Events, RAG, Executive Copilot, ERP Connectors
 - **NEW**: Agent memory — every orchestrator agent run persists its outputs (`agent_runs`); the Executive reports run-over-run deltas; `business_deltas` copilot tool answers "what changed?"
 - **NEW**: `modules/events.py` — event-driven automation: supplier-delay, inventory-below-threshold, demand-spike, and at-risk-surge detectors auto-run the mapped workflows on data load with full audit chain

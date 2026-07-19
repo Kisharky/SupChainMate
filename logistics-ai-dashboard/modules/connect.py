@@ -78,6 +78,101 @@ def fetch_shopify_orders(shop_url: str, access_token: str) -> tuple[Optional[pd.
     return df, f"Imported {len(df):,} orders from {host}."
 
 
+def fetch_erpnext_orders(site_url: str, api_key: str,
+                         api_secret: str) -> tuple[Optional[pd.DataFrame], str]:
+    """
+    Fetch Sales Orders from an ERPNext / Frappe instance (token auth).
+    Requires a read-only API key pair (User → API Access).
+    """
+    host = _clean_domain(site_url)
+    if not host or not api_key.strip() or not api_secret.strip():
+        return None, "Enter your ERPNext site URL, API key, and API secret."
+
+    headers = {"Authorization": f"token {api_key.strip()}:{api_secret.strip()}"}
+    base = f"https://{host}/api/resource/Sales Order"
+    rows: list[dict] = []
+    try:
+        for page in range(_MAX_PAGES):
+            resp = requests.get(
+                base, headers=headers,
+                params={"fields": '["transaction_date","total_qty"]',
+                        "limit_start": page * 200, "limit_page_length": 200},
+                timeout=_TIMEOUT)
+            if resp.status_code in (401, 403):
+                return None, f"ERPNext rejected the credentials ({resp.status_code})."
+            if resp.status_code == 404:
+                return None, f"No ERPNext API found at {host}."
+            resp.raise_for_status()
+            data = resp.json().get("data", [])
+            if not data:
+                break
+            for o in data:
+                rows.append({"order_date": o.get("transaction_date"),
+                             "quantity": max(float(o.get("total_qty") or 1), 1)})
+            if len(data) < 200:
+                break
+    except requests.exceptions.RequestException as e:
+        return None, f"ERPNext connection failed: {e}"
+    except ValueError:
+        return None, "ERPNext returned unexpected data."
+
+    if not rows:
+        return None, "Connected, but no Sales Orders were returned."
+    df = pd.DataFrame(rows)
+    df["order_date"] = pd.to_datetime(df["order_date"], errors="coerce")
+    df = df[df["order_date"].notna()]
+    return df, f"Imported {len(df):,} sales orders from {host} (ERPNext)."
+
+
+def fetch_rest_orders(url: str, records_path: str, date_field: str,
+                      qty_field: str = "",
+                      bearer_token: str = "") -> tuple[Optional[pd.DataFrame], str]:
+    """
+    Generic REST adapter for any JSON API (SAP/Oracle/D365 gateways, custom
+    services): point at an endpoint, name the records array and the
+    date/quantity fields, and the orders flow through the same pipeline.
+    """
+    if not url.strip() or not date_field.strip():
+        return None, "Enter the endpoint URL and the date field name."
+    headers = {"Authorization": f"Bearer {bearer_token.strip()}"} if bearer_token.strip() else {}
+    try:
+        resp = requests.get(url.strip(), headers=headers, timeout=_TIMEOUT)
+        if resp.status_code in (401, 403):
+            return None, f"API rejected the request ({resp.status_code}) — check the token."
+        resp.raise_for_status()
+        payload = resp.json()
+    except requests.exceptions.RequestException as e:
+        return None, f"API connection failed: {e}"
+    except ValueError:
+        return None, "The endpoint did not return JSON."
+
+    records = payload
+    for part in [p for p in records_path.strip().split(".") if p]:
+        if isinstance(records, dict) and part in records:
+            records = records[part]
+        else:
+            return None, f"Records path '{records_path}' not found in the response."
+    if not isinstance(records, list) or not records:
+        return None, "No records found at the given path."
+
+    rows = []
+    for r in records:
+        if not isinstance(r, dict) or date_field not in r:
+            continue
+        qty = r.get(qty_field, 1) if qty_field.strip() else 1
+        try:
+            rows.append({"order_date": r[date_field],
+                         "quantity": max(float(qty or 1), 1)})
+        except (TypeError, ValueError):
+            continue
+    if not rows:
+        return None, f"No records carried the field '{date_field}'."
+    df = pd.DataFrame(rows)
+    df["order_date"] = pd.to_datetime(df["order_date"], errors="coerce")
+    df = df[df["order_date"].notna()]
+    return df, f"Imported {len(df):,} records from the REST endpoint."
+
+
 def fetch_woocommerce_orders(site_url: str, consumer_key: str,
                              consumer_secret: str) -> tuple[Optional[pd.DataFrame], str]:
     """

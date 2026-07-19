@@ -27,7 +27,7 @@ from views import helpers as vh
 from views import landing as v_landing, retail as v_retail, upload as v_upload
 from views import decision_center as v_decisions
 from views import agents_hub as v_agents
-from modules import trust
+from modules import trust, events, knowledge
 
 vh.apply_theme()
 
@@ -39,7 +39,8 @@ _SESSION_KEYS = [
     "daily_df", "forecast_df", "tracking_df", "geo_df",
     "delay_model", "X_test_delay", "summary", "current_cost",
     "data_loaded", "demo_mode", "shipments_df", "carriers_simulated",
-    "kpi_snapshot_saved", "orders_sku_df", "sku_stock",
+    "kpi_snapshot_saved", "orders_sku_df", "sku_stock", "events_processed",
+    "event_runs",
 ]
 
 for key in _SESSION_KEYS:
@@ -1387,7 +1388,82 @@ _orch_ctx = {
     "shipment_weight_kg": 20.0,
     "health": hc,
 }
+# ── Event-driven automation: detect once per load, auto-run workflows ─────────
+if not st.session_state.get("events_processed"):
+    fired_events = events.detect(_orch_ctx)
+    if fired_events:
+        from modules.agents import build_default_orchestrator as _build_orch
+        with st.spinner(f"{len(fired_events)} event(s) detected — agents responding..."):
+            st.session_state.event_runs = events.run_triggered(
+                _build_orch(), fired_events, _orch_ctx)
+    else:
+        st.session_state.event_runs = []
+    st.session_state.events_processed = True
+
+for _ev in st.session_state.get("event_runs") or []:
+    _e, _r = _ev["event"], _ev["run"]
+    st.markdown(f"""
+    <div style="background:#1A1205;border-left:3px solid #FBC02D;padding:8px 14px;
+                margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;">
+        <b style="color:#FBC02D;">⚡ EVENT: {_e['name'].replace('_', ' ').upper()}</b>
+        <span style="color:#999;"> — {_e['detail']}</span><br>
+        <span style="color:#CCC;">Auto-ran <b>{_r.workflow}</b>: {len(_r.results)} agents,
+        {_r.recommendations_created} recommendation(s) routed for approval.</span>
+    </div>""", unsafe_allow_html=True)
+
 v_agents.render(_orch_ctx)
+
+# ── Knowledge Base — RAG over your own documents ───────────────────────────────
+with st.expander("📚 KNOWLEDGE BASE — SOPs · POLICIES · CONTRACTS (RAG)", expanded=False):
+    kb_engine = "🟢 GROQ-GROUNDED ANSWERS" if groq_ai.is_available() \
+        else "🟡 EXTRACTIVE MODE — retrieval works offline; set GROQ_API_KEY for composed answers"
+    st.markdown(
+        f"<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#888;'>"
+        f"{kb_engine} · TF-IDF RETRIEVAL · EVERY ANSWER CITES ITS SOURCE PASSAGES</div>",
+        unsafe_allow_html=True)
+    kb1, kb2 = st.columns([2, 1])
+    with kb1:
+        kb_file = st.file_uploader("Add a document (SOP, policy, contract, manual)",
+                                   type=["txt", "pdf"], key="kb_upload")
+        if kb_file is not None and st.button("＋ ADD TO KNOWLEDGE BASE", key="kb_add",
+                                             use_container_width=True):
+            kb_text, kb_msg = doc_intel.extract_text(kb_file.read(), kb_file.name)
+            if kb_text is None:
+                st.error(kb_msg)
+            else:
+                store.add_document(kb_file.name, kb_text)
+                store.log_event("user", "document_added", details=kb_file.name)
+                st.rerun()
+    with kb2:
+        kb_stats = knowledge.kb_stats()
+        st.markdown(f"""
+        <div class="hud-panel" style="border-color:#333340;">
+            <div class="hud-label">KNOWLEDGE BASE</div>
+            <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:#00D4FF;">
+                {kb_stats['documents']} DOCS</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#666;">
+                {kb_stats['chunks']} SEARCHABLE CHUNKS</div>
+        </div>""", unsafe_allow_html=True)
+    if kb_stats["names"]:
+        kb_docs = store.load_documents()
+        kb_del = st.selectbox("Remove a document", range(len(kb_docs)),
+                              format_func=lambda i: kb_docs[i]["name"], key="kb_del_sel")
+        if st.button("Remove selected document", key="kb_del_btn"):
+            store.delete_document(kb_docs[kb_del]["id"])
+            st.rerun()
+    kb_q = st.text_input("Ask the knowledge base",
+                         placeholder='e.g. "What does our policy say about supplier lead times?"',
+                         key="kb_question")
+    if kb_q.strip():
+        kb_res = knowledge.answer(kb_q.strip())
+        st.markdown(f"""
+        <div style="background:#151518;border-left:3px solid #00D4FF;padding:10px 16px;
+                    font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:#CCC;
+                    white-space:pre-wrap;">{kb_res['answer']}</div>""",
+                    unsafe_allow_html=True)
+        for kb_i, kb_p in enumerate(kb_res["passages"]):
+            with st.expander(f"Source [{kb_i+1}] — {kb_p['doc']} (similarity {kb_p['score']:.2f})"):
+                st.code(kb_p["text"][:1500], language=None)
 
 # ── Freight Tender / RFP Toolkit ───────────────────────────────────────────────
 with st.expander("📑 FREIGHT TENDER / RFP TOOLKIT", expanded=False):

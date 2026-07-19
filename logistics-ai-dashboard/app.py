@@ -27,7 +27,8 @@ from views import helpers as vh
 from views import landing as v_landing, retail as v_retail, upload as v_upload
 from views import decision_center as v_decisions
 from views import agents_hub as v_agents
-from modules import trust, events, knowledge, allocation, disputes
+from modules import trust, events, knowledge, allocation, disputes, geo
+from views import map_view
 
 vh.apply_theme()
 
@@ -266,24 +267,27 @@ with col_map:
     # Haversine centroid metrics
     centroid_stats = network.cluster_centroid_distances(geo_df)
 
-    fig_map = px.scatter_mapbox(
-        geo_df, lat="lat", lon="lon",
-        color="combined_level",       # ← fused multi-signal colour
-        size="combined_risk",
-        size_max=18,
-        hover_data={"risk_score": True, "delay_proba": True, "combined_risk": True, "signal_agreement": True},
-        zoom=2.5, height=480,
-        color_discrete_map={"Critical": "#FF003C", "Warning": "#FBC02D", "Safe": "#00D4FF"},
-    )
-    fig_map.update_layout(
-        mapbox_style="carto-darkmatter",
-        mapbox=dict(center=dict(lat=20, lon=0), zoom=1.5),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=0, b=0),
-        legend=dict(bgcolor="rgba(13,13,16,0.8)", bordercolor="#FF003C",
-                    borderwidth=1, font=dict(color="#CCCCCC", size=10)),
-    )
-    st.plotly_chart(fig_map, use_container_width=True)
+    # Leaflet + MapTiler when available; plotly mapbox as the fallback
+    _leaflet_ok = map_view.render_radar(geo_df)
+    if not _leaflet_ok:
+        fig_map = px.scatter_mapbox(
+            geo_df, lat="lat", lon="lon",
+            color="combined_level",       # ← fused multi-signal colour
+            size="combined_risk",
+            size_max=18,
+            hover_data={"risk_score": True, "delay_proba": True, "combined_risk": True, "signal_agreement": True},
+            zoom=2.5, height=480,
+            color_discrete_map={"Critical": "#FF003C", "Warning": "#FBC02D", "Safe": "#00D4FF"},
+        )
+        fig_map.update_layout(
+            mapbox_style="carto-darkmatter",
+            mapbox=dict(center=dict(lat=20, lon=0), zoom=1.5),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=0, r=0, t=0, b=0),
+            legend=dict(bgcolor="rgba(13,13,16,0.8)", bordercolor="#FF003C",
+                        borderwidth=1, font=dict(color="#CCCCCC", size=10)),
+        )
+        st.plotly_chart(fig_map, use_container_width=True)
 
     critical_pct    = len(geo_df[geo_df["combined_level"] == "Critical"]) / len(geo_df) * 100
     agreed_critical = geo_df[geo_df["signal_agreement"] == True]["cluster"].unique()
@@ -1148,6 +1152,98 @@ with st.expander("🌱 CARBON LENS — FREIGHT CO₂e ESTIMATES", expanded=False
                         margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#CCCCCC;">
                 {note}
             </div>""", unsafe_allow_html=True)
+
+# ── Geo Services — geocoding, road routing, zone weather ──────────────────────
+with st.expander("🌐 GEO SERVICES — GEOCODING · ROAD ROUTING · ZONE WEATHER", expanded=False):
+    st.markdown(
+        "<div style='font-family:Share Tech Mono,monospace;font-size:0.62rem;color:#888;'>"
+        "NOMINATIM GEOCODING (KEYLESS, CACHED) · ROUTING: HERE WITH A KEY, OSRM FALLBACK · "
+        "WEATHER: OPENWEATHERMAP WITH A KEY, OPEN-METEO FALLBACK</div>",
+        unsafe_allow_html=True)
+
+    gs1, gs2 = st.columns([1, 1])
+
+    with gs1:
+        st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>📍 GEOCODER</div>", unsafe_allow_html=True)
+        geo_q = st.text_input("Address or place", placeholder="e.g. Av. Paulista, São Paulo",
+                              key="geo_query", label_visibility="collapsed")
+        if geo_q.strip():
+            hit, geo_src = geo.geocode(geo_q)
+            if hit is None:
+                st.warning(geo_src)
+            else:
+                _cent = centroid_stats.reset_index() if centroid_stats is not None else None
+                nearest_txt = ""
+                if _cent is not None and len(_cent):
+                    _dists = [(int(r["cluster"]),
+                               network.haversine_km(hit["lat"], hit["lon"],
+                                                    float(geo_df[geo_df["cluster"] == r["cluster"]]["lat"].mean()),
+                                                    float(geo_df[geo_df["cluster"] == r["cluster"]]["lon"].mean())))
+                              for _, r in _cent.iterrows()]
+                    zid, zkm = min(_dists, key=lambda t: t[1])
+                    nearest_txt = f" · nearest hub: zone {zid} ({zkm:,.0f} km)"
+                st.success(f"{hit['display_name'][:90]} → ({hit['lat']:.4f}, {hit['lon']:.4f})"
+                           f"{nearest_txt}  [{geo_src}]")
+
+        st.markdown("<div class='hud-label' style='margin:12px 0 4px 0;'>🌦 ZONE WEATHER WATCH</div>", unsafe_allow_html=True)
+        if st.button("CHECK WEATHER AT TOP ZONES", key="geo_wx", use_container_width=True):
+            _cent = centroid_stats.reset_index() if centroid_stats is not None else None
+            if _cent is None or not len(_cent):
+                st.info("No zones available.")
+            else:
+                top_zones = _cent.nlargest(3, "customers") if "customers" in _cent.columns else _cent.head(3)
+                for _, zr in top_zones.iterrows():
+                    zg = geo_df[geo_df["cluster"] == zr["cluster"]]
+                    wx, wx_src = geo.current_weather(float(zg["lat"].mean()), float(zg["lon"].mean()))
+                    if wx is None:
+                        st.warning(f"Zone {int(zr['cluster'])}: {wx_src}")
+                        continue
+                    note = geo.weather_disruption_note(wx)
+                    color = "#FF003C" if note else "#00E676"
+                    st.markdown(f"""
+                    <div style="background:#151518;border-left:3px solid {color};padding:8px 14px;
+                                margin-bottom:4px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;">
+                        <b style="color:#FFF;">ZONE {int(zr['cluster'])}</b>
+                        <span style="color:#999;"> · {wx['temp_c']:.0f}°C · wind {wx['wind_kmh']:.0f} km/h ·
+                        precip {wx['precip_mm']:.1f} mm {('· ' + wx['desc']) if wx['desc'] else ''}
+                        <span style="color:#555;">[{wx_src}]</span></span>
+                        {f'<br><span style="color:#FF003C;">⚠ {note}</span>' if note else ''}
+                    </div>""", unsafe_allow_html=True)
+
+    with gs2:
+        st.markdown("<div class='hud-label' style='margin:8px 0 4px 0;'>🚚 HUB-TO-HUB ROAD MATRIX</div>", unsafe_allow_html=True)
+        st.caption("Real road distances and drive times between your hub centroids — "
+                   "vs the straight-line Haversine the optimiser uses by default.")
+        if st.button("FETCH ROAD MATRIX", key="geo_matrix", use_container_width=True):
+            _cent = centroid_stats.reset_index() if centroid_stats is not None else None
+            if _cent is None or len(_cent) < 2:
+                st.info("Need at least two hubs.")
+            else:
+                coords = [(float(geo_df[geo_df["cluster"] == r["cluster"]]["lat"].mean()),
+                           float(geo_df[geo_df["cluster"] == r["cluster"]]["lon"].mean()))
+                          for _, r in _cent.head(8).iterrows()]
+                with st.spinner("Fetching road matrix..."):
+                    matrix, mx_src = geo.road_matrix(coords)
+                if matrix is None:
+                    st.warning(mx_src)
+                else:
+                    rows = []
+                    for i in range(len(coords)):
+                        for j in range(len(coords)):
+                            if i >= j:
+                                continue
+                            hav = network.haversine_km(*coords[i], *coords[j])
+                            road = matrix["distances_km"][i][j]
+                            rows.append({
+                                "Lane": f"zone {i} → zone {j}",
+                                "Road (km)": round(road, 0),
+                                "Straight-line (km)": round(hav, 0),
+                                "Detour factor": round(road / hav, 2) if hav > 0 else None,
+                                "Drive time (min)": round(matrix["durations_min"][i][j], 0),
+                            })
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True,
+                                 hide_index=True, height=240)
+                    st.caption(f"Source: {mx_src}")
 
 # ── Auto Carrier Allocation ────────────────────────────────────────────────────
 with st.expander("🎛 CARRIER ALLOCATION — MULTI-CRITERIA AUTO-BALANCE", expanded=False):

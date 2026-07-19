@@ -14,6 +14,8 @@ python-dotenv==1.2.2
 groq==1.5.0
 pypdf==6.14.2
 holidays==0.100
+folium==0.20.0
+streamlit-folium==0.27.2
 
 # Development / testing
 pytest==9.1.1

@@ -6,14 +6,14 @@
 
 *A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
 
-[![Version](https://img.shields.io/badge/version-5.2.0-brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.3.0-brightgreen)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-112%20passing-brightgreen)](logistics-ai-dashboard/tests)
+[![Tests](https://img.shields.io/badge/tests-119%20passing-brightgreen)](logistics-ai-dashboard/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 [Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
@@ -76,6 +76,7 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 | **Freight Cost Audit** | Billing anomaly detection: per-carrier IQR cost outliers with overcharge estimates, potential duplicate charges, late-delivery premiums, and re-tender opportunity |
 | **Invoice / BOL Scanner** | Upload a freight invoice (PDF/TXT); fields are extracted and reconciled against the shipment board and audited rate bands, producing pay/review verdicts |
 | **Tender / RFP Toolkit** | Data-backed tender pack: monthly lane volumes, peak-capacity callout, incumbent carrier summary, ready-to-edit RFP document, and a carrier rate-shift simulator |
+| **Geo Services** | Vendor-neutral geo stack: Leaflet radar map with MapTiler dark tiles (plotly fallback), Nominatim geocoding (keyless, cached), hub-to-hub road matrices via HERE (key) or the OSRM public server (keyless) with detour factors and drive times, and zone weather watch via OpenWeatherMap (key) or Open-Meteo (keyless) with delivery-risk notes |
 | **Carbon Lens** | CO₂e estimates from real route distances (DEFRA-style mode factors) by carrier and zone, greenest-vs-cheapest analysis, route-savings in tCO₂e |
 
 ### Planning & Intelligence
@@ -300,6 +301,9 @@ cp .env.example .env
 | `NVIDIA_DEEPSEEK_API_KEY` | Copilot fallback when Groq is unavailable | Offline copilot mode |
 | `NVIDIA_LLAMA_API_KEY` | Legacy fallback model | — |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Email delivery of alert digests | Digests remain downloadable in-app |
+| `MAPTILER_API_KEY` | Dark MapTiler basemap on the Leaflet radar | OpenStreetMap tiles (or plotly fallback) |
+| `HERE_API_KEY` | Road matrices with live traffic | OSRM public server (keyless) |
+| `OPENWEATHER_API_KEY` | Zone weather via OpenWeatherMap | Open-Meteo (keyless) |
 
 **Store connections** (Shopify Admin API token with `read_orders`; WooCommerce read-only REST keys) are entered in the UI per-fetch and never persisted.
 
@@ -324,7 +328,7 @@ Upload any CSV or Excel — the ingestion engine auto-detects columns under any 
 
 ```bash
 cd logistics-ai-dashboard
-python -m pytest tests/ -q        # 112 tests
+python -m pytest tests/ -q        # 119 tests
 ```
 
 Coverage spans the decision-engine mathematics (safety stock, EOQ, ROP, monotonicity), network scoring (Haversine, clustering, Isolation Forest), forecasting aggregation, optimisation summaries, shipment classification, carrier scorecards, cost-audit anomaly detection, health-check scoring, tender and rate-shift math, ensemble backtesting, alert digests, SQLite persistence, agent routing and tracing, and the store connectors (exercised against mocked HTTP — no network required).

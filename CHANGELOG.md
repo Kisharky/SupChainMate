@@ -2,6 +2,13 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v5.3.0 — Geo Stack: Leaflet · MapTiler · Routing · Weather
+- **NEW**: `modules/geo.py` — vendor-neutral geo adapters: MapTiler tile URLs, Nominatim geocoding (keyless, SQLite-cached, rate-polite), road matrices (HERE Matrix API with key → OSRM public server keyless), current weather (OpenWeatherMap with key → Open-Meteo keyless) with delivery-risk notes
+- **NEW**: `views/map_view.py` — Leaflet (folium) disruption radar with MapTiler dark tiles, risk-colored markers, hub pins; plotly mapbox fallback when unavailable
+- **NEW**: Geo Services panel — geocoder with nearest-hub distance, hub-to-hub road matrix with detour factors and drive times, zone weather watch
+- **NEW**: env keys `MAPTILER_API_KEY`, `HERE_API_KEY`, `OPENWEATHER_API_KEY` (all optional, keyless fallbacks)
+- Requirements: folium, streamlit-folium (pinned); tests: +7 (119 total)
+
 ## v5.2.0 — Auto Carrier Allocation + Dispute Manager
 - **NEW**: `modules/allocation.py` — multi-criteria carrier allocation: cost/service/emissions/reliability scoring under user weights, score-proportional shares with a 50% concentration cap, blended-mix impact (cost, on-time, CO₂e), Decision Center proposal builder
 - **NEW**: `modules/disputes.py` — dispute lifecycle: raise from audit-flagged charges (deduped), validated OPEN → SENT → RESOLVED / WRITTEN_OFF transitions, recovered amounts, recovery-rate KPIs, audit events

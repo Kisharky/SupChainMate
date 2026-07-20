@@ -103,6 +103,31 @@ export interface BacktestResponse {
 
 export type DecisionStatus = "APPROVED" | "REJECTED" | "MODIFIED" | "ESCALATED";
 
+export interface AdminResponse {
+  providers: { capability: string; provider: string; model: string; configured: boolean }[];
+  api_keys: { name: string; purpose: string; configured: boolean; masked: string }[];
+  audit: AuditEntry[];
+  users: { name: string; email: string; role: string; status: string }[];
+  roles: { role: string; view: boolean; run: boolean; approve: boolean; admin: boolean }[];
+  integrations: { name: string; kind: string; status: string }[];
+  source: string;
+}
+
+export interface RepricingTicket {
+  sku: string; current_price: number; recommended_price: number; uplift_pct: number;
+  current_margin_pct: number; annual_impact: number;
+}
+export interface CommercialResponse {
+  segments: { segment: string; orders: number; revenue: number; margin: number; margin_pct: number }[];
+  kpis: { total_revenue: number; net_margin: number; net_margin_pct: number; revenue_leakage: number; underpriced_skus: number; repricing_upside: number };
+  leakage: { freight: number; discount: number; total: number };
+  waterfall: { label: string; value: number; kind: string }[];
+  tickets: RepricingTicket[];
+  assumptions: { aov: number; gross_margin_pct: number; target_margin_pct: number };
+  source: string;
+}
+export interface EmailResponse { sku: string; subject: string; body: string; ticket: RepricingTicket | null; }
+
 // ---- Endpoints --------------------------------------------------------------
 export const api = {
   kpis: () => get<KpiResponse>("/api/kpis"),
@@ -119,6 +144,9 @@ export const api = {
   decide: (rec_key: string, status: DecisionStatus, note = "") =>
     post<{ ok: boolean; rec_key: string; status: string }>("/api/decisions/decide", { rec_key, status, note }),
   audit: () => get<{ entries: AuditEntry[] }>("/api/audit"),
+  admin: () => get<AdminResponse>("/api/admin"),
+  commercial: () => get<CommercialResponse>("/api/commercial"),
+  repricingEmail: (sku: string) => post<EmailResponse>("/api/commercial/email", { sku }),
   knowledgeAsk: (query: string) => post<KnowledgeAnswer>("/api/knowledge/ask", { query }),
   runWorkflow: (workflow = "full_control_tower", ai_enabled = false) =>
     post<WorkflowRun>("/api/agents/run", { workflow, ai_enabled }),

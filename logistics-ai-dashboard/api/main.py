@@ -49,6 +49,10 @@ class DecideRequest(BaseModel):
     actor: str = "user"
 
 
+class EmailRequest(BaseModel):
+    sku: str
+
+
 class WorkflowRequest(BaseModel):
     workflow: str = "full_control_tower"
     ai_enabled: bool = False
@@ -142,6 +146,21 @@ def audit(limit: int = 200) -> dict:
 @app.get("/api/reports")
 def reports() -> dict:
     return services.reports_list()
+
+
+@app.get("/api/admin")
+def admin() -> dict:
+    return services.admin_snapshot()
+
+
+@app.get("/api/commercial")
+def commercial() -> dict:
+    return services.commercial_snapshot()
+
+
+@app.post("/api/commercial/email")
+def commercial_email(req: EmailRequest) -> dict:
+    return services.repricing_email(req.sku)
 
 
 @app.get("/api/ai/status")

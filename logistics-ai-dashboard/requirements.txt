@@ -18,5 +18,9 @@ holidays==0.100
 folium==0.20.0
 streamlit-folium==0.27.2
 
+# REST API (frontend backend)
+fastapi==0.139.2
+uvicorn[standard]==0.38.0
+
 # Development / testing
 pytest==9.1.1

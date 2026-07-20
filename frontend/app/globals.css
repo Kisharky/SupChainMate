@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Design tokens — single source of truth (mirrors design/tokens.css).
+   Inter + JetBrains Mono are injected as CSS vars by app/layout.tsx.
+   ============================================================ */
+:root {
+  --navy-950:#060B16; --navy-900:#0B1220; --navy-850:#0E1729; --navy-800:#111A2E;
+  --navy-700:#16213A; --navy-600:#1E2A44; --navy-500:#2A3A5C;
+  --slate-300:#B4BECE; --slate-400:#8A94A6; --slate-500:#66707F; --slate-600:#4B5563;
+  --emerald-500:#10B981; --emerald-400:#34D399; --emerald-glow:rgba(16,185,129,.18);
+  --good:#10B981; --warning:#F59E0B; --critical:#EF4444; --info:#38BDF8;
+  --good-bg:rgba(16,185,129,.12); --warning-bg:rgba(245,158,11,.12);
+  --critical-bg:rgba(239,68,68,.12); --info-bg:rgba(56,189,248,.12);
+
+  --bg:var(--navy-900); --bg-sunken:var(--navy-950); --panel:var(--navy-800);
+  --panel-2:var(--navy-850); --rail:var(--navy-850); --hairline:var(--navy-600);
+  --hairline-strong:var(--navy-500); --text:#EAF0F8; --text-2:var(--slate-300);
+  --text-3:var(--slate-400); --accent:var(--emerald-500); --accent-ink:#04170F; --focus:#6EE7B7;
+  --shadow:0 1px 2px rgba(3,7,18,.4),0 8px 24px -12px rgba(3,7,18,.55);
+}
+@media (prefers-color-scheme:light){:root{
+  --bg:#F5F7FA; --bg-sunken:#EEF1F6; --panel:#FFF; --panel-2:#FFF; --rail:#FFF;
+  --hairline:#D4DBE6; --hairline-strong:#B4BECE; --text:#0B1220; --text-2:#4B5563;
+  --text-3:#66707F; --accent-ink:#FFF; --focus:#059669;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 12px 28px -16px rgba(16,24,40,.22);
+}}
+:root[data-theme="light"]{
+  --bg:#F5F7FA; --bg-sunken:#EEF1F6; --panel:#FFF; --panel-2:#FFF; --rail:#FFF;
+  --hairline:#D4DBE6; --hairline-strong:#B4BECE; --text:#0B1220; --text-2:#4B5563;
+  --text-3:#66707F; --accent-ink:#FFF; --focus:#059669;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 12px 28px -16px rgba(16,24,40,.22);
+}
+:root[data-theme="dark"]{
+  --bg:var(--navy-900); --bg-sunken:var(--navy-950); --panel:var(--navy-800);
+  --panel-2:var(--navy-850); --rail:var(--navy-850); --hairline:var(--navy-600);
+  --hairline-strong:var(--navy-500); --text:#EAF0F8; --text-2:var(--slate-300);
+  --text-3:var(--slate-400); --accent-ink:#04170F; --focus:#6EE7B7;
+  --shadow:0 1px 2px rgba(3,7,18,.4),0 8px 24px -12px rgba(3,7,18,.55);
+}
+
+@layer base {
+  body { background: var(--bg); color: var(--text); }
+  * { border-color: var(--hairline); }
+  ::selection { background: var(--emerald-glow); }
+}
+
+@layer utilities {
+  .tnum { font-variant-numeric: tabular-nums; }
+  .eyebrow { font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); font-weight:600; }
+}

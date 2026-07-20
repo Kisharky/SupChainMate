@@ -26,7 +26,28 @@ export type KpiStatus = "good" | "warning" | "critical" | "info";
 export interface Kpi {
   value: number; unit: string; prefix?: string; delta?: number; status: KpiStatus;
 }
-export interface KpiResponse { kpis: Record<string, Kpi>; source: string; }
+export interface KpiResponse { kpis: Record<string, Kpi>; live?: Record<string, boolean>; source: string; }
+
+export interface CarrierRow { carrier: string; shipments: number; on_time: number | null; grade: string; avg_delay: number; }
+
+export interface MapPoint { name: string; lat: number; lon: number; size: number; }
+export interface MapRoute { from: { lat: number; lon: number; name: string }; to: { lat: number; lon: number; name: string }; status: KpiStatus; distance_km: number; }
+export interface MapResponse { tiles_url: string | null; attribution: string; center: [number, number]; zoom: number; points: MapPoint[]; routes: MapRoute[]; source: string; }
+
+export interface ForecastPoint { ds: string; y?: number; yhat?: number; lower?: number; upper?: number; }
+export interface ForecastResponse {
+  history: ForecastPoint[]; forecast: ForecastPoint[];
+  insights: { next_week_total?: number; stockout_risk_short?: string; stockout_risk_detail?: string; demand_pct_change_vs_prior_week?: number; historical_p90_daily?: number };
+  source: string;
+}
+
+export interface ProcurementRow { carrier: string; score: number; on_time: number | null; current_share: number | null; recommended_share: number | null; }
+export interface ProcurementResponse { carriers: ProcurementRow[]; impact: Record<string, number>; source: string; }
+
+export interface OperationsResponse { kpis: Record<string, number>; status_counts: Record<string, number>; source: string; }
+
+export interface WarehouseZone { zone: string; lat: number; lon: number; locations: number; utilization: number; }
+export interface WarehouseResponse { zones: WarehouseZone[]; avg_utilization: number; hub_count: number; source: string; }
 
 export interface InventoryRow {
   sku: string; abc: string; reorder_point: number; eoq: number;
@@ -40,7 +61,7 @@ export interface Lane { from: string; to: string; status: KpiStatus; }
 export interface DelayedShipment { id: string; lane: string; reason: string; eta_slip: string; }
 export interface LogisticsResponse {
   kpis: { in_transit: number; delayed: number; on_time_rate: number; avg_cost: number };
-  lanes: Lane[]; delayed: DelayedShipment[]; source: string;
+  lanes: Lane[]; delayed: DelayedShipment[]; carriers?: CarrierRow[]; source: string;
 }
 
 export interface Citation { marker?: string; source?: string; name?: string; ref?: string; }
@@ -66,6 +87,11 @@ export const api = {
   kpis: () => get<KpiResponse>("/api/kpis"),
   inventory: () => get<InventoryResponse>("/api/inventory"),
   logistics: () => get<LogisticsResponse>("/api/logistics"),
+  logisticsMap: () => get<MapResponse>("/api/logistics/map"),
+  forecast: () => get<ForecastResponse>("/api/forecast"),
+  procurement: () => get<ProcurementResponse>("/api/procurement"),
+  operations: () => get<OperationsResponse>("/api/operations"),
+  warehouse: () => get<WarehouseResponse>("/api/warehouse"),
   reports: () => get<ReportsResponse>("/api/reports"),
   knowledgeAsk: (query: string) => post<KnowledgeAnswer>("/api/knowledge/ask", { query }),
   runWorkflow: (workflow = "full_control_tower", ai_enabled = false) =>

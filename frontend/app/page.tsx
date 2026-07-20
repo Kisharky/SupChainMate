@@ -16,10 +16,13 @@ const KPI_ORDER: { key: string; label: string; seed: number }[] = [
 
 export default function ControlTower() {
   const [kpis, setKpis] = useState<Record<string, Kpi> | null>(null);
+  const [live, setLive] = useState<Record<string, boolean>>({});
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [running, setRunning] = useState(false);
 
-  useEffect(() => { api.kpis().then((r) => setKpis(r.kpis)).catch(() => setKpis(null)); }, []);
+  useEffect(() => {
+    api.kpis().then((r) => { setKpis(r.kpis); setLive(r.live ?? {}); }).catch(() => setKpis(null));
+  }, []);
 
   const runAgents = async () => {
     setRunning(true);
@@ -42,9 +45,19 @@ export default function ControlTower() {
         {KPI_ORDER.map(({ key, label, seed }) => {
           const k = kpis?.[key];
           return (
-            <KpiCard key={key} label={label} seed={seed}
-              value={k ? k.value : "—"} unit={k?.unit} prefix={k?.prefix}
-              delta={k?.delta} status={k?.status ?? "good"} />
+            <div key={key} className="relative">
+              <KpiCard label={label} seed={seed}
+                value={k ? k.value : "—"} unit={k?.unit} prefix={k?.prefix}
+                delta={k?.delta} status={k?.status ?? "good"} />
+              {kpis && (
+                <span className="absolute top-3 right-3 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                  style={live[key]
+                    ? { color: "var(--good)", background: "var(--good-bg)" }
+                    : { color: "var(--text-3)", background: "color-mix(in srgb,var(--text) 8%,transparent)" }}>
+                  {live[key] ? "● live" : "demo"}
+                </span>
+              )}
+            </div>
           );
         })}
       </div>
@@ -108,8 +121,9 @@ export default function ControlTower() {
 
       {kpis && (
         <p className="mt-4 text-[0.75rem] text-ink-3">
-          Headline KPIs are a representative board-level snapshot; the Inventory screen shows genuinely
-          computed engine output. Agent runs above execute the real 9-agent orchestrator.
+          KPIs marked <b style={{ color: "var(--good)" }}>● live</b> are computed from the real engines
+          (health score, carrier scorecard, SKU plan); <b>demo</b> figures await a live operational feed.
+          Agent runs above execute the real 9-agent orchestrator.
         </p>
       )}
     </AppShell>

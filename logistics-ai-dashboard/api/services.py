@@ -112,36 +112,302 @@ def inventory_snapshot() -> dict[str, Any]:
 
 # ---- Executive KPIs ----------------------------------------------------------
 def executive_kpis() -> dict[str, Any]:
-    """Control-tower headline KPIs.
+    """Control-tower headline KPIs, computed from real engine output where
+    derivable and labelled per-metric with ``live`` vs ``representative``.
 
-    These six board-level metrics (network health, risk count, forecast
-    accuracy, supplier health, …) are not derivable from the Olist
-    order-timestamp demo data, so they are served as a representative
-    snapshot and labelled as such. The genuinely computed figures live on
-    the Inventory endpoint. Wire real KPIs here once operational feeds
-    (WMS / TMS / supplier scorecards) are connected.
+    * supply_chain_health — network health score (modules.health_check)
+    * late_shipments / todays_risks — real control-tower shipment KPIs
+    * supplier_health — mean on-time across the carrier scorecard
+    * inventory_value — avg on-hand value from the SKU plan × unit price
+    * forecast_accuracy — representative until a scored backtest is wired
     """
-    return {"kpis": _FALLBACK_KPIS, "source": "representative"}
+    def build() -> dict[str, Any]:
+        import pandas as pd
+        kpis = {k: dict(v) for k, v in _FALLBACK_KPIS.items()}
+        live: dict[str, bool] = {k: False for k in kpis}
+
+        # Shipments → health, late, risks, supplier health
+        try:
+            shipments, sk, scorecard = _shipments()
+            from modules import health_check
+            hc = health_check.run_health_check(shipments=shipments, kpis=sk,
+                                               delay_risk=sk.get("avg_delay_days"))
+            if hc.get("score") is not None:
+                kpis["supply_chain_health"].update(value=int(round(hc["score"])),
+                                                   status=_health_status(hc["score"]))
+                live["supply_chain_health"] = True
+            if scorecard is not None and "On-Time %" in scorecard.columns:
+                sh = float(scorecard["On-Time %"].dropna().mean())
+                if not pd.isna(sh):
+                    kpis["supplier_health"].update(value=int(round(sh)),
+                                                   status=_health_status(sh))
+                    live["supplier_health"] = True
+                # Current-signal counts derived from carrier performance rather
+                # than cumulative history (the demo dataset is fully delivered):
+                # risks = carriers graded below B; late = carriers running a
+                # positive average delay right now.
+                risks = int((~scorecard["Grade"].isin(["A", "B"])).sum())
+                kpis["todays_risks"].update(value=risks,
+                                            status="critical" if risks else "good")
+                live["todays_risks"] = True
+                if "Avg Delay (days)" in scorecard.columns:
+                    late = int((scorecard["Avg Delay (days)"] > 0.5).sum())
+                    kpis["late_shipments"].update(value=late,
+                                                  status="warning" if late else "good")
+                    live["late_shipments"] = True
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Inventory value from the real SKU plan × unit price
+        try:
+            classified, plan = _inventory_frame()
+            merged = plan.merge(classified[["SKU", "Unit Price"]], on="SKU", how="left")
+            price = merged["Unit Price"].fillna(15.0)
+            avg_units = merged["Safety Stock"] + merged["EOQ"] / 2.0
+            inv_value = float((avg_units * price).sum())
+            kpis["inventory_value"].update(value=round(inv_value / 1_000_000, 1))
+            live["inventory_value"] = True
+        except Exception:  # noqa: BLE001
+            pass
+
+        return {"kpis": kpis, "live": live}
+
+    return _safe(build, {"kpis": _FALLBACK_KPIS,
+                         "live": {k: False for k in _FALLBACK_KPIS}})
+
+
+def _health_status(score: float) -> str:
+    return "good" if score >= 85 else "warning" if score >= 70 else "critical"
+
+
+# ---- Forecasting -------------------------------------------------------------
+@_ttl_cache(900)
+def _forecast_frame():
+    """Prophet demand forecast over the Olist order history (cached 15 min)."""
+    from modules import forecast
+    orders = forecast.load_orders()
+    daily = forecast.daily_demand(orders)
+    # daily_demand adds an ``external_signal`` regressor; the module's
+    # run_forecast doesn't populate it for future dates, so drive Prophet
+    # directly here (backend logic untouched) and default the future signal to 0.
+    model = forecast.fit_prophet_model(daily)
+    future = model.make_future_dataframe(periods=14)
+    if "external_signal" in daily.columns:
+        future["external_signal"] = 0.0
+    fc = model.predict(future)
+    insights = forecast.forecast_insights(fc, daily, horizon_days=14)
+    return daily, fc, insights
+
+
+def forecast_snapshot() -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        daily, fc, insights = _forecast_frame()
+        hist = daily.tail(90)
+        history = [{"ds": str(d)[:10], "y": float(y)}
+                   for d, y in zip(hist["ds"], hist["y"])]
+        fut = fc.tail(14)
+        forecast_rows = [{
+            "ds": str(d)[:10],
+            "yhat": round(float(yh), 1),
+            "lower": round(float(lo), 1),
+            "upper": round(float(hi), 1),
+        } for d, yh, lo, hi in zip(fut["ds"], fut["yhat"],
+                                   fut["yhat_lower"], fut["yhat_upper"])]
+        return {"history": history, "forecast": forecast_rows,
+                "insights": _jsonable(insights)}
+    return _safe(build, {"history": [], "forecast": [], "insights": {}})
+
+
+# ---- Procurement -------------------------------------------------------------
+def procurement_snapshot() -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        import pandas as pd
+        from modules import allocation
+        shipments, sk, scorecard = _shipments()
+        if scorecard is None:
+            raise ValueError("no scorecard")
+        profiles = allocation.build_carrier_profiles(scorecard, shipments)
+        scored = allocation.allocation_scores(profiles)
+        impact = allocation.allocation_impact(scored, int(sk.get("total", len(shipments))))
+        rows = [{
+            "carrier": str(r.get("Carrier", "—")),
+            "score": round(float(r.get("Score", r.get("score", 0)) or 0), 1),
+            "on_time": None if pd.isna(r.get("On-Time %")) else float(r.get("On-Time %")),
+            "current_share": round(float(r.get("Current Share", 0) or 0) * 100, 1)
+            if r.get("Current Share") is not None else None,
+            "recommended_share": round(float(r.get("Recommended Share", 0) or 0) * 100, 1)
+            if r.get("Recommended Share") is not None else None,
+        } for _, r in scored.iterrows()]
+        return {"carriers": rows, "impact": _jsonable(impact)}
+    return _safe(build, {"carriers": [], "impact": {}})
+
+
+# ---- Operations --------------------------------------------------------------
+def operations_snapshot() -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        from modules import forecast, optimization
+        shipments, sk, _ = _shipments()
+        orders = forecast.load_orders()
+        net = optimization.network_summary(orders) or {}
+        status_counts = shipments["status"].value_counts().to_dict()
+        return {
+            "kpis": {
+                "in_transit": int(sk.get("in_transit", 0)),
+                "on_time_pct": round(float(sk.get("on_time_pct") or 0), 1),
+                "avg_lead_days": round(float(net.get("avg_lead_days", 0)), 1),
+                "delivered_observed": int(net.get("n_delivered_observed", 0)),
+            },
+            "status_counts": {str(k): int(v) for k, v in status_counts.items()},
+        }
+    return _safe(build, {"kpis": {}, "status_counts": {}})
+
+
+# ---- Warehouse (network zones from the geo clustering) -----------------------
+def warehouse_snapshot() -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        cents = _geo_centroids().sort_values("size", ascending=False).reset_index(drop=True)
+        total = float(cents["size"].sum()) or 1.0
+        # Utilisation proxy: share of demand each zone serves, capped at 100.
+        zones = [{
+            "zone": f"Hub {int(r['cluster'])}",
+            "lat": round(float(r["lat"]), 3),
+            "lon": round(float(r["lon"]), 3),
+            "locations": int(r["size"]),
+            "utilization": round(min(100.0, r["size"] / total * 100 * len(cents)), 1),
+        } for _, r in cents.iterrows()]
+        avg_util = round(sum(z["utilization"] for z in zones) / len(zones), 1) if zones else 0.0
+        return {"zones": zones, "avg_utilization": avg_util, "hub_count": len(zones)}
+    return _safe(build, {"zones": [], "avg_utilization": 0.0, "hub_count": 0})
+
+
+# ---- Shipments (shared control-tower pipeline) -------------------------------
+@_ttl_cache(300)
+def _shipments():
+    """Real shipment board from the Olist orders (cached 5 min).
+
+    Uses the same control-tower pipeline as the Streamlit app: attach demo
+    carriers/costs, then derive per-shipment status, delay-vs-promise and
+    health. Returns ``(shipments_df, kpis, scorecard_df)``.
+    """
+    import pandas as pd
+    from modules import control_tower
+    orders = pd.read_csv("data/olist_orders_dataset.csv")
+    orders = control_tower.assign_demo_carriers(orders)
+    shipments = control_tower.prepare_shipments(orders)
+    kpis = control_tower.shipment_kpis(shipments)
+    scorecard = control_tower.carrier_scorecard(shipments)
+    return shipments, kpis, scorecard
+
+
+_STATUS = {"good": "good", "warning": "warning", "critical": "critical"}
 
 
 # ---- Logistics ---------------------------------------------------------------
+_LOGI_FALLBACK = {
+    "kpis": {"in_transit": 128, "delayed": 3, "on_time_rate": 94, "avg_cost": 3.1},
+    "lanes": [
+        {"from": "Shanghai DC", "to": "Rotterdam", "status": "good"},
+        {"from": "Ningbo", "to": "Melbourne", "status": "warning"},
+        {"from": "Rotterdam", "to": "Lyon", "status": "good"},
+    ],
+    "delayed": [
+        {"id": "SHP-20481", "lane": "Ningbo → Melbourne", "reason": "port congestion", "eta_slip": "+2d"},
+    ],
+    "carriers": [],
+}
+
+
 def logistics_snapshot() -> dict[str, Any]:
-    fallback = {
-        "kpis": {"in_transit": 128, "delayed": 3, "on_time_rate": 94, "avg_cost": 3.1},
-        "lanes": [
-            {"from": "Shanghai DC", "to": "Rotterdam", "status": "good"},
-            {"from": "Shanghai DC", "to": "Auckland", "status": "good"},
-            {"from": "Ningbo", "to": "Melbourne", "status": "warning"},
-            {"from": "Ningbo", "to": "Auckland", "status": "warning"},
-            {"from": "Rotterdam", "to": "Lyon", "status": "good"},
-        ],
-        "delayed": [
-            {"id": "SHP-20481", "lane": "Ningbo → Melbourne", "reason": "port congestion", "eta_slip": "+2d"},
-            {"id": "SHP-20455", "lane": "Ningbo → Auckland", "reason": "awaiting berth", "eta_slip": "+1d"},
-            {"id": "SHP-20390", "lane": "Rotterdam → Lyon", "reason": "customs hold", "eta_slip": "+9h"},
-        ],
-    }
-    return _safe(lambda: fallback, fallback)  # tracking pipeline is upload-driven
+    def build() -> dict[str, Any]:
+        import pandas as pd
+        shipments, kpis, scorecard = _shipments()
+        cost = None
+        if scorecard is not None and "Avg Cost/Shipment ($)" in scorecard.columns:
+            cost = float(scorecard["Avg Cost/Shipment ($)"].mean())
+        # A few worst-delayed real shipments for the feed
+        late = shipments[shipments["delay_days"].fillna(0) > 0].sort_values(
+            "delay_days", ascending=False).head(5)
+        delayed = [{
+            "id": str(r["shipment_id"]),
+            "lane": str(r.get("carrier", "—")),
+            "reason": f"{int(r['delay_days'])}d late vs promise",
+            "eta_slip": f"+{int(r['delay_days'])}d",
+        } for _, r in late.iterrows()]
+        carriers = []
+        if scorecard is not None:
+            for _, r in scorecard.head(8).iterrows():
+                ot = r.get("On-Time %")
+                carriers.append({
+                    "carrier": str(r["Carrier"]),
+                    "shipments": int(r["Shipments"]),
+                    "on_time": None if pd.isna(ot) else float(ot),
+                    "grade": str(r.get("Grade", "—")),
+                    "avg_delay": float(r.get("Avg Delay (days)", 0) or 0),
+                })
+        return {
+            "kpis": {
+                "in_transit": int(kpis.get("in_transit", 0)),
+                "delayed": int(kpis.get("late", 0)),
+                "on_time_rate": round(float(kpis.get("on_time_pct") or 0), 1),
+                "avg_cost": round(cost, 2) if cost else None,  # $ per shipment
+            },
+            "lanes": _LOGI_FALLBACK["lanes"],  # illustrative until lane geo is fed
+            "delayed": delayed or _LOGI_FALLBACK["delayed"],
+            "carriers": carriers,
+        }
+    return _safe(build, _LOGI_FALLBACK)
+
+
+# ---- Map (real geo from the Olist geolocation join) --------------------------
+@_ttl_cache(600)
+def _geo_centroids():
+    """KMeans hub centroids over real customer lat/lon (cached 10 min)."""
+    import pandas as pd
+    from modules import network
+    customers = pd.read_csv("data/olist_customers_dataset.csv")
+    coords = network.prepare_customer_data(customers)
+    clustered = network.run_clustering(coords, n_clusters=6)
+    cents = clustered.groupby("cluster").agg(
+        lat=("lat", "mean"), lon=("lon", "mean"), size=("lat", "size")
+    ).reset_index()
+    return cents
+
+
+def logistics_map() -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        from modules import geo
+        cents = _geo_centroids()
+        cents = cents.sort_values("size", ascending=False).reset_index(drop=True)
+        points = [{
+            "name": f"Hub {int(r['cluster'])}",
+            "lat": round(float(r["lat"]), 4),
+            "lon": round(float(r["lon"]), 4),
+            "size": int(r["size"]),
+        } for _, r in cents.iterrows()]
+        # Routes: primary hub → every other hub, flagged by relative distance
+        routes = []
+        if points:
+            hub = points[0]
+            from modules.network import haversine_km
+            dists = [haversine_km(hub["lat"], hub["lon"], p["lat"], p["lon"]) for p in points[1:]]
+            far = max(dists) if dists else 1.0
+            for p, d in zip(points[1:], dists):
+                routes.append({
+                    "from": {"lat": hub["lat"], "lon": hub["lon"], "name": hub["name"]},
+                    "to": {"lat": p["lat"], "lon": p["lon"], "name": p["name"]},
+                    "status": "warning" if d > 0.7 * far else "good",
+                    "distance_km": round(d, 0),
+                })
+        center = ([sum(p["lat"] for p in points) / len(points),
+                   sum(p["lon"] for p in points) / len(points)] if points else [-15.0, -50.0])
+        return {
+            "tiles_url": geo.maptiler_tiles_url(),
+            "attribution": geo.maptiler_attribution(),
+            "center": center, "zoom": 4,
+            "points": points, "routes": routes,
+        }
+    return _safe(build, {"tiles_url": None, "attribution": "", "center": [-15.0, -50.0],
+                         "zoom": 4, "points": [], "routes": []})
 
 
 # ---- Knowledge (RAG) ---------------------------------------------------------

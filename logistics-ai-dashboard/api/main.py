@@ -67,6 +67,31 @@ def logistics() -> dict:
     return services.logistics_snapshot()
 
 
+@app.get("/api/logistics/map")
+def logistics_map() -> dict:
+    return services.logistics_map()
+
+
+@app.get("/api/forecast")
+def forecast() -> dict:
+    return services.forecast_snapshot()
+
+
+@app.get("/api/procurement")
+def procurement() -> dict:
+    return services.procurement_snapshot()
+
+
+@app.get("/api/operations")
+def operations() -> dict:
+    return services.operations_snapshot()
+
+
+@app.get("/api/warehouse")
+def warehouse() -> dict:
+    return services.warehouse_snapshot()
+
+
 @app.get("/api/workflows")
 def workflows() -> dict:
     return services.list_workflows()

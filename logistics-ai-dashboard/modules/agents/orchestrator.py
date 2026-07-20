@@ -74,7 +74,8 @@ class Orchestrator:
 
     # ── Execution ─────────────────────────────────────────────────────────────
     def run_workflow(self, name: str, shared: dict[str, Any],
-                     sync_to_decision_center: bool = True) -> WorkflowRun:
+                     sync_to_decision_center: bool = True,
+                     ai_enabled: bool = False) -> WorkflowRun:
         if name not in self._workflows:
             raise ValueError(f"Unknown workflow: {name}")
         run = WorkflowRun(workflow=name)
@@ -86,12 +87,14 @@ class Orchestrator:
         shared = dict(shared)
         shared["memory"] = store.last_agent_runs()
 
-        store.log_event("orchestrator", "workflow_started", details=name)
+        store.log_event("orchestrator", "workflow_started",
+                        details=f"{name}{' · AI reasoning' if ai_enabled else ''}")
         _log.info("Workflow '%s': %s", name, " -> ".join(self._workflows[name]))
 
         for agent_name in self._workflows[name]:
             agent = self._agents[agent_name]
-            result = agent.execute(shared, upstream, upstream_conf)
+            result = agent.execute(shared, upstream, upstream_conf,
+                                   ai_enabled=ai_enabled)
             run.results.append(result)
             upstream[agent_name] = result.outputs
             upstream_conf[agent_name] = result.confidence

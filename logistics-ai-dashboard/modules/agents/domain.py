@@ -325,6 +325,7 @@ class ExecutiveAgent(BaseAgent):
     name = "executive"
     objective = "Synthesize everything into one decision-ready brief."
     required_context = ["health", "memory"]
+    reasoning_capability = "reasoning.executive"   # router picks the executive model
     depends_on = ["demand_forecast", "inventory", "procurement", "logistics",
                   "supplier_risk", "warehouse", "sustainability"]
 

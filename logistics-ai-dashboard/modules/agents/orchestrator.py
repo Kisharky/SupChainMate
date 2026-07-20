@@ -18,9 +18,10 @@ import config
 from modules import store, trust
 from modules.agents.base import AgentResult, BaseAgent
 from modules.agents.domain import (DemandForecastAgent, ExecutiveAgent,
-                                   InventoryAgent, LogisticsAgent,
-                                   ProcurementAgent, SupplierRiskAgent,
-                                   SustainabilityAgent, WarehouseAgent)
+                                   InventoryAgent, KnowledgeAgent,
+                                   LogisticsAgent, ProcurementAgent,
+                                   SupplierRiskAgent, SustainabilityAgent,
+                                   WarehouseAgent)
 
 _log = config.get_logger(__name__)
 
@@ -117,17 +118,21 @@ class Orchestrator:
 
 
 def build_default_orchestrator() -> Orchestrator:
-    """The standard eight-agent roster and its three built-in workflows."""
+    """The specialist-agent roster and its built-in workflows. The Executive
+    agent coordinates — it depends on every specialist and runs last."""
     orch = Orchestrator()
     for agent in (DemandForecastAgent(), InventoryAgent(), ProcurementAgent(),
                   LogisticsAgent(), SupplierRiskAgent(), WarehouseAgent(),
-                  SustainabilityAgent(), ExecutiveAgent()):
+                  SustainabilityAgent(), KnowledgeAgent(), ExecutiveAgent()):
         orch.register(agent)
     orch.define_workflow("planning_chain",
                          ["demand_forecast", "inventory", "procurement", "executive"])
     orch.define_workflow("logistics_review",
                          ["logistics", "supplier_risk", "sustainability", "executive"])
+    # Executive coordinates every specialist (dependency-ordered: forecast
+    # before inventory before procurement; risk before the executive brief).
     orch.define_workflow("full_control_tower",
                          ["demand_forecast", "inventory", "procurement", "logistics",
-                          "supplier_risk", "warehouse", "sustainability", "executive"])
+                          "supplier_risk", "warehouse", "sustainability", "knowledge",
+                          "executive"])
     return orch

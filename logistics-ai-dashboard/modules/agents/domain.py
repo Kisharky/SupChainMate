@@ -1,7 +1,8 @@
 """
 modules/agents/domain.py
-The eight domain agents. Each wraps existing deterministic engines —
-nothing is rebuilt — and declares exactly the context it needs.
+The domain agents. Each wraps existing deterministic engines — nothing is
+rebuilt — declares exactly the context it needs, and requests AI
+*capabilities* (never a model) through the router.
 
 Communication: downstream agents read upstream outputs via ctx.upstream
 (e.g. Inventory reads the Demand agent's horizon; Procurement reads
@@ -321,13 +322,58 @@ def _memory_deltas(memory: dict, upstream: dict[str, dict]) -> list[str]:
     return notes[:6]
 
 
+class KnowledgeAgent(BaseAgent):
+    name = "knowledge"
+    objective = "Ground decisions in company policy, SOPs, and contracts."
+    required_context = ["kpis", "scorecard"]
+
+    # Standing themes the agent checks the knowledge base for, derived from
+    # the operational picture. The KB is this agent's domain resource.
+    _THEMES = {
+        "carrier SLA / on-time performance policy": ("scorecard", "grade"),
+        "late delivery and penalty policy": ("kpis", "late"),
+        "reorder and safety stock policy": (None, None),
+        "freight invoice payment terms": (None, None),
+    }
+
+    def run(self, ctx: ScopedContext) -> AgentResult:
+        res = AgentResult(agent=self.name, objective=self.objective)
+        from modules import knowledge
+        stats = knowledge.kb_stats()
+        if stats["documents"] == 0:
+            res.findings.append("Knowledge base is empty — upload SOPs, policies, and "
+                                "contracts so decisions can be grounded in them.")
+            res.confidence, res.confidence_basis = 25.0, "no documents indexed"
+            res.outputs = {"policies_found": 0, "documents": 0}
+            return res
+
+        found, covered = 0, []
+        for theme in self._THEMES:
+            hits = knowledge.retrieve(theme, top_k=1)
+            if hits:
+                found += 1
+                covered.append(theme)
+                res.findings.append(f"Policy found for '{theme}': "
+                                    f"\"{hits[0]['text'][:120]}…\" (from {hits[0]['doc']}).")
+        if not covered:
+            res.findings.append(f"{stats['documents']} document(s) indexed, but none match "
+                                f"the current operational themes — check coverage.")
+        retr = stats.get("indexed_chunks", 0)
+        res.confidence = float(min(90, 40 + found * 12 + min(stats["documents"], 5) * 2))
+        res.confidence_basis = (f"{stats['documents']} docs / {stats['chunks']} chunks "
+                                f"({retr} vector-indexed); {found}/{len(self._THEMES)} themes covered")
+        res.outputs = {"policies_found": found, "documents": stats["documents"],
+                       "themes_covered": covered}
+        return res
+
+
 class ExecutiveAgent(BaseAgent):
     name = "executive"
     objective = "Synthesize everything into one decision-ready brief."
     required_context = ["health", "memory"]
-    reasoning_capability = "reasoning.executive"   # router picks the executive model
     depends_on = ["demand_forecast", "inventory", "procurement", "logistics",
-                  "supplier_risk", "warehouse", "sustainability"]
+                  "supplier_risk", "warehouse", "sustainability", "knowledge"]
+    reasoning_capability = "reasoning.executive"   # router picks the executive model
 
     def run(self, ctx: ScopedContext) -> AgentResult:
         res = AgentResult(agent=self.name, objective=self.objective)
@@ -362,6 +408,10 @@ class ExecutiveAgent(BaseAgent):
         w = up.get("warehouse", {})
         if w:
             res.findings.append(f"Warehouse: network efficiency {w.get('avg_efficiency', 0):.0f}%.")
+        kn = up.get("knowledge", {})
+        if kn:
+            res.findings.append(f"Policy: {kn.get('policies_found', 0)} relevant "
+                                f"policy area(s) grounded from {kn.get('documents', 0)} document(s).")
         su = up.get("sustainability", {})
         if su:
             res.findings.append(f"Sustainability: {su.get('total_tco2e', 0):,.1f} tCO₂e; "

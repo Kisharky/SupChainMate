@@ -6,14 +6,14 @@
 
 *A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
 
-[![Version](https://img.shields.io/badge/version-5.4.0-brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.5.0-brightgreen)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-136%20passing-brightgreen)](logistics-ai-dashboard/tests)
+[![Tests](https://img.shields.io/badge/tests-139%20passing-brightgreen)](logistics-ai-dashboard/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 [Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
@@ -156,7 +156,9 @@ Business Logic (deterministic)  →  Agents  →  ai.AI (Router)  →  Capabilit
 
 - **Graceful fallback everywhere** — a capability with no key falls back down its declared chain, then to Groq, then to a deterministic/extractive path. The platform runs identically with zero NVIDIA keys.
 - **Agents call `AI.ask()`** — the base class adds an AI narrative through the router when reasoning is enabled (opt-in toggle in the Agent Orchestrator); numbers still come from the deterministic engines, the LLM only narrates.
-- **Every AI call is audit-logged** via the router's memory sink.
+- **Every AI call is observed** — `ai/observability.py` logs timestamp, capability, model, provider, latency, tokens, and cache/fallback flags to SQLite (AI Platform Observability panel).
+- **Response caching** (`ai/cache.py`, LRU+TTL) and **pooled provider clients** cut repeated-call latency and cost; async `router.aask()` is available for non-Streamlit deployment.
+- **Enterprise RAG** (`ai/rag.py`): overlap chunking → embedding generation → **cached vector index** → hybrid semantic+lexical retrieval → citations → reasoning, all degrading to lexical/extractive without keys.
 
 ---
 
@@ -240,6 +242,7 @@ SupChainMate/
 │   │   ├── router.py             #   AI.ask() — the only capability→model resolver
 │   │   ├── registry.py           #   Capability → ModelSpec plan
 │   │   ├── types.py              #   Capability, ModelSpec, AIResponse (framework-free)
+│   │   ├── rag.py · observability.py · cache.py   #   enterprise RAG, request log, response cache
 │   │   ├── reasoning.py · embeddings.py · coding.py · safety.py · ocr.py · vision.py · memory.py
 │   │   └── providers/nvidia.py   #   Cached NIM client, retries, timeouts
 │   ├── style.css                 # HUD theme

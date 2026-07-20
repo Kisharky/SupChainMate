@@ -122,13 +122,48 @@ def test_router_embed():
     assert resp.ok and len(resp.vectors) == 2
 
 
-def test_memory_sink_records_calls():
+def test_observer_records_calls():
     records = []
     router = AIRouter(providers={"nvidia": FakeProvider()})
-    router.set_memory_sink(records.append)
+    router.set_observer(lambda task, resp: records.append((task, resp)))
     router.ask(Capability.REASONING_OPERATIONS, "review", {"a": 1})
-    assert len(records) == 1 and records[0]["capability"] == "reasoning.operations"
-    assert records[0]["ok"] is True
+    assert len(records) == 1
+    task, resp = records[0]
+    assert task == "review" and resp.capability == "reasoning.operations" and resp.ok
+
+
+def test_response_cache_hit():
+    prov = FakeProvider(text="cached-answer")
+    router = AIRouter(providers={"nvidia": prov})
+    r1 = router.ask(Capability.REASONING_OPERATIONS, "t", {"a": 1})
+    r2 = router.ask(Capability.REASONING_OPERATIONS, "t", {"a": 1})  # identical
+    assert r1.text == r2.text == "cached-answer"
+    assert not r1.cached and r2.cached          # second served from cache
+    assert prov.calls == ["z-ai/glm-5.2"]        # provider hit only once
+    # different context → cache miss → provider called again
+    router.ask(Capability.REASONING_OPERATIONS, "t", {"a": 2})
+    assert len(prov.calls) == 2
+    assert router.cache.stats()["hits"] == 1
+
+
+def test_token_usage_and_observability(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "get_env", lambda n: "k")
+    from ai import observability
+    monkeypatch.setattr(observability.store, "DB_PATH", str(tmp_path / "obs.db"))
+    prov = NvidiaProvider()
+    msg = MagicMock(); msg.content = "hi"; msg.reasoning_content = None
+    usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+    client = MagicMock()
+    client.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=msg)], usage=usage)
+    prov._clients["k"] = client
+    router = AIRouter(providers={"nvidia": prov})
+    router.set_observer(observability.record)
+    resp = router.ask(Capability.REASONING_OPERATIONS, "obs_task", {"a": 1})
+    assert resp.usage.total_tokens == 15 and resp.usage.prompt_tokens == 10
+    s = observability.stats()
+    assert s["requests"] == 1 and s["total_tokens"] == 15
+    assert observability.recent()[0]["task"] == "obs_task"
 
 
 # ── NVIDIA provider (mocked SDK) ──────────────────────────────────────────────
@@ -254,14 +289,18 @@ def test_rag_uses_embedding_retriever_when_available():
     store.add_document("policy.txt",
                        "Supplier lead times must not exceed 21 days.\n\n"
                        "Forklift operators need annual safety training.")
-    # embeddings ON
+    # embeddings ON → hybrid retriever, lead-time doc ranks first
     AI.configure(AIRouter(providers={"nvidia": EmbedProvider()}))
     try:
         hits = knowledge.retrieve("what is the supplier lead time policy?")
-        assert hits and hits[0]["retriever"] == "embedding"
+        assert hits and hits[0]["retriever"] == "hybrid"
+        assert "lead time" in hits[0]["text"].lower()
     finally:
         AI._router = None
-    # embeddings OFF (no provider) → lexical
+    # embeddings OFF (no provider) → lexical. Clear the retrieval cache since
+    # we're simulating a different runtime (cache is tested separately).
+    from ai import rag
+    rag._retrieval_cache.clear()
     AI.configure(AIRouter(providers={}, offline_handler=lambda c, m: None))
     try:
         hits = knowledge.retrieve("what is the supplier lead time policy?")

@@ -53,7 +53,6 @@ def test_executive_reports_memory_deltas():
 # ── Knowledge base (RAG) ──────────────────────────────────────────────────────
 
 def test_kb_retrieval_and_extractive_answer(monkeypatch):
-    monkeypatch.setattr(knowledge.groq_ai, "is_available", lambda: False)
     store.add_document("procurement_policy.txt",
                        "Supplier lead times must not exceed 21 days.\n\n"
                        "All purchase orders above $10,000 require director approval.\n\n"
@@ -156,7 +155,6 @@ def test_business_deltas_tool():
 
 
 def test_copilot_routing_new_tools(monkeypatch):
-    monkeypatch.setattr(knowledge.groq_ai, "is_available", lambda: False)
     store.add_document("policy.txt", "Orders above $10,000 require director approval.")
     ctx = {"metrics": {}}
     r = agent.run_agent("What actions should I approve today?", ctx, client=False)

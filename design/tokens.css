@@ -1,0 +1,60 @@
+/* ============================================================
+   SupChainMate — Design Tokens
+   Drop into your Next.js app (e.g. app/globals.css) as the single
+   source of truth. Components read these variables; never hard-code
+   a hex. Both themes ship; the app toggles data-theme on <html>.
+   Typography: Inter (load via next/font/google in layout.tsx).
+   ============================================================ */
+
+:root {
+  /* Brand — Navy */
+  --navy-950:#060B16; --navy-900:#0B1220; --navy-850:#0E1729; --navy-800:#111A2E;
+  --navy-700:#16213A; --navy-600:#1E2A44; --navy-500:#2A3A5C;
+  /* Neutrals — Slate (cool-biased) */
+  --slate-50:#F5F7FA; --slate-100:#E9EDF3; --slate-200:#D4DBE6; --slate-300:#B4BECE;
+  --slate-400:#8A94A6; --slate-500:#66707F; --slate-600:#4B5563; --slate-700:#333B49;
+  /* Accent — Emerald (spend sparingly) */
+  --emerald-600:#059669; --emerald-500:#10B981; --emerald-400:#34D399;
+  --emerald-glow:rgba(16,185,129,.18);
+  /* Semantic — state signals (separate from accent) */
+  --good:#10B981; --warning:#F59E0B; --critical:#EF4444; --info:#38BDF8;
+  --good-bg:rgba(16,185,129,.12); --warning-bg:rgba(245,158,11,.12);
+  --critical-bg:rgba(239,68,68,.12); --info-bg:rgba(56,189,248,.12);
+
+  /* Semantic surface tokens (theme-mapped) — dark is the default ground */
+  --bg:var(--navy-900); --bg-sunken:var(--navy-950); --panel:var(--navy-800);
+  --panel-2:var(--navy-850); --rail:var(--navy-850); --hairline:var(--navy-600);
+  --hairline-strong:var(--navy-500); --text:#EAF0F8; --text-2:var(--slate-300);
+  --text-3:var(--slate-400); --accent:var(--emerald-500); --accent-ink:#04170F; --focus:#6EE7B7;
+
+  /* Type scale */
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  --step--1:.75rem; --step-0:.8125rem; --step-1:.9375rem; --step-2:1.125rem;
+  --step-3:1.5rem; --step-4:2.25rem; --step-5:3rem;
+
+  /* Shape & elevation */
+  --radius-sm:5px; --radius:8px; --radius-lg:12px; --gutter:24px;
+  --shadow:0 1px 2px rgba(3,7,18,.4),0 8px 24px -12px rgba(3,7,18,.55);
+}
+
+@media (prefers-color-scheme:light) {
+  :root {
+    --bg:var(--slate-50); --bg-sunken:#EEF1F6; --panel:#FFF; --panel-2:#FFF; --rail:#FFF;
+    --hairline:var(--slate-200); --hairline-strong:var(--slate-300); --text:var(--navy-900);
+    --text-2:var(--slate-600); --text-3:var(--slate-500); --accent-ink:#FFF; --focus:var(--emerald-600);
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 12px 28px -16px rgba(16,24,40,.22);
+  }
+}
+:root[data-theme="light"]{
+  --bg:var(--slate-50); --bg-sunken:#EEF1F6; --panel:#FFF; --panel-2:#FFF; --rail:#FFF;
+  --hairline:var(--slate-200); --hairline-strong:var(--slate-300); --text:var(--navy-900);
+  --text-2:var(--slate-600); --text-3:var(--slate-500); --accent-ink:#FFF; --focus:var(--emerald-600);
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 12px 28px -16px rgba(16,24,40,.22);
+}
+:root[data-theme="dark"]{
+  --bg:var(--navy-900); --bg-sunken:var(--navy-950); --panel:var(--navy-800); --panel-2:var(--navy-850);
+  --rail:var(--navy-850); --hairline:var(--navy-600); --hairline-strong:var(--navy-500);
+  --text:#EAF0F8; --text-2:var(--slate-300); --text-3:var(--slate-400); --accent-ink:#04170F; --focus:#6EE7B7;
+  --shadow:0 1px 2px rgba(3,7,18,.4),0 8px 24px -12px rgba(3,7,18,.55);
+}

@@ -1,0 +1,562 @@
+<title>SupChainMate — Control Plane Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --navy-950:#060B16;--navy-900:#0B1220;--navy-850:#0E1729;--navy-800:#111A2E;
+  --navy-700:#16213A;--navy-600:#1E2A44;--navy-500:#2A3A5C;
+  --slate-50:#F5F7FA;--slate-100:#E9EDF3;--slate-200:#D4DBE6;--slate-300:#B4BECE;
+  --slate-400:#8A94A6;--slate-500:#66707F;--slate-600:#4B5563;
+  --emerald-600:#059669;--emerald-500:#10B981;--emerald-400:#34D399;--emerald-glow:rgba(16,185,129,.18);
+  --good:#10B981;--warning:#F59E0B;--critical:#EF4444;--info:#38BDF8;
+  --good-bg:rgba(16,185,129,.12);--warning-bg:rgba(245,158,11,.12);--critical-bg:rgba(239,68,68,.12);--info-bg:rgba(56,189,248,.12);
+  --bg:var(--navy-900);--bg-sunken:var(--navy-950);--panel:var(--navy-800);--panel-2:var(--navy-850);
+  --rail:var(--navy-850);--hairline:var(--navy-600);--hairline-strong:var(--navy-500);
+  --text:#EAF0F8;--text-2:var(--slate-300);--text-3:var(--slate-400);
+  --accent:var(--emerald-500);--accent-ink:#04170F;--focus:#6EE7B7;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  --s--1:.75rem;--s0:.8125rem;--s1:.9375rem;--s2:1.125rem;--s3:1.5rem;--s4:2.25rem;--s5:3rem;
+  --radius:8px;--radius-sm:5px;--radius-lg:12px;--gutter:24px;
+  --shadow:0 1px 2px rgba(3,7,18,.4),0 8px 24px -12px rgba(3,7,18,.55);
+}
+@media (prefers-color-scheme:light){:root{
+  --bg:var(--slate-50);--bg-sunken:#EEF1F6;--panel:#FFF;--panel-2:#FFF;--rail:#FFF;
+  --hairline:var(--slate-200);--hairline-strong:var(--slate-300);--text:var(--navy-900);
+  --text-2:var(--slate-600);--text-3:var(--slate-500);--accent-ink:#FFF;--focus:var(--emerald-600);
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 12px 28px -16px rgba(16,24,40,.22);
+}}
+:root[data-theme="light"]{--bg:var(--slate-50);--bg-sunken:#EEF1F6;--panel:#FFF;--panel-2:#FFF;--rail:#FFF;--hairline:var(--slate-200);--hairline-strong:var(--slate-300);--text:var(--navy-900);--text-2:var(--slate-600);--text-3:var(--slate-500);--accent-ink:#FFF;--focus:var(--emerald-600);--shadow:0 1px 2px rgba(16,24,40,.06),0 12px 28px -16px rgba(16,24,40,.22);}
+:root[data-theme="dark"]{--bg:var(--navy-900);--bg-sunken:var(--navy-950);--panel:var(--navy-800);--panel-2:var(--navy-850);--rail:var(--navy-850);--hairline:var(--navy-600);--hairline-strong:var(--navy-500);--text:#EAF0F8;--text-2:var(--slate-300);--text-3:var(--slate-400);--accent-ink:#04170F;--focus:#6EE7B7;--shadow:0 1px 2px rgba(3,7,18,.4),0 8px 24px -12px rgba(3,7,18,.55);}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}html{scroll-behavior:auto;}}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:var(--s1);line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+h1,h2,h3,h4{text-wrap:balance;margin:0;font-weight:600;letter-spacing:-.01em;}
+.tnum{font-variant-numeric:tabular-nums;}
+.mono{font-family:var(--mono);}
+
+.shell{display:grid;grid-template-columns:236px 1fr;min-height:100vh;}
+.rail{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;background:var(--rail);border-right:1px solid var(--hairline);padding:18px 14px;display:flex;flex-direction:column;gap:3px;}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 16px;}
+.brand-mark{width:28px;height:28px;border-radius:7px;flex:none;background:linear-gradient(145deg,var(--emerald-500),var(--emerald-600));display:grid;place-items:center;color:var(--accent-ink);font-weight:800;font-size:15px;box-shadow:0 0 0 1px rgba(16,185,129,.4),0 4px 14px var(--emerald-glow);}
+.brand-name{font-weight:700;letter-spacing:-.02em;font-size:15px;}
+.brand-sub{font-size:10px;color:var(--text-3);letter-spacing:.14em;text-transform:uppercase;}
+.nav-group-label{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);padding:14px 10px 6px;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text-2);cursor:pointer;font-size:var(--s0);font-weight:500;text-decoration:none;border:1px solid transparent;transition:background .12s,color .12s;}
+.nav-item:hover{background:color-mix(in srgb,var(--text) 6%,transparent);color:var(--text);}
+.nav-item.active{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--text);border-color:color-mix(in srgb,var(--accent) 34%,transparent);}
+.nav-item.active .nav-ico{color:var(--accent);}
+.nav-ico{width:16px;text-align:center;color:var(--text-3);font-size:13px;}
+.nav-item .badge-mini{margin-left:auto;font-size:10px;padding:1px 6px;border-radius:20px;background:var(--critical);color:#fff;font-weight:700;}
+
+.content{min-width:0;display:flex;flex-direction:column;}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px var(--gutter);background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--hairline);}
+.crumbs{display:flex;align-items:center;gap:8px;font-size:var(--s0);color:var(--text-3);}
+.crumbs b{color:var(--text);font-weight:600;}
+.searchbox{display:flex;align-items:center;gap:8px;background:var(--bg-sunken);border:1px solid var(--hairline);border-radius:var(--radius-sm);padding:7px 11px;min-width:240px;color:var(--text-3);font-size:var(--s0);}
+.searchbox input{border:0;background:transparent;color:var(--text);font:inherit;outline:none;width:100%;}
+.topbar-actions{display:flex;align-items:center;gap:10px;}
+.icon-btn{width:34px;height:34px;display:grid;place-items:center;border-radius:var(--radius-sm);border:1px solid var(--hairline);background:var(--panel);color:var(--text-2);cursor:pointer;position:relative;}
+.icon-btn .dotN{position:absolute;top:6px;right:7px;width:6px;height:6px;border-radius:50%;background:var(--critical);}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--navy-500),var(--navy-700));display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;border:1px solid var(--hairline-strong);}
+
+.wrap{padding:22px var(--gutter) 64px;max-width:1280px;width:100%;margin:0 auto;}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px;}
+.page-title{font-size:var(--s4);letter-spacing:-.02em;line-height:1.05;}
+.page-sub{color:var(--text-2);font-size:var(--s1);margin-top:6px;}
+.eyebrow{font-size:var(--s--1);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600;}
+.eyebrow-lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);font-weight:600;}
+
+.card{background:var(--panel);border:1px solid var(--hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow);}
+.card-pad{padding:18px;}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--hairline);}
+.card-title{font-size:var(--s1);font-weight:600;}
+.card-hint{font-size:var(--s--1);color:var(--text-3);}
+.grid{display:grid;gap:16px;}
+
+.btn{--_bg:transparent;--_fg:var(--text);--_bd:var(--hairline-strong);display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--sans);font-size:var(--s0);font-weight:600;line-height:1;padding:9px 14px;border-radius:var(--radius-sm);background:var(--_bg);color:var(--_fg);border:1px solid var(--_bd);cursor:pointer;white-space:nowrap;transition:filter .12s,background .12s,transform .04s;}
+.btn:hover{filter:brightness(1.06);}
+.btn:active{transform:translateY(1px);}
+.btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+.btn-primary{--_bg:var(--emerald-500);--_fg:var(--accent-ink);--_bd:var(--emerald-500);box-shadow:0 4px 14px var(--emerald-glow);}
+.btn-primary:hover{--_bg:var(--emerald-400);}
+.btn-secondary{--_bg:var(--panel-2);--_fg:var(--text);--_bd:var(--hairline-strong);}
+.btn-ghost{--_bg:transparent;--_fg:var(--text-2);--_bd:transparent;}
+.btn-ghost:hover{background:color-mix(in srgb,var(--text) 7%,transparent);color:var(--text);}
+.btn-sm{padding:6px 10px;font-size:var(--s--1);}
+.btn-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:var(--s--1);font-weight:600;padding:3px 9px 3px 8px;border-radius:20px;border:1px solid transparent;white-space:nowrap;}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;}
+.badge-good{color:var(--good);background:var(--good-bg);border-color:color-mix(in srgb,var(--good) 30%,transparent);}
+.badge-warning{color:var(--warning);background:var(--warning-bg);border-color:color-mix(in srgb,var(--warning) 30%,transparent);}
+.badge-critical{color:var(--critical);background:var(--critical-bg);border-color:color-mix(in srgb,var(--critical) 30%,transparent);}
+.badge-info{color:var(--info);background:var(--info-bg);border-color:color-mix(in srgb,var(--info) 30%,transparent);}
+.badge-neutral{color:var(--text-2);background:color-mix(in srgb,var(--text) 8%,transparent);border-color:var(--hairline);}
+
+.kpi{position:relative;overflow:hidden;padding:16px 18px;display:flex;flex-direction:column;gap:9px;}
+.kpi-top{display:flex;align-items:center;justify-content:space-between;}
+.kpi-label{font-size:var(--s--1);color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;}
+.kpi-fig{font-size:var(--s4);font-weight:700;letter-spacing:-.02em;line-height:1;}
+.kpi-fig .unit{font-size:var(--s2);color:var(--text-3);font-weight:600;margin-left:2px;}
+.kpi-delta{display:inline-flex;align-items:center;gap:4px;font-size:var(--s0);font-weight:600;}
+.kpi-delta.up{color:var(--good);}.kpi-delta.down{color:var(--critical);}.kpi-delta.flat{color:var(--text-3);}
+.kpi-foot{font-size:var(--s--1);color:var(--text-3);}
+.kpi-spark{position:absolute;right:0;bottom:0;width:100px;height:42px;opacity:.9;}
+.kpi-rail{position:absolute;left:0;top:0;bottom:0;width:3px;}
+.kpi-rail.good{background:var(--good);}.kpi-rail.warning{background:var(--warning);}.kpi-rail.critical{background:var(--critical);}.kpi-rail.info{background:var(--info);}
+
+.table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--hairline);}
+table.data{width:100%;border-collapse:collapse;font-size:var(--s0);min-width:640px;}
+table.data thead th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);font-weight:600;padding:10px 14px;background:var(--panel-2);border-bottom:1px solid var(--hairline);}
+table.data th.num,table.data td.num{text-align:right;font-variant-numeric:tabular-nums;}
+table.data tbody td{padding:11px 14px;border-bottom:1px solid var(--hairline);color:var(--text-2);}
+table.data tbody tr:last-child td{border-bottom:0;}
+table.data tbody tr:hover td{background:color-mix(in srgb,var(--accent) 6%,transparent);}
+table.data td .cell-strong{color:var(--text);font-weight:600;}
+.bar{height:6px;border-radius:4px;background:var(--hairline);overflow:hidden;min-width:56px;}
+.bar>i{display:block;height:100%;border-radius:4px;background:var(--accent);}
+
+.alert{display:flex;gap:12px;padding:12px 14px;border-radius:var(--radius);border:1px solid var(--hairline);background:var(--panel-2);border-left-width:3px;align-items:flex-start;}
+.alert-ico{font-size:15px;line-height:1.4;flex:none;}
+.alert-title{font-weight:600;font-size:var(--s1);}
+.alert-msg{color:var(--text-2);font-size:var(--s0);margin-top:2px;}
+.alert-good{border-left-color:var(--good);}.alert-good .alert-ico{color:var(--good);}
+.alert-warning{border-left-color:var(--warning);}.alert-warning .alert-ico{color:var(--warning);}
+.alert-critical{border-left-color:var(--critical);}.alert-critical .alert-ico{color:var(--critical);}
+.alert-info{border-left-color:var(--info);}.alert-info .alert-ico{color:var(--info);}
+
+.field{display:flex;flex-direction:column;gap:6px;}
+.label{font-size:var(--s--1);font-weight:600;color:var(--text-2);}
+.input,.select{font-family:var(--sans);font-size:var(--s0);color:var(--text);background:var(--bg-sunken);border:1px solid var(--hairline-strong);border-radius:var(--radius-sm);padding:9px 11px;width:100%;}
+.input:focus,.select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--emerald-glow);}
+.seg{display:inline-flex;padding:3px;gap:2px;background:var(--bg-sunken);border:1px solid var(--hairline);border-radius:var(--radius-sm);}
+.seg button{border:0;background:transparent;color:var(--text-3);font:inherit;font-size:var(--s--1);font-weight:600;padding:5px 12px;border-radius:4px;cursor:pointer;}
+.seg button.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow);}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:var(--s--1);color:var(--text-3);}
+.legend span{display:inline-flex;align-items:center;gap:6px;}
+.legend i{width:10px;height:3px;border-radius:2px;display:inline-block;}
+
+/* AI Executive Summary panel */
+.ai-panel{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 8%,var(--panel)),var(--panel));border:1px solid color-mix(in srgb,var(--accent) 28%,var(--hairline));position:relative;overflow:hidden;}
+.ai-tag{display:inline-flex;align-items:center;gap:7px;font-size:var(--s--1);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);}
+.ai-tag .pulse{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--emerald-glow);animation:pulse 2.4s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.4);}70%{box-shadow:0 0 0 9px rgba(16,185,129,0);}100%{box-shadow:0 0 0 0 rgba(16,185,129,0);}}
+.rec-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px dashed var(--hairline);font-size:var(--s0);color:var(--text-2);}
+.rec-item:last-child{border-bottom:0;}
+.rec-ico{color:var(--accent);flex:none;}
+
+.feed-item{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--hairline);}
+.feed-item:last-child{border-bottom:0;}
+.feed-ic{width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;font-size:12px;}
+.feed-t{font-size:var(--s0);color:var(--text);font-weight:600;}
+.feed-m{font-size:var(--s--1);color:var(--text-3);margin-top:1px;}
+.feed-time{margin-left:auto;font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+
+.screen{display:none;}
+.screen.active{display:block;animation:fade .25s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+.theme-toggle{display:inline-flex;align-items:center;gap:7px;font-size:var(--s0);color:var(--text-2);border:1px solid var(--hairline);background:var(--panel);padding:7px 11px;border-radius:var(--radius-sm);cursor:pointer;font-weight:600;}
+
+/* Map schematic */
+.map{position:relative;height:320px;border-radius:var(--radius);overflow:hidden;background:radial-gradient(120% 120% at 30% 20%,var(--navy-700),var(--bg-sunken));border:1px solid var(--hairline);}
+:root[data-theme="light"] .map,@media (prefers-color-scheme:light){.map{background:radial-gradient(120% 120% at 30% 20%,#DCE4EF,#EEF1F6);}}
+.hub{position:absolute;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);}
+.hub b{position:absolute;left:15px;top:-4px;font-size:10.5px;color:var(--text-2);white-space:nowrap;font-weight:600;}
+.hub .ring{position:absolute;inset:-5px;border-radius:50%;border:1px solid currentColor;opacity:.4;animation:pulse 3s infinite;}
+
+.ask-bar{display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--hairline-strong);border-radius:var(--radius);padding:8px 8px 8px 14px;box-shadow:var(--shadow);}
+.ask-bar input{flex:1;border:0;background:transparent;color:var(--text);font:inherit;font-size:var(--s1);outline:none;}
+.cite{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--info);background:var(--info-bg);border:1px solid color-mix(in srgb,var(--info) 30%,transparent);padding:2px 7px;border-radius:5px;cursor:pointer;}
+.source-card{display:flex;gap:11px;padding:11px 13px;border:1px solid var(--hairline);border-radius:var(--radius);background:var(--panel-2);}
+.source-ico{width:30px;height:36px;border-radius:5px;flex:none;background:var(--critical-bg);color:var(--critical);display:grid;place-items:center;font-size:11px;font-weight:700;border:1px solid color-mix(in srgb,var(--critical) 25%,transparent);}
+
+.report-card{display:flex;flex-direction:column;gap:0;overflow:hidden;}
+.report-thumb{height:120px;background:linear-gradient(135deg,var(--navy-700),var(--navy-850));position:relative;border-bottom:1px solid var(--hairline);}
+:root[data-theme="light"] .report-thumb{background:linear-gradient(135deg,#E3E9F2,#F1F4F9);}
+
+@media (max-width:980px){.shell{grid-template-columns:1fr;}.rail{display:none;}.searchbox{display:none;}}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div><div class="brand-name">SupChainMate</div><div class="brand-sub">Decision Intelligence</div></div>
+    </div>
+    <a class="nav-item active" data-nav="tower"><span class="nav-ico">◧</span> Dashboard</a>
+    <a class="nav-item" data-nav="soon"><span class="nav-ico">⬒</span> Operations</a>
+    <a class="nav-item" data-nav="soon"><span class="nav-ico">◡</span> Forecasting</a>
+    <a class="nav-item" data-nav="inventory"><span class="nav-ico">▦</span> Inventory<span class="badge-mini">7</span></a>
+    <a class="nav-item" data-nav="soon"><span class="nav-ico">◈</span> Procurement</a>
+    <a class="nav-item" data-nav="soon"><span class="nav-ico">▤</span> Warehouse</a>
+    <a class="nav-item" data-nav="logistics"><span class="nav-ico">◎</span> Logistics<span class="badge-mini">3</span></a>
+    <a class="nav-item" data-nav="knowledge"><span class="nav-ico">◍</span> Knowledge</a>
+    <a class="nav-item" data-nav="reports"><span class="nav-ico">▥</span> Reports</a>
+    <div class="nav-group-label">System</div>
+    <a class="nav-item" data-nav="soon"><span class="nav-ico">⚙</span> Administration</a>
+    <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--hairline);">
+      <div class="nav-item" style="cursor:default;"><span class="nav-ico" style="color:var(--good)">●</span><span style="font-size:11px;color:var(--text-3)">AI Router · operational</span></div>
+    </div>
+  </aside>
+
+  <div class="content">
+    <div class="topbar">
+      <div class="crumbs"><span id="crumbRoot">SupChainMate</span> <span>/</span> <b id="crumbLeaf">Executive Control Tower</b></div>
+      <div class="topbar-actions">
+        <div class="searchbox">⌕ <input placeholder="Search SKUs, shipments, suppliers…"></div>
+        <button class="theme-toggle" id="themeBtn">◑ Theme</button>
+        <button class="icon-btn" title="Alerts">◔<span class="dotN"></span></button>
+        <div class="avatar">KP</div>
+      </div>
+    </div>
+
+    <!-- ================= 1. EXECUTIVE CONTROL TOWER ================= -->
+    <section class="screen active" id="s-tower"><div class="wrap">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Live · updated 2 min ago</div>
+          <h1 class="page-title">Executive Control Tower</h1>
+          <p class="page-sub">Network-wide health, risk, and the actions your AI agents recommend right now.</p>
+        </div>
+        <div class="btn-row">
+          <div class="seg"><button class="on">Today</button><button>7D</button><button>QTD</button></div>
+          <button class="btn btn-secondary btn-sm">⇩ Export brief</button>
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin-top:16px;">
+        <div class="card kpi"><span class="kpi-rail good"></span><div class="kpi-top"><span class="kpi-label">Supply Chain Health</span></div><div class="kpi-fig tnum">96<span class="unit">%</span></div><div><span class="kpi-delta up">▲ 1.4</span> <span class="kpi-foot">vs last week</span></div><canvas class="kpi-spark" data-spark="good" data-seed="7"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail critical"></span><div class="kpi-top"><span class="kpi-label">Today's Risks</span></div><div class="kpi-fig tnum">4</div><div><span class="kpi-delta down">▲ 2 new</span> <span class="kpi-foot">1 critical</span></div><canvas class="kpi-spark" data-spark="critical" data-seed="2"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail warning"></span><div class="kpi-top"><span class="kpi-label">Late Shipments</span></div><div class="kpi-fig tnum">3</div><div><span class="kpi-delta down">▲ 1</span> <span class="kpi-foot">2 on APAC lanes</span></div><canvas class="kpi-spark" data-spark="warning" data-seed="5"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail info"></span><div class="kpi-top"><span class="kpi-label">Inventory Value</span></div><div class="kpi-fig tnum">$12.4<span class="unit">M</span></div><div><span class="kpi-delta up">▼ 2.0%</span> <span class="kpi-foot">capital freed</span></div><canvas class="kpi-spark" data-spark="info" data-seed="3"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail good"></span><div class="kpi-top"><span class="kpi-label">Forecast Accuracy</span></div><div class="kpi-fig tnum">95<span class="unit">%</span></div><div><span class="kpi-delta up">▲ 0.8</span> <span class="kpi-foot">ensemble model</span></div><canvas class="kpi-spark" data-spark="good" data-seed="9"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail good"></span><div class="kpi-top"><span class="kpi-label">Supplier Health</span></div><div class="kpi-fig tnum">91<span class="unit">%</span></div><div><span class="kpi-delta flat">— 0.0</span> <span class="kpi-foot">42 active</span></div><canvas class="kpi-spark" data-spark="good" data-seed="6"></canvas></div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1.5fr 1fr;margin-top:16px;align-items:start;">
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <!-- AI Executive Summary -->
+          <div class="card ai-panel card-pad">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="ai-tag"><span class="pulse"></span> AI Executive Summary</span>
+              <span class="badge badge-neutral mono">Executive agent · 8 specialists</span>
+            </div>
+            <p style="font-size:var(--s2);line-height:1.45;margin:12px 0 4px;color:var(--text);">
+              Demand is <b>rising in Victoria</b> (+11% wk/wk on 3 categories) while two
+              upstream suppliers have <b>slipped their lead times</b>. Stockout exposure is
+              concentrated in the controller-board line. I've prepared four actions to hold
+              service level above 98%.
+            </p>
+            <div style="margin:10px 0 14px;">
+              <div class="rec-item"><span class="rec-ico">→</span> Expedite PO-8841 for SKM-9931 (air freight, +$2.1k) to cover the 2-day gap.</div>
+              <div class="rec-item"><span class="rec-ico">→</span> Shift 400 units of buffer stock Melbourne → Geelong ahead of the demand spike.</div>
+              <div class="rec-item"><span class="rec-ico">→</span> Re-route 2 APAC shipments around Ningbo congestion (ETA saved ~31h).</div>
+              <div class="rec-item"><span class="rec-ico">→</span> Raise reorder point on 6 Victoria SKUs by one week of cover.</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary">✓ Approve Recommendations</button>
+              <button class="btn btn-secondary">Review Details</button>
+              <button class="btn btn-ghost">Dismiss</button>
+            </div>
+          </div>
+
+          <!-- Throughput chart -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Network throughput vs forecast</div><div class="seg"><button class="on">7D</button><button>30D</button><button>QTD</button></div></div>
+            <div class="card-pad">
+              <canvas id="towerChart" height="190" style="width:100%;height:190px;display:block;"></canvas>
+              <div class="legend" style="margin-top:12px;"><span><i style="background:var(--accent)"></i> Units shipped</span><span><i style="background:var(--info)"></i> Forecast</span><span><i style="background:var(--warning)"></i> Capacity ceiling</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <!-- Risk feed -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Priority risks</div><a class="card-hint" data-nav="logistics" style="cursor:pointer;color:var(--accent);">View all →</a></div>
+            <div class="card-pad" style="padding-top:6px;padding-bottom:6px;">
+              <div class="feed-item"><div class="feed-ic" style="background:var(--critical-bg);color:var(--critical);">◆</div><div><div class="feed-t">Stockout risk · SKM-9931</div><div class="feed-m">2 days cover · controller board</div></div><span class="feed-time">now</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--warning-bg);color:var(--warning);">▲</div><div><div class="feed-t">Port congestion · Ningbo</div><div class="feed-m">3 shipments delayed ~36h</div></div><span class="feed-time">18m</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--warning-bg);color:var(--warning);">▲</div><div><div class="feed-t">Supplier slip · Anhui Cell Co.</div><div class="feed-m">Lead time 12→16 days</div></div><span class="feed-time">1h</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--info-bg);color:var(--info);">◔</div><div><div class="feed-t">Demand surge · Victoria</div><div class="feed-m">+11% wk/wk, 3 categories</div></div><span class="feed-time">2h</span></div>
+            </div>
+          </div>
+          <!-- Agent activity -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Agent activity</div><span class="badge badge-good"><span class="dot"></span>All healthy</span></div>
+            <div class="card-pad" style="padding-top:6px;padding-bottom:6px;">
+              <div class="feed-item"><div class="feed-ic" style="background:var(--good-bg);color:var(--good);">✓</div><div><div class="feed-t">Forecast agent</div><div class="feed-m">Ensemble re-weighted · 95.2%</div></div><span class="feed-time">3m</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--good-bg);color:var(--good);">✓</div><div><div class="feed-t">Inventory agent</div><div class="feed-m">6 reorder points recomputed</div></div><span class="feed-time">3m</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--good-bg);color:var(--good);">✓</div><div><div class="feed-t">Logistics agent</div><div class="feed-m">Re-route plan drafted</div></div><span class="feed-time">4m</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--good-bg);color:var(--good);">✓</div><div><div class="feed-t">Executive agent</div><div class="feed-m">Brief synthesised from 8 agents</div></div><span class="feed-time">4m</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></section>
+
+    <!-- ================= 2. INVENTORY INTELLIGENCE ================= -->
+    <section class="screen" id="s-inventory"><div class="wrap">
+      <div class="page-head">
+        <div><div class="eyebrow">1,204 active SKUs · 5 warehouses</div><h1 class="page-title">Inventory Intelligence</h1><p class="page-sub">Stock health, days of cover, and AI reorder recommendations across the network.</p></div>
+        <div class="btn-row"><button class="btn btn-secondary btn-sm">Filters</button><button class="btn btn-primary btn-sm">✓ Approve 6 reorders</button></div>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin-top:16px;">
+        <div class="card kpi"><span class="kpi-rail info"></span><div class="kpi-label">Inventory Value</div><div class="kpi-fig tnum">$12.4<span class="unit">M</span></div><span class="kpi-foot">across 5 sites</span><canvas class="kpi-spark" data-spark="info" data-seed="3"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail warning"></span><div class="kpi-label">Reorder Alerts</div><div class="kpi-fig tnum">7</div><span class="kpi-foot">2 urgent</span><canvas class="kpi-spark" data-spark="warning" data-seed="8"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail critical"></span><div class="kpi-label">Stockout Risk</div><div class="kpi-fig tnum">3</div><span class="kpi-foot">&lt; 3 days cover</span><canvas class="kpi-spark" data-spark="critical" data-seed="4"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail good"></span><div class="kpi-label">Fill Rate</div><div class="kpi-fig tnum">98.1<span class="unit">%</span></div><span class="kpi-foot">trailing 30d</span><canvas class="kpi-spark" data-spark="good" data-seed="7"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail good"></span><div class="kpi-label">Turns / Year</div><div class="kpi-fig tnum">8.4</div><span class="kpi-foot">▲ 0.3 vs Q2</span><canvas class="kpi-spark" data-spark="good" data-seed="1"></canvas></div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 320px;margin-top:16px;align-items:start;">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Stock levels &amp; reorder recommendations</div><div class="seg"><button class="on">All</button><button>At risk</button><button>Healthy</button></div></div>
+          <div class="table-wrap" style="border:0;border-radius:0;">
+            <table class="data">
+              <thead><tr><th>SKU</th><th>Description</th><th class="num">On hand</th><th class="num">Days cover</th><th>Coverage</th><th class="num">Recommend</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td class="mono cell-strong">SKM-9931</td><td>Controller board v4</td><td class="num tnum">312</td><td class="num tnum">2</td><td><div class="bar"><i style="width:22%;background:var(--critical)"></i></div></td><td class="num tnum cell-strong">+1,800</td><td><span class="badge badge-critical"><span class="dot"></span>Order now</span></td></tr>
+                <tr><td class="mono cell-strong">SKM-4471</td><td>Lithium cell 21700</td><td class="num tnum">1,240</td><td class="num tnum">6</td><td><div class="bar"><i style="width:44%;background:var(--warning)"></i></div></td><td class="num tnum cell-strong">+3,000</td><td><span class="badge badge-warning"><span class="dot"></span>Reorder</span></td></tr>
+                <tr><td class="mono cell-strong">SKM-1087</td><td>Wiring harness</td><td class="num tnum">4,560</td><td class="num tnum">19</td><td><div class="bar"><i style="width:72%"></i></div></td><td class="num tnum">—</td><td><span class="badge badge-good"><span class="dot"></span>Healthy</span></td></tr>
+                <tr><td class="mono cell-strong">SKM-2210</td><td>Aluminium housing</td><td class="num tnum">8,902</td><td class="num tnum">41</td><td><div class="bar"><i style="width:94%;background:var(--good)"></i></div></td><td class="num tnum">—</td><td><span class="badge badge-good"><span class="dot"></span>Healthy</span></td></tr>
+                <tr><td class="mono cell-strong">SKM-3355</td><td>Thermal pad kit</td><td class="num tnum">760</td><td class="num tnum">8</td><td><div class="bar"><i style="width:52%;background:var(--warning)"></i></div></td><td class="num tnum cell-strong">+1,200</td><td><span class="badge badge-warning"><span class="dot"></span>Reorder</span></td></tr>
+                <tr><td class="mono cell-strong">SKM-6642</td><td>Display module 7"</td><td class="num tnum">2,140</td><td class="num tnum">24</td><td><div class="bar"><i style="width:80%"></i></div></td><td class="num tnum">—</td><td><span class="badge badge-good"><span class="dot"></span>Healthy</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card ai-panel card-pad">
+            <span class="ai-tag"><span class="pulse"></span> Inventory agent</span>
+            <p style="font-size:var(--s0);color:var(--text-2);margin:10px 0 12px;">Two SKUs fall below the 3-day floor within the demand window. Approving reorders holds fill rate at 98%+ and frees ~$240k in slow-moving stock.</p>
+            <button class="btn btn-primary btn-sm" style="width:100%;">✓ Approve reorders</button>
+          </div>
+          <div class="card"><div class="card-head"><div class="card-title">ABC distribution</div></div><div class="card-pad" style="display:flex;flex-direction:column;gap:12px;">
+            <div><div style="display:flex;justify-content:space-between;font-size:var(--s0);margin-bottom:5px;"><span>A · high value</span><span class="tnum">72% val · 14% SKUs</span></div><div class="bar"><i style="width:72%;background:var(--accent)"></i></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:var(--s0);margin-bottom:5px;"><span>B · medium</span><span class="tnum">21% val · 31% SKUs</span></div><div class="bar"><i style="width:21%;background:var(--info)"></i></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:var(--s0);margin-bottom:5px;"><span>C · long tail</span><span class="tnum">7% val · 55% SKUs</span></div><div class="bar"><i style="width:7%;background:var(--slate-400)"></i></div></div>
+          </div></div>
+        </div>
+      </div>
+    </div></section>
+
+    <!-- ================= 3. LOGISTICS COMMAND CENTER ================= -->
+    <section class="screen" id="s-logistics"><div class="wrap">
+      <div class="page-head">
+        <div><div class="eyebrow">128 shipments in transit</div><h1 class="page-title">Logistics Command Center</h1><p class="page-sub">Shipments, routes, and delays across active lanes — with re-route options from the logistics agent.</p></div>
+        <div class="btn-row"><div class="seg"><button class="on">Map</button><button>List</button></div><button class="btn btn-secondary btn-sm">⇩ Manifest</button></div>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:16px;">
+        <div class="card kpi"><span class="kpi-rail info"></span><div class="kpi-label">In Transit</div><div class="kpi-fig tnum">128</div><span class="kpi-foot">42 arriving today</span><canvas class="kpi-spark" data-spark="info" data-seed="2"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail warning"></span><div class="kpi-label">Delayed</div><div class="kpi-fig tnum">3</div><span class="kpi-foot">2 APAC · 1 EU</span><canvas class="kpi-spark" data-spark="warning" data-seed="5"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail good"></span><div class="kpi-label">On-Time Rate</div><div class="kpi-fig tnum">94<span class="unit">%</span></div><span class="kpi-foot">trailing 30d</span><canvas class="kpi-spark" data-spark="good" data-seed="7"></canvas></div>
+        <div class="card kpi"><span class="kpi-rail good"></span><div class="kpi-label">Avg Freight Cost</div><div class="kpi-fig tnum">$3.1<span class="unit">k</span></div><span class="kpi-foot">per shipment</span><canvas class="kpi-spark" data-spark="good" data-seed="6"></canvas></div>
+      </div>
+      <div class="grid" style="grid-template-columns:1.4fr 1fr;margin-top:16px;align-items:start;">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Active lanes</div><div class="legend"><span><i style="background:var(--good)"></i>On time</span><span><i style="background:var(--warning)"></i>Delayed</span><span><i style="background:var(--info)"></i>Hub</span></div></div>
+          <div class="card-pad">
+            <div class="map" id="lmap">
+              <canvas id="mapLines" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
+              <div class="hub" style="left:20%;top:38%;color:var(--info);background:var(--info);"><span class="ring"></span><b>Shanghai DC</b></div>
+              <div class="hub" style="left:44%;top:28%;color:var(--good);background:var(--good);"><b>Rotterdam</b></div>
+              <div class="hub" style="left:78%;top:70%;color:var(--warning);background:var(--warning);"><span class="ring"></span><b>Melbourne</b></div>
+              <div class="hub" style="left:82%;top:34%;color:var(--good);background:var(--good);"><b>Auckland</b></div>
+              <div class="hub" style="left:30%;top:66%;color:var(--warning);background:var(--warning);"><b>Ningbo ⚠</b></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card ai-panel card-pad">
+            <span class="ai-tag"><span class="pulse"></span> Logistics agent</span>
+            <p style="font-size:var(--s0);color:var(--text-2);margin:10px 0 12px;">Ningbo congestion adds ~36h to 2 shipments. A re-route via Shanghai recovers ~31h at +$180 freight. Recommend approval.</p>
+            <div class="btn-row"><button class="btn btn-primary btn-sm">✓ Approve re-route</button><button class="btn btn-ghost btn-sm">Compare</button></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Delayed shipments</div></div>
+            <div class="card-pad" style="padding-top:6px;padding-bottom:6px;">
+              <div class="feed-item"><div class="feed-ic" style="background:var(--warning-bg);color:var(--warning);">◎</div><div><div class="feed-t mono">SHP-20481 · Ningbo → Melbourne</div><div class="feed-m">+36h · port congestion</div></div><span class="feed-time">ETA +2d</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--warning-bg);color:var(--warning);">◎</div><div><div class="feed-t mono">SHP-20455 · Ningbo → Auckland</div><div class="feed-m">+28h · awaiting berth</div></div><span class="feed-time">ETA +1d</span></div>
+              <div class="feed-item"><div class="feed-ic" style="background:var(--warning-bg);color:var(--warning);">◎</div><div><div class="feed-t mono">SHP-20390 · Rotterdam → Lyon</div><div class="feed-m">+9h · customs hold</div></div><span class="feed-time">ETA +9h</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></section>
+
+    <!-- ================= 4. KNOWLEDGE CENTER (RAG) ================= -->
+    <section class="screen" id="s-knowledge"><div class="wrap">
+      <div class="page-head">
+        <div><div class="eyebrow">RAG · 214 documents indexed · 3,180 chunks</div><h1 class="page-title">Knowledge Center</h1><p class="page-sub">Ask across your policies, supplier contracts, and SOPs — answers cite their sources.</p></div>
+      </div>
+      <div style="margin-top:16px;">
+        <div class="ask-bar"><span style="color:var(--accent);font-size:16px;">◍</span><input value="What is our expedite policy when a critical SKU drops below 3 days of cover?"><button class="btn btn-primary btn-sm">Ask</button></div>
+        <div class="btn-row" style="margin-top:10px;"><span class="badge badge-neutral">Supplier lead-time SLA?</span><span class="badge badge-neutral">Safety-stock formula</span><span class="badge badge-neutral">Ningbo contingency plan</span><span class="badge badge-neutral">Returns policy AU</span></div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 320px;margin-top:16px;align-items:start;">
+        <div class="card">
+          <div class="card-head"><span class="ai-tag"><span class="pulse"></span> Knowledge agent · answer</span><span class="card-hint">reasoning.operations · 4 sources</span></div>
+          <div class="card-pad">
+            <p style="font-size:var(--s1);line-height:1.6;color:var(--text);">
+              When a <b>critical-class SKU</b> falls below <b>3 days of cover</b>, the expedite policy authorises air freight without further sign-off up to <b>$5,000</b> per order <span class="cite">◈ Logistics SOP §4.2</span>. Beyond that threshold, the procurement lead must approve <span class="cite">◈ Procurement Policy §7</span>. Buffer stock may be re-balanced between AU warehouses first if transit is under 24h <span class="cite">◈ Inventory Playbook p.12</span>. All expedites are logged to the decision audit trail <span class="cite">◈ Governance §2.1</span>.
+            </p>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--hairline);display:flex;gap:10px;align-items:center;">
+              <span class="badge badge-good"><span class="dot"></span>High confidence · 0.91</span>
+              <span class="card-hint">Grounded in 4 of 214 documents</span>
+              <div style="margin-left:auto;" class="btn-row"><button class="btn btn-ghost btn-sm">⧉ Copy</button><button class="btn btn-secondary btn-sm">Open in Reports</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Cited sources</div></div>
+          <div class="card-pad" style="display:flex;flex-direction:column;gap:10px;">
+            <div class="source-card"><div class="source-ico">PDF</div><div><div class="feed-t">Logistics SOP</div><div class="feed-m">§4.2 · Expedite authorisation · updated Mar 2026</div></div></div>
+            <div class="source-card"><div class="source-ico">PDF</div><div><div class="feed-t">Procurement Policy</div><div class="feed-m">§7 · Spend approval thresholds</div></div></div>
+            <div class="source-card"><div class="source-ico">DOC</div><div><div class="feed-t">Inventory Playbook</div><div class="feed-m">p.12 · Buffer re-balancing</div></div></div>
+            <div class="source-card"><div class="source-ico">PDF</div><div><div class="feed-t">Governance Manual</div><div class="feed-m">§2.1 · Decision audit trail</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div></section>
+
+    <!-- ================= 5. EXECUTIVE REPORTS ================= -->
+    <section class="screen" id="s-reports"><div class="wrap">
+      <div class="page-head">
+        <div><div class="eyebrow">Generated · exportable to PDF</div><h1 class="page-title">Executive Reports</h1><p class="page-sub">Board-ready summaries, trend packs, and audit exports — synthesised by the Executive agent.</p></div>
+        <div class="btn-row"><button class="btn btn-secondary btn-sm">Schedule</button><button class="btn btn-primary btn-sm">⇩ New report</button></div>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:16px;">
+        <div class="card report-card"><div class="report-thumb"><canvas class="rep-spark" data-seed="4" style="position:absolute;inset:0;width:100%;height:100%;"></canvas><span class="badge badge-good" style="position:absolute;top:12px;left:12px;"><span class="dot"></span>Ready</span></div><div class="card-pad"><div class="feed-t">Weekly Executive Brief</div><div class="feed-m" style="margin:4px 0 12px;">Health, risks &amp; recommended actions · wk 29</div><div class="btn-row"><button class="btn btn-primary btn-sm">⇩ PDF</button><button class="btn btn-ghost btn-sm">Preview</button></div></div></div>
+        <div class="card report-card"><div class="report-thumb"><canvas class="rep-spark" data-seed="9" style="position:absolute;inset:0;width:100%;height:100%;"></canvas><span class="badge badge-good" style="position:absolute;top:12px;left:12px;"><span class="dot"></span>Ready</span></div><div class="card-pad"><div class="feed-t">Forecast Accuracy Pack</div><div class="feed-m" style="margin:4px 0 12px;">Ensemble vs actuals · 13-week trend</div><div class="btn-row"><button class="btn btn-primary btn-sm">⇩ PDF</button><button class="btn btn-ghost btn-sm">Preview</button></div></div></div>
+        <div class="card report-card"><div class="report-thumb"><canvas class="rep-spark" data-seed="2" style="position:absolute;inset:0;width:100%;height:100%;"></canvas><span class="badge badge-warning" style="position:absolute;top:12px;left:12px;"><span class="dot"></span>Draft</span></div><div class="card-pad"><div class="feed-t">Supplier Scorecard</div><div class="feed-m" style="margin:4px 0 12px;">42 suppliers · OTIF, quality, risk</div><div class="btn-row"><button class="btn btn-secondary btn-sm">Generate</button><button class="btn btn-ghost btn-sm">Preview</button></div></div></div>
+        <div class="card report-card"><div class="report-thumb"><canvas class="rep-spark" data-seed="6" style="position:absolute;inset:0;width:100%;height:100%;"></canvas><span class="badge badge-good" style="position:absolute;top:12px;left:12px;"><span class="dot"></span>Ready</span></div><div class="card-pad"><div class="feed-t">Decision Audit Trail</div><div class="feed-m" style="margin:4px 0 12px;">Approvals, overrides &amp; rationale · Q3</div><div class="btn-row"><button class="btn btn-primary btn-sm">⇩ PDF</button><button class="btn btn-ghost btn-sm">Preview</button></div></div></div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1.5fr 1fr;margin-top:16px;align-items:start;">
+        <div class="card"><div class="card-head"><div class="card-title">KPI trends · last 13 weeks</div><div class="seg"><button class="on">Health</button><button>Accuracy</button><button>Fill rate</button></div></div><div class="card-pad"><canvas id="repChart" height="200" style="width:100%;height:200px;display:block;"></canvas></div></div>
+        <div class="card ai-panel card-pad"><span class="ai-tag"><span class="pulse"></span> Executive agent · summary</span>
+          <p style="font-size:var(--s1);line-height:1.55;margin:12px 0 6px;color:var(--text);">Network health held above 95% for 11 of 13 weeks. The two dips align with the Ningbo congestion events; both were mitigated within 48h via agent re-routes. Forecast accuracy is trending up on the ensemble model. No structural supplier risk this quarter.</p>
+          <div class="btn-row" style="margin-top:8px;"><button class="btn btn-primary btn-sm">⇩ Export brief (PDF)</button><button class="btn btn-ghost btn-sm">⧉ Copy</button></div>
+        </div>
+      </div>
+    </div></section>
+
+    <!-- ================= COMING SOON ================= -->
+    <section class="screen" id="s-soon"><div class="wrap">
+      <div style="max-width:520px;margin:60px auto;text-align:center;">
+        <div style="font-size:40px;margin-bottom:12px;opacity:.6;">◷</div>
+        <h1 class="page-title" style="font-size:var(--s3);" id="soonTitle">Module</h1>
+        <p class="page-sub">This module follows the same design system. In the prototype, the five priority screens are built out — Dashboard, Inventory, Logistics, Knowledge, and Reports.</p>
+        <button class="btn btn-secondary" style="margin-top:16px;" data-nav="tower">← Back to Control Tower</button>
+      </div>
+    </div></section>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('themeBtn');
+  function curTheme(){return root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');}
+  btn.addEventListener('click',function(){root.setAttribute('data-theme',curTheme()==='dark'?'light':'dark');drawAll();});
+
+  var titles={tower:'Executive Control Tower',inventory:'Inventory Intelligence',logistics:'Logistics Command Center',knowledge:'Knowledge Center',reports:'Executive Reports',soon:'Module'};
+  var screenMap={tower:'s-tower',inventory:'s-inventory',logistics:'s-logistics',knowledge:'s-knowledge',reports:'s-reports',soon:'s-soon'};
+  function go(nav,label){
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+    document.getElementById(screenMap[nav]).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(function(n){n.classList.toggle('active', n.getAttribute('data-nav')===nav);});
+    document.getElementById('crumbLeaf').textContent = (nav==='soon' && label)? label : titles[nav];
+    if(nav==='soon') document.getElementById('soonTitle').textContent = (label||'Module');
+    window.scrollTo({top:0,behavior:'auto'});
+    requestAnimationFrame(drawAll);
+  }
+  document.querySelectorAll('[data-nav]').forEach(function(el){
+    el.addEventListener('click',function(){ var lbl=(this.textContent||'').replace(/\d+$/,'').trim(); go(this.getAttribute('data-nav'), lbl); });
+  });
+
+  // segmented control local toggle
+  document.querySelectorAll('.seg').forEach(function(s){s.addEventListener('click',function(e){if(e.target.tagName==='BUTTON'){s.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});e.target.classList.add('on');}});});
+
+  function css(v){return getComputedStyle(root).getPropertyValue(v).trim();}
+  function rng(seed){return function(){seed=(seed*9301+49297)%233280;return seed/233280;};}
+
+  function spark(cv){
+    if(!cv.clientWidth) return;
+    var g=cv.getContext('2d'); cv.width=cv.clientWidth*2; cv.height=cv.clientHeight*2;
+    var kind=cv.dataset.spark, seed=+cv.dataset.seed||4, r=rng(seed), w=cv.width, h=cv.height;
+    var col=kind==='good'?css('--good'):kind==='warning'?css('--warning'):kind==='critical'?css('--critical'):css('--info');
+    var n=20,pts=[],y=.5;
+    for(var i=0;i<n;i++){y+=(r()-0.45)*0.16;y=Math.max(.15,Math.min(.85,y));pts.push(y);}
+    if(kind==='good'||kind==='info'){for(var j=0;j<n;j++){pts[j]=0.68-(j/n)*0.32+(r()-0.5)*0.12;}}
+    g.beginPath();pts.forEach(function(p,i){var x=i/(n-1)*w,yy=h-p*h;i?g.lineTo(x,yy):g.moveTo(x,yy);});
+    g.lineTo(w,h);g.lineTo(0,h);g.closePath();
+    var gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,col+'55');gr.addColorStop(1,col+'00');g.fillStyle=gr;g.fill();
+    g.beginPath();pts.forEach(function(p,i){var x=i/(n-1)*w,yy=h-p*h;i?g.lineTo(x,yy):g.moveTo(x,yy);});
+    g.strokeStyle=col;g.lineWidth=2.5;g.lineJoin='round';g.stroke();
+    g.beginPath();g.arc(w,h-pts[n-1]*h,3.5,0,7);g.fillStyle=col;g.fill();
+  }
+
+  function area(id,seedA,seedB){
+    var cv=document.getElementById(id); if(!cv||!cv.clientWidth) return;
+    var dpr=2,g=cv.getContext('2d'); cv.width=cv.clientWidth*dpr; cv.height=cv.clientHeight*dpr; g.scale(dpr,dpr);
+    var w=cv.clientWidth,h=cv.clientHeight,pad=8;
+    g.clearRect(0,0,w,h);
+    g.strokeStyle=css('--hairline');g.lineWidth=1;
+    for(var i=0;i<4;i++){var yy=pad+i*(h-2*pad)/3;g.beginPath();g.moveTo(0,yy);g.lineTo(w,yy);g.stroke();}
+    var n=28,acc=css('--accent'),info=css('--info'),warn=css('--warning');
+    function series(base,amp,rr){var a=[],y=base;for(var i=0;i<n;i++){y+=(rr()-0.5)*amp;y=Math.max(.2,Math.min(.9,y));a.push(y);}return a;}
+    var s1=series(0.55,0.12,rng(seedA)),s2=series(0.5,0.08,rng(seedB));
+    g.setLineDash([4,4]);g.strokeStyle=warn;g.lineWidth=1.5;g.beginPath();g.moveTo(0,pad+8);g.lineTo(w,pad+8);g.stroke();g.setLineDash([]);
+    function path(a,fill,stroke){
+      g.beginPath();a.forEach(function(p,i){var x=i/(n-1)*w,yy=h-pad-p*(h-2*pad);i?g.lineTo(x,yy):g.moveTo(x,yy);});
+      if(fill){g.lineTo(w,h);g.lineTo(0,h);g.closePath();var gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,fill+'44');gr.addColorStop(1,fill+'00');g.fillStyle=gr;g.fill();}
+      g.beginPath();a.forEach(function(p,i){var x=i/(n-1)*w,yy=h-pad-p*(h-2*pad);i?g.lineTo(x,yy):g.moveTo(x,yy);});
+      g.strokeStyle=stroke;g.lineWidth=2.5;g.lineJoin='round';g.stroke();
+    }
+    path(s2,null,info);path(s1,acc,acc);
+  }
+
+  function mapLines(){
+    var cv=document.getElementById('mapLines'); if(!cv||!cv.clientWidth) return;
+    var dpr=2,g=cv.getContext('2d'); cv.width=cv.clientWidth*dpr; cv.height=cv.clientHeight*dpr; g.scale(dpr,dpr);
+    var w=cv.clientWidth,h=cv.clientHeight; g.clearRect(0,0,w,h);
+    var pts={sh:[.20,.38],ro:[.44,.28],me:[.78,.70],au:[.82,.34],ni:[.30,.66]};
+    function lane(a,b,col,dash){
+      g.beginPath();g.moveTo(a[0]*w,a[1]*h);
+      var mx=(a[0]+b[0])/2*w, my=(a[1]+b[1])/2*h-40;
+      g.quadraticCurveTo(mx,my,b[0]*w,b[1]*h);
+      g.strokeStyle=col;g.lineWidth=2;g.setLineDash(dash?[5,5]:[]);g.globalAlpha=.85;g.stroke();g.globalAlpha=1;g.setLineDash([]);
+    }
+    lane(pts.sh,pts.ro,css('--good'),false);
+    lane(pts.sh,pts.au,css('--good'),false);
+    lane(pts.ni,pts.me,css('--warning'),true);
+    lane(pts.ni,pts.au,css('--warning'),true);
+    lane(pts.ro,pts.me,css('--good'),false);
+  }
+
+  function repSpark(cv){
+    if(!cv.clientWidth) return;
+    var dpr=2,g=cv.getContext('2d');cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;g.scale(dpr,dpr);
+    var w=cv.clientWidth,h=cv.clientHeight,r=rng(+cv.dataset.seed||3),acc=css('--accent');
+    var n=16,a=[],y=.5;for(var i=0;i<n;i++){y+=(r()-0.5)*0.22;y=Math.max(.25,Math.min(.8,y));a.push(y);}
+    g.beginPath();a.forEach(function(p,i){var x=8+i/(n-1)*(w-16),yy=h-10-p*(h-24);i?g.lineTo(x,yy):g.moveTo(x,yy);});
+    g.lineTo(w-8,h);g.lineTo(8,h);g.closePath();
+    var gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,acc+'44');gr.addColorStop(1,acc+'00');g.fillStyle=gr;g.fill();
+    g.beginPath();a.forEach(function(p,i){var x=8+i/(n-1)*(w-16),yy=h-10-p*(h-24);i?g.lineTo(x,yy):g.moveTo(x,yy);});
+    g.strokeStyle=acc;g.lineWidth=2;g.lineJoin='round';g.stroke();
+  }
+
+  function drawAll(){
+    document.querySelectorAll('.screen.active .kpi-spark').forEach(spark);
+    document.querySelectorAll('.screen.active .rep-spark').forEach(repSpark);
+    area('towerChart',4,21); area('repChart',12,30); mapLines();
+  }
+  window.addEventListener('resize',drawAll);
+  drawAll();
+})();
+</script>

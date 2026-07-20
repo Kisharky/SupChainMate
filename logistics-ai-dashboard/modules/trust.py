@@ -36,7 +36,7 @@ from modules import tender as tender_mod
 
 _log = config.get_logger(__name__)
 
-VALID_STATUSES = ("PENDING", "APPROVED", "REJECTED", "MODIFIED")
+VALID_STATUSES = ("PENDING", "APPROVED", "REJECTED", "MODIFIED", "ESCALATED")
 MAX_SKU_RECOMMENDATIONS = 5
 
 

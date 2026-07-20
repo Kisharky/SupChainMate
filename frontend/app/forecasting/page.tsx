@@ -4,11 +4,15 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardHead, KpiCard } from "@/components/ui/primitives";
 import { ForecastChart } from "@/components/ForecastChart";
-import { api, ForecastResponse } from "@/lib/api";
+import { api, ForecastResponse, BacktestResponse } from "@/lib/api";
 
 export default function Forecasting() {
   const [data, setData] = useState<ForecastResponse | null>(null);
-  useEffect(() => { api.forecast().then(setData).catch(() => setData(null)); }, []);
+  const [bt, setBt] = useState<BacktestResponse | null>(null);
+  useEffect(() => {
+    api.forecast().then(setData).catch(() => setData(null));
+    api.backtest().then(setBt).catch(() => setBt(null));
+  }, []);
   const ins = data?.insights;
   const pct = ins?.demand_pct_change_vs_prior_week;
 
@@ -32,6 +36,55 @@ export default function Forecasting() {
         <div className="p-[18px]">
           {data ? <ForecastChart history={data.history} forecast={data.forecast} /> : <div className="h-[220px] grid place-items-center text-ink-3 text-[0.8125rem]">Loading forecast…</div>}
           {ins?.stockout_risk_detail && <p className="text-[0.8125rem] text-ink-2 mt-3">{ins.stockout_risk_detail}</p>}
+        </div>
+      </Card>
+
+      {/* Backtest — measurable accuracy */}
+      <Card className="mt-4">
+        <CardHead title="Forecast accuracy — backtest"
+          hint={bt ? `${bt.granularity} · ${bt.holdout_weeks}-week holdout` : "running…"} />
+        <div className="p-[18px]">
+          <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))" }}>
+            {[
+              { l: "Accuracy", v: bt?.accuracy != null ? `${bt.accuracy}%` : "—", hint: "100 − MAPE" },
+              { l: "MAPE", v: bt?.mape != null ? `${bt.mape}%` : "—", hint: "mean abs % error" },
+              { l: "MAE", v: bt?.mae ?? "—", hint: "mean abs error" },
+              { l: "RMSE", v: bt?.rmse ?? "—", hint: "root mean sq error" },
+              { l: "Bias", v: bt?.bias != null ? (bt.bias > 0 ? `+${bt.bias}` : bt.bias) : "—", hint: "over/under forecast" },
+            ].map((m) => (
+              <div key={m.l} className="rounded border p-3" style={{ borderColor: "var(--hairline)", background: "var(--panel-2)" }}>
+                <div className="eyebrow">{m.l}</div>
+                <div className="text-[1.5rem] font-bold tnum mt-1">{m.v}</div>
+                <div className="text-[0.6875rem] text-ink-3 mt-0.5">{m.hint}</div>
+              </div>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[0.8125rem] min-w-[520px]">
+              <thead><tr>
+                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-ink-3 border-b" style={{ borderColor: "var(--hairline)" }}>Week</th>
+                <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wider text-ink-3 border-b" style={{ borderColor: "var(--hairline)" }}>Actual</th>
+                <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wider text-ink-3 border-b" style={{ borderColor: "var(--hairline)" }}>Predicted</th>
+                <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wider text-ink-3 border-b" style={{ borderColor: "var(--hairline)" }}>Error %</th>
+              </tr></thead>
+              <tbody>
+                {(bt?.points ?? []).map((p) => {
+                  const errPct = p.actual ? ((p.predicted - p.actual) / p.actual) * 100 : 0;
+                  return (
+                    <tr key={p.ds}>
+                      <td className="px-3 py-2 border-b text-ink-2 font-mono" style={{ borderColor: "var(--hairline)" }}>{p.ds}</td>
+                      <td className="px-3 py-2 border-b text-right tnum text-ink" style={{ borderColor: "var(--hairline)" }}>{p.actual.toLocaleString()}</td>
+                      <td className="px-3 py-2 border-b text-right tnum text-ink-2" style={{ borderColor: "var(--hairline)" }}>{p.predicted.toLocaleString()}</td>
+                      <td className="px-3 py-2 border-b text-right tnum" style={{ borderColor: "var(--hairline)", color: Math.abs(errPct) > 25 ? "var(--critical)" : Math.abs(errPct) > 10 ? "var(--warning)" : "var(--good)" }}>
+                        {errPct > 0 ? "+" : ""}{errPct.toFixed(1)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!bt?.points?.length && <tr><td colSpan={4} className="px-3 py-4 text-ink-3 text-center">Running backtest…</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Card>
     </AppShell>

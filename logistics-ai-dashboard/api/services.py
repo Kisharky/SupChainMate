@@ -158,6 +158,16 @@ def executive_kpis() -> dict[str, Any]:
         except Exception:  # noqa: BLE001
             pass
 
+        # Forecast accuracy from the real Prophet holdout backtest
+        try:
+            bt = _backtest()
+            if bt.get("accuracy") is not None:
+                kpis["forecast_accuracy"].update(value=int(round(bt["accuracy"])),
+                                                 status=_health_status(bt["accuracy"]))
+                live["forecast_accuracy"] = True
+        except Exception:  # noqa: BLE001
+            pass
+
         # Inventory value from the real SKU plan × unit price
         try:
             classified, plan = _inventory_frame()
@@ -480,6 +490,102 @@ def reports_list() -> dict[str, Any]:
         {"id": "audit-trail", "title": "Decision Audit Trail",
          "subtitle": "Approvals, overrides & rationale", "status": "ready"},
     ], "source": "live"}
+
+
+# ---- Decision Center (trust layer + audit) -----------------------------------
+def _ensure_recommendations() -> None:
+    """Generate + persist recommendations from live engine context (idempotent;
+    save_recommendation dedupes by key)."""
+    from modules import cost_audit, sku, trust
+    ctx: dict[str, Any] = {"service_level": 0.95, "avg_lead_time": 7.0, "history_days": 180}
+    try:
+        classified, plan = _inventory_frame()
+        ctx["sku_plan"] = sku.stock_status(plan)  # adds ORDER NOW/SOON Status column
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        shipments, _sk, scorecard = _shipments()
+        ctx["scorecard"] = scorecard
+        ctx["audit"] = cost_audit.run_audit(shipments)
+    except Exception:  # noqa: BLE001
+        pass
+    recs = trust.generate_all(ctx)
+    trust.sync_recommendations(recs)
+
+
+def decisions_snapshot() -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        from modules import trust
+        _ensure_recommendations()
+        return {
+            "kpis": trust.summary_kpis(),
+            "pending": trust.pending(),
+            "history": trust.history(limit=60),
+        }
+    return _safe(build, {"kpis": {}, "pending": [], "history": []})
+
+
+def decide(rec_key: str, status: str, note: str = "", actor: str = "user") -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        from modules import trust
+        ok = trust.decide(rec_key, status.upper(), note=note, actor=actor)
+        return {"ok": ok, "rec_key": rec_key, "status": status.upper()}
+    return _safe(build, {"ok": False, "rec_key": rec_key, "status": status})
+
+
+def audit_trail(limit: int = 200) -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        from modules import store
+        return {"entries": store.load_audit_log(limit=limit)}
+    return _safe(build, {"entries": []})
+
+
+# ---- Forecast accuracy backtest ----------------------------------------------
+@_ttl_cache(1800)
+def _backtest(holdout_weeks: int = 10):
+    """Forecast-accuracy backtest at planning (weekly) granularity — the level
+    S&OP accuracy is actually quoted at. Aggregate daily orders to weekly demand,
+    hold out the last ``holdout_weeks``, fit Prophet on the rest, and score
+    predicted vs actual (MAPE / MAE / RMSE / Bias). Cached 30 min.
+    """
+    import numpy as np
+    import pandas as pd
+    from prophet import Prophet
+    from modules import forecast
+    orders = forecast.load_orders()
+    daily = forecast.daily_demand(orders)[["ds", "y"]].sort_values("ds")
+    weekly = (daily.set_index("ds")["y"].resample("W").sum().reset_index())
+    # Trim trailing partial weeks (near-zero tail) so MAPE stays meaningful.
+    med = float(weekly["y"].median())
+    if med > 0:
+        healthy = weekly["y"] >= 0.2 * med
+        if healthy.any():
+            weekly = weekly.iloc[: healthy[healthy].index[-1] + 1].reset_index(drop=True)
+    train, test = weekly.iloc[:-holdout_weeks], weekly.iloc[-holdout_weeks:]
+    model = Prophet(weekly_seasonality=False, daily_seasonality=False, yearly_seasonality=True)
+    model.fit(train)
+    future = model.make_future_dataframe(periods=holdout_weeks, freq="W")
+    fc = model.predict(future).tail(holdout_weeks).reset_index(drop=True)
+    actual = test["y"].to_numpy(dtype=float)
+    pred = np.clip(fc["yhat"].to_numpy(dtype=float), 0, None)
+    err = pred - actual
+    nz = actual > 0
+    mape = float(np.mean(np.abs(err[nz] / actual[nz])) * 100) if nz.any() else None
+    mae = float(np.mean(np.abs(err)))
+    rmse = float(np.sqrt(np.mean(err ** 2)))
+    bias = float(np.mean(err))
+    points = [{"ds": str(d)[:10], "actual": round(float(a), 1), "predicted": round(float(p), 1)}
+              for d, a, p in zip(test["ds"], actual, pred)]
+    return {"mape": None if mape is None else round(mape, 1),
+            "mae": round(mae, 1), "rmse": round(rmse, 1), "bias": round(bias, 1),
+            "accuracy": None if mape is None else round(max(0.0, 100 - mape), 1),
+            "holdout_weeks": holdout_weeks, "granularity": "weekly", "points": points}
+
+
+def forecast_backtest() -> dict[str, Any]:
+    return _safe(lambda: {**_backtest(), "ok": True},
+                 {"mape": None, "mae": None, "rmse": None, "bias": None,
+                  "accuracy": None, "holdout_weeks": 10, "granularity": "weekly", "points": []})
 
 
 # ---- AI platform status (observability) --------------------------------------

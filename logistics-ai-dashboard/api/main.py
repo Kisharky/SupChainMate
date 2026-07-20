@@ -42,6 +42,13 @@ class AskRequest(BaseModel):
     query: str
 
 
+class DecideRequest(BaseModel):
+    rec_key: str
+    status: str  # APPROVED | REJECTED | MODIFIED | ESCALATED
+    note: str = ""
+    actor: str = "user"
+
+
 class WorkflowRequest(BaseModel):
     workflow: str = "full_control_tower"
     ai_enabled: bool = False
@@ -110,6 +117,26 @@ def knowledge_stats() -> dict:
 @app.post("/api/knowledge/ask")
 def knowledge_ask(req: AskRequest) -> dict:
     return services.knowledge_ask(req.query)
+
+
+@app.get("/api/forecast/backtest")
+def forecast_backtest() -> dict:
+    return services.forecast_backtest()
+
+
+@app.get("/api/decisions")
+def decisions() -> dict:
+    return services.decisions_snapshot()
+
+
+@app.post("/api/decisions/decide")
+def decisions_decide(req: DecideRequest) -> dict:
+    return services.decide(req.rec_key, req.status, note=req.note, actor=req.actor)
+
+
+@app.get("/api/audit")
+def audit(limit: int = 200) -> dict:
+    return services.audit_trail(limit=limit)
 
 
 @app.get("/api/reports")

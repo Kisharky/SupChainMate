@@ -17,6 +17,7 @@ const NAV: { label: string; href: string; icon: string; badge?: number }[] = [
   { label: "Procurement", href: "/procurement", icon: "◈" },
   { label: "Warehouse", href: "/warehouse", icon: "▤" },
   { label: "Logistics", href: "/logistics", icon: "◎", badge: 3 },
+  { label: "Decisions", href: "/decisions", icon: "◇" },
   { label: "Knowledge", href: "/knowledge", icon: "◍" },
   { label: "Reports", href: "/reports", icon: "▥" },
 ];

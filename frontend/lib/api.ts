@@ -82,6 +82,27 @@ export interface WorkflowRun {
 export interface ReportItem { id: string; title: string; subtitle: string; status: string; }
 export interface ReportsResponse { reports: ReportItem[]; source: string; }
 
+export interface Driver { reason: string; evidence: string; }
+export interface DecisionImpact { cost_savings_yr?: number | null; stockout_risk_pct?: number | null; service_level_pct?: number | null; other?: string | null; }
+export interface Recommendation {
+  rec_key: string; source: string; category: string; title: string; action: string;
+  drivers: Driver[]; confidence: number; confidence_basis: string; impact: DecisionImpact;
+  status: string; created_ts?: string; decided_ts?: string; decided_by?: string; note?: string;
+}
+export interface DecisionsResponse {
+  kpis: { pending: number; approved: number; rejected: number; approved_savings: number; avg_confidence: number | null };
+  pending: Recommendation[]; history: Recommendation[]; source: string;
+}
+export interface AuditEntry { ts: string; actor: string; event: string; rec_key: string | null; details: string; }
+
+export interface BacktestResponse {
+  mape: number | null; mae: number | null; rmse: number | null; bias: number | null;
+  accuracy: number | null; holdout_weeks: number; granularity: string;
+  points: { ds: string; actual: number; predicted: number }[]; source: string;
+}
+
+export type DecisionStatus = "APPROVED" | "REJECTED" | "MODIFIED" | "ESCALATED";
+
 // ---- Endpoints --------------------------------------------------------------
 export const api = {
   kpis: () => get<KpiResponse>("/api/kpis"),
@@ -93,6 +114,11 @@ export const api = {
   operations: () => get<OperationsResponse>("/api/operations"),
   warehouse: () => get<WarehouseResponse>("/api/warehouse"),
   reports: () => get<ReportsResponse>("/api/reports"),
+  backtest: () => get<BacktestResponse>("/api/forecast/backtest"),
+  decisions: () => get<DecisionsResponse>("/api/decisions"),
+  decide: (rec_key: string, status: DecisionStatus, note = "") =>
+    post<{ ok: boolean; rec_key: string; status: string }>("/api/decisions/decide", { rec_key, status, note }),
+  audit: () => get<{ entries: AuditEntry[] }>("/api/audit"),
   knowledgeAsk: (query: string) => post<KnowledgeAnswer>("/api/knowledge/ask", { query }),
   runWorkflow: (workflow = "full_control_tower", ai_enabled = false) =>
     post<WorkflowRun>("/api/agents/run", { workflow, ai_enabled }),

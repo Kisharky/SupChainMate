@@ -67,7 +67,7 @@ def render(shared_context: dict) -> None:
     wf_labels = {
         "planning_chain": "📦 Planning chain — Demand → Inventory → Procurement → Executive",
         "logistics_review": "⛟ Logistics review — Logistics → Supplier Risk → Sustainability → Executive",
-        "full_control_tower": "🕸 Full control tower — all 8 agents",
+        "full_control_tower": "🕸 Full control tower — all specialists → Executive",
     }
     from ai import AI
     _ai_status = AI.status()
@@ -114,6 +114,43 @@ def render(shared_context: dict) -> None:
         <b style="color:#FBC02D;">{run.recommendations_created} NEW RECOMMENDATION(S)</b>
         ROUTED TO THE DECISION CENTER FOR APPROVAL
     </div>""", unsafe_allow_html=True)
+    _render_observability()
+
+
+def _render_observability() -> None:
+    """AI platform observability — request log, tokens, latency, cache."""
+    import pandas as pd
+    from ai import observability
+    from ai.router import AI
+
+    with st.expander("🔭 AI PLATFORM OBSERVABILITY — REQUESTS · TOKENS · LATENCY · CACHE"):
+        s = observability.stats()
+        cache = AI.router.cache.stats()
+        if not s.get("requests"):
+            st.caption("No AI requests logged yet. Enable 🧠 AI reasoning and run a "
+                       "workflow, or ask the Executive Copilot, to populate the log. "
+                       "(In this environment NVIDIA is only reachable from your machine.)")
+        o1, o2, o3, o4, o5 = st.columns(5)
+        o1.metric("AI REQUESTS", f"{s.get('requests', 0):,}")
+        o2.metric("TOTAL TOKENS", f"{s.get('total_tokens', 0):,}")
+        o3.metric("AVG LATENCY", f"{s.get('avg_latency_ms', 0):.0f} ms")
+        o4.metric("SUCCESS RATE",
+                  f"{s['success_rate']:.0f}%" if s.get("success_rate") is not None else "—")
+        o5.metric("CACHE HIT",
+                  f"{cache['hit_rate']:.0f}%" if cache.get("hit_rate") is not None else "—")
+        if s.get("by_capability"):
+            st.markdown("<div class='hud-label' style='margin:6px 0 2px 0;'>BY CAPABILITY</div>",
+                        unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame(s["by_capability"]), use_container_width=True,
+                         hide_index=True)
+        recent = observability.recent(limit=25)
+        if recent:
+            df = pd.DataFrame(recent)[
+                ["ts", "task", "capability", "model", "latency_ms", "total_tokens",
+                 "ok", "cached", "fell_back"]]
+            st.markdown("<div class='hud-label' style='margin:8px 0 2px 0;'>RECENT AI REQUESTS</div>",
+                        unsafe_allow_html=True)
+            st.dataframe(df, use_container_width=True, hide_index=True, height=220)
 
     exec_result = next((r for r in run.results if r.agent == "executive"), None)
     if exec_result and exec_result.outputs.get("brief"):

@@ -14,6 +14,15 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ai.router import AI, AIRouter
+from modules import store
+
+
+@pytest.fixture(autouse=True)
+def _isolated_db(tmp_path, monkeypatch):
+    """Point SQLite at a throwaway file so no test touches the real DB.
+    Tests that set their own tmp_db override this (both are autouse; the
+    module-level fixture runs after this conftest one)."""
+    monkeypatch.setattr(store, "DB_PATH", str(tmp_path / "conftest.db"))
 
 
 @pytest.fixture(autouse=True)

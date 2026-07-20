@@ -170,8 +170,13 @@ def test_full_workflow_passes_context_and_audits(shared_context):
     run = orch.run_workflow("full_control_tower", shared_context)
     assert [r.agent for r in run.results] == [
         "demand_forecast", "inventory", "procurement", "logistics",
-        "supplier_risk", "warehouse", "sustainability", "executive"]
+        "supplier_risk", "warehouse", "sustainability", "knowledge", "executive"]
     assert all(r.ok for r in run.results)
+    # Executive coordinates: its dependency list covers every specialist
+    from modules.agents.domain import ExecutiveAgent
+    assert set(ExecutiveAgent.depends_on) == {
+        "demand_forecast", "inventory", "procurement", "logistics",
+        "supplier_risk", "warehouse", "sustainability", "knowledge"}
     # context passing: executive brief mentions upstream agents' numbers
     brief = run.results[-1].outputs["brief"]
     assert "Demand:" in brief and "Inventory:" in brief and "Risk:" in brief
@@ -182,7 +187,23 @@ def test_full_workflow_passes_context_and_audits(shared_context):
     # audit trail captured the run
     events = [e["event"] for e in store.load_audit_log()]
     assert "workflow_started" in events and "workflow_completed" in events
-    assert events.count("agent_run") == 8
+    assert events.count("agent_run") == 9
+
+
+def test_knowledge_agent_reports_kb_coverage(shared_context):
+    from modules.agents.domain import KnowledgeAgent
+    from modules import store
+    # empty KB → low confidence, honest finding
+    empty = KnowledgeAgent().execute(shared_context, {})
+    assert empty.ok and empty.outputs["policies_found"] == 0
+    assert "empty" in empty.findings[0].lower()
+    # with a matching policy → coverage found, cited
+    store.add_document("sla_policy.txt",
+                       "Carrier SLA on-time performance must exceed 95%. Carriers "
+                       "grading below this face review.")
+    covered = KnowledgeAgent().execute(shared_context, {})
+    assert covered.outputs["policies_found"] >= 1
+    assert covered.confidence > empty.confidence
 
 
 def test_planning_chain_inter_agent_flow(shared_context):

@@ -1678,7 +1678,7 @@ with st.expander("📚 KNOWLEDGE BASE — SOPs · POLICIES · CONTRACTS (RAG)", 
             <div style="font-family:'Teko',sans-serif;font-size:1.8rem;color:#00D4FF;">
                 {kb_stats['documents']} DOCS</div>
             <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#666;">
-                {kb_stats['chunks']} SEARCHABLE CHUNKS</div>
+                {kb_stats['chunks']} CHUNKS · {kb_stats.get('indexed_chunks', 0)} VECTOR-INDEXED</div>
         </div>""", unsafe_allow_html=True)
     if kb_stats["names"]:
         kb_docs = store.load_documents()

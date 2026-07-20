@@ -16,7 +16,7 @@ from typing import Optional
 
 import config
 from ai.types import (AIResponse, EmbeddingResponse, Message, ModelSpec,
-                      ProviderError)
+                      ProviderError, TokenUsage)
 
 _log = config.get_logger(__name__)
 
@@ -33,9 +33,12 @@ class NvidiaProvider:
 
     def __init__(self, base_url: str = NVIDIA_BASE_URL) -> None:
         self._base_url = base_url
-        self._clients: dict[str, object] = {}   # api_key -> OpenAI client (cached)
+        # Connection pooling / provider reuse: one client per key, reused for
+        # the process lifetime (the OpenAI SDK holds a pooled httpx transport).
+        self._clients: dict[str, object] = {}
+        self._aclients: dict[str, object] = {}
 
-    # ── Client management (centralized creation) ──────────────────────────────
+    # ── Client management (centralized creation, pooled) ──────────────────────
     def _client(self, api_key: str):
         if api_key not in self._clients:
             try:
@@ -48,8 +51,54 @@ class NvidiaProvider:
                 timeout=REQUEST_TIMEOUT_S, max_retries=0)
         return self._clients[api_key]
 
+    def _aclient(self, api_key: str):
+        if api_key not in self._aclients:
+            try:
+                from openai import AsyncOpenAI
+            except ImportError as e:
+                raise ProviderError("openai package not installed") from e
+            self._aclients[api_key] = AsyncOpenAI(
+                base_url=self._base_url, api_key=api_key,
+                timeout=REQUEST_TIMEOUT_S, max_retries=0)
+        return self._aclients[api_key]
+
     def is_configured(self, spec: ModelSpec) -> bool:
         return bool(config.get_env(spec.api_key_env))
+
+    # ── Shared request/response shaping (no duplication across sync/async) ────
+    @staticmethod
+    def _chat_payload(messages: list[Message], spec: ModelSpec) -> dict:
+        payload = dict(
+            model=spec.model,
+            messages=[{"role": m.role, "content": m.content} for m in messages],
+            temperature=spec.temperature, top_p=spec.top_p,
+            max_tokens=spec.max_tokens, stream=False)
+        if spec.extra_body:
+            payload["extra_body"] = spec.extra_body
+        return payload
+
+    @staticmethod
+    def _usage(resp) -> TokenUsage:
+        u = getattr(resp, "usage", None)
+        if u is None:
+            return TokenUsage()
+        return TokenUsage(
+            prompt_tokens=int(getattr(u, "prompt_tokens", 0) or 0),
+            completion_tokens=int(getattr(u, "completion_tokens", 0) or 0),
+            total_tokens=int(getattr(u, "total_tokens", 0) or 0))
+
+    def _shape_chat(self, resp, spec: ModelSpec, t0: float) -> AIResponse:
+        choice = resp.choices[0].message
+        text = (getattr(choice, "content", None) or "").strip()
+        reasoning = (getattr(choice, "reasoning_content", None)
+                     or getattr(choice, "reasoning", None))
+        return AIResponse(
+            text=text, capability=spec.capability.value, ok=bool(text),
+            model_used=spec.model, provider=self.name,
+            reasoning=reasoning.strip() if isinstance(reasoning, str) else None,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
+            usage=self._usage(resp),
+            error=None if text else "empty completion")
 
     # ── Retry wrapper ─────────────────────────────────────────────────────────
     def _with_retries(self, fn, what: str):
@@ -66,40 +115,43 @@ class NvidiaProvider:
                     time.sleep(wait)
         raise ProviderError(f"{what} failed after {MAX_RETRIES} attempts: {last}")
 
-    # ── Chat / reasoning ──────────────────────────────────────────────────────
+    # ── Chat / reasoning (sync) ───────────────────────────────────────────────
     def chat(self, messages: list[Message], spec: ModelSpec) -> AIResponse:
         key = config.get_env(spec.api_key_env)
         if not key:
             return AIResponse.failure(spec.capability.value,
                                       f"{spec.api_key_env} not set")
         t0 = time.perf_counter()
-        payload = dict(
-            model=spec.model,
-            messages=[{"role": m.role, "content": m.content} for m in messages],
-            temperature=spec.temperature,
-            top_p=spec.top_p,
-            max_tokens=spec.max_tokens,
-            stream=False,
-        )
-        if spec.extra_body:
-            payload["extra_body"] = spec.extra_body
+        payload = self._chat_payload(messages, spec)
         try:
             client = self._client(key)
             resp = self._with_retries(
                 lambda: client.chat.completions.create(**payload), "chat")
         except ProviderError as e:
             return AIResponse.failure(spec.capability.value, str(e))
+        return self._shape_chat(resp, spec, t0)
 
-        choice = resp.choices[0].message
-        text = (getattr(choice, "content", None) or "").strip()
-        reasoning = (getattr(choice, "reasoning_content", None)
-                     or getattr(choice, "reasoning", None))
-        return AIResponse(
-            text=text, capability=spec.capability.value, ok=bool(text),
-            model_used=spec.model, provider=self.name,
-            reasoning=reasoning.strip() if isinstance(reasoning, str) else None,
-            latency_ms=round((time.perf_counter() - t0) * 1000),
-            error=None if text else "empty completion")
+    # ── Chat / reasoning (async) — same shaping, non-blocking transport ───────
+    async def achat(self, messages: list[Message], spec: ModelSpec) -> AIResponse:
+        import asyncio
+        key = config.get_env(spec.api_key_env)
+        if not key:
+            return AIResponse.failure(spec.capability.value,
+                                      f"{spec.api_key_env} not set")
+        t0 = time.perf_counter()
+        payload = self._chat_payload(messages, spec)
+        last: Optional[Exception] = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                client = self._aclient(key)
+                resp = await client.chat.completions.create(**payload)
+                return self._shape_chat(resp, spec, t0)
+            except Exception as e:  # noqa: BLE001 — non-raising contract
+                last = e
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(BACKOFF_BASE_S * (2 ** (attempt - 1)))
+        return AIResponse.failure(spec.capability.value,
+                                  f"achat failed after {MAX_RETRIES} attempts: {last}")
 
     # ── Embeddings ────────────────────────────────────────────────────────────
     def embed(self, texts: list[str], spec: ModelSpec,

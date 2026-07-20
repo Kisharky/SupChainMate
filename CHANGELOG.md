@@ -2,6 +2,14 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v5.5.0 — Production Hardening: Observability, Caching, Enterprise RAG
+- **RAG**: new `ai/rag.py` enterprise pipeline — intelligent overlap chunking, embedding generation, **cached vector index** (chunk embeddings persisted by content hash; only new chunks are embedded), hybrid semantic+lexical ranking, citation generation, and retrieval caching (TTL, mode-aware key). `modules/knowledge.py` is now a thin adapter
+- **Observability**: `ai/observability.py` records every AI request — timestamp, capability, model, provider, latency, tokens, cached/fallback flags, errors — to SQLite; router uses it as the observer. New AI Platform Observability panel (requests, tokens, avg latency, success/cache/fallback rates, by-capability, recent log)
+- **Performance**: response cache (`ai/cache.py`, LRU+TTL, keyed by capability+prompt+params) in the router; token usage captured from provider `usage`; pooled clients reused per key; async provider path (`achat`) + `router.aask()` for non-Streamlit deployment
+- **Agents**: new **Knowledge Agent** (grounds decisions in policies/SOPs via RAG); Executive agent coordinates all specialists (depends on every one, runs last); `full_control_tower` now runs 9 agents. Every agent requests capabilities, never models (guardrail test enforces it)
+- **Quality**: shared payload/response shaping in the NVIDIA provider (no sync/async duplication); fixed min-max normalization zeroing a single-candidate RAG hit; conftest isolates the DB so no test touches the real store
+- Tests: +3 net (139 total) — cache hits, token/observability capture, KnowledgeAgent coverage, hybrid retriever selection
+
 ## v5.4.0 — Provider-Agnostic AI Architecture (NVIDIA NIM)
 - **NEW**: `ai/` package — capability-routed AI layer. `router.py` (`AI.ask(capability, task, context)`, the sole capability→model resolver, fallback chain, audit sink), `registry.py` (capability→ModelSpec plan), `providers/nvidia.py` (one cached OpenAI-compatible client per key, own retry policy, 30s timeout, non-raising), `types.py` (Capability/ModelSpec/AIResponse dataclasses)
 - **NEW**: capability services — `reasoning` (operations/executive), `embeddings`, `coding`, `safety`, `ocr`, `vision`, `memory`

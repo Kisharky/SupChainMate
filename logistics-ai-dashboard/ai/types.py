@@ -47,6 +47,14 @@ class Message:
 
 
 @dataclass
+class TokenUsage:
+    """Token accounting from a provider, when reported."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+@dataclass
 class AIResponse:
     """The uniform result of every AI.ask() call."""
     text: str
@@ -57,6 +65,8 @@ class AIResponse:
     reasoning: Optional[str] = None         # chain-of-thought when the model emits it
     latency_ms: int = 0
     fell_back: bool = False                 # a fallback path served this
+    cached: bool = False                    # served from the response cache
+    usage: TokenUsage = field(default_factory=TokenUsage)
     error: Optional[str] = None
 
     @classmethod

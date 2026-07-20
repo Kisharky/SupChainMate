@@ -55,6 +55,10 @@ def _render_result(result, step: int, total: int) -> None:
                     margin-top:6px;">
             BASIS: {result.confidence_basis} &nbsp;·&nbsp; HANDS DOWNSTREAM: {handoff}
         </div>
+        {f'''<div style="background:#0D0D10;border-left:2px solid #00D4FF;padding:6px 12px;
+                    margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:0.68rem;
+                    color:#AACCDD;white-space:pre-wrap;">🧠 {result.ai_narrative}</div>'''
+          if getattr(result, 'ai_narrative', None) else ''}
     </div>""", unsafe_allow_html=True)
 
 
@@ -65,17 +69,32 @@ def render(shared_context: dict) -> None:
         "logistics_review": "⛟ Logistics review — Logistics → Supplier Risk → Sustainability → Executive",
         "full_control_tower": "🕸 Full control tower — all 8 agents",
     }
-    c1, c2 = st.columns([3, 1])
+    from ai import AI
+    _ai_status = AI.status()
+    _ai_ready = any(_ai_status.get(c) for c in
+                    ("reasoning.operations", "reasoning.executive"))
+
+    c1, c2, c3 = st.columns([3, 1, 1])
     choice = c1.selectbox("Workflow", list(orch.workflows),
                           format_func=lambda k: wf_labels.get(k, k),
                           key="orch_workflow", label_visibility="collapsed")
-    go = c2.button("▶ RUN WORKFLOW", key="orch_run", use_container_width=True)
+    ai_on = c2.toggle("🧠 AI reasoning", value=False, key="orch_ai",
+                      help=("Each agent adds an LLM narrative via the AI Router "
+                            "(capability → model). "
+                            + ("Reasoning models configured." if _ai_ready else
+                               "No NVIDIA reasoning key set — uses Groq/offline fallback.")))
+    go = c3.button("▶ RUN WORKFLOW", key="orch_run", use_container_width=True)
     st.caption("PIPELINE: " + "  →  ".join(
-        a.replace("_", " ").upper() for a in orch.workflows[choice]))
+        a.replace("_", " ").upper() for a in orch.workflows[choice])
+        + "   ·   AI ROUTER: " + " / ".join(
+            f"{k.split('.')[-1]}={'✓' if v else '—'}"
+            for k, v in _ai_status.items() if k.startswith("reasoning")))
 
     if go:
-        with st.spinner(f"Running {len(orch.workflows[choice])} agents..."):
-            st.session_state.orch_last_run = orch.run_workflow(choice, shared_context)
+        with st.spinner(f"Running {len(orch.workflows[choice])} agents"
+                        f"{' with AI reasoning' if ai_on else ''}..."):
+            st.session_state.orch_last_run = orch.run_workflow(
+                choice, shared_context, ai_enabled=ai_on)
 
     run = st.session_state.get("orch_last_run")
     if run is None:

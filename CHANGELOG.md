@@ -2,6 +2,14 @@
 
 All notable changes to SupChainMate are documented here.
 
+## v5.4.0 — Provider-Agnostic AI Architecture (NVIDIA NIM)
+- **NEW**: `ai/` package — capability-routed AI layer. `router.py` (`AI.ask(capability, task, context)`, the sole capability→model resolver, fallback chain, audit sink), `registry.py` (capability→ModelSpec plan), `providers/nvidia.py` (one cached OpenAI-compatible client per key, own retry policy, 30s timeout, non-raising), `types.py` (Capability/ModelSpec/AIResponse dataclasses)
+- **NEW**: capability services — `reasoning` (operations/executive), `embeddings`, `coding`, `safety`, `ocr`, `vision`, `memory`
+- **NEW**: model plan via NVIDIA NIM — embedding→nemotron-3-embed-1b, reasoning.executive→nemotron-3-ultra-550b-a55b, reasoning.operations→z-ai/glm-5.2, coding→deepseek-v4-flash (vision/ocr/safety declared for wiring)
+- **REFACTOR**: agents call `AI.ask()` via the base class (opt-in AI-reasoning toggle in the orchestrator); no agent references a model name. RAG answers + embedding retrieval route through the AI layer with lexical/Groq fallback
+- **QUALITY**: dependency injection (registry/providers/offline handler), type hints throughout, retries + timeouts, graceful fallback, every AI call audit-logged
+- Requirements: openai; tests: +17 (136 total) — registry, router fallback, provider retries/caching (mocked), agent narrative routing, RAG retriever selection
+
 ## v5.3.0 — Geo Stack: Leaflet · MapTiler · Routing · Weather
 - **NEW**: `modules/geo.py` — vendor-neutral geo adapters: MapTiler tile URLs, Nominatim geocoding (keyless, SQLite-cached, rate-polite), road matrices (HERE Matrix API with key → OSRM public server keyless), current weather (OpenWeatherMap with key → Open-Meteo keyless) with delivery-risk notes
 - **NEW**: `views/map_view.py` — Leaflet (folium) disruption radar with MapTiler dark tiles, risk-colored markers, hub pins; plotly mapbox fallback when unavailable

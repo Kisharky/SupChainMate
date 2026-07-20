@@ -69,6 +69,7 @@ class AgentResult:
     requires_approval: bool = False
     duration_ms: int = 0
     error: Optional[str] = None
+    ai_narrative: Optional[str] = None   # LLM narrative when AI reasoning is enabled
 
     @property
     def ok(self) -> bool:
@@ -76,12 +77,14 @@ class AgentResult:
 
 
 class BaseAgent(ABC):
-    """Template-method base: scoping, timing, and failure containment."""
+    """Template-method base: scoping, timing, failure containment, and — when
+    enabled — AI reasoning through the router (never a model directly)."""
 
     name: str = "agent"
     objective: str = ""
     required_context: list[str] = []
     depends_on: list[str] = []     # upstream agent names whose outputs it may read
+    reasoning_capability: str = "reasoning.operations"   # router picks the model
 
     @abstractmethod
     def run(self, ctx: ScopedContext) -> AgentResult:
@@ -89,8 +92,10 @@ class BaseAgent(ABC):
 
     def execute(self, shared: dict[str, Any],
                 upstream: dict[str, dict[str, Any]],
-                upstream_confidence: Optional[dict[str, float]] = None) -> AgentResult:
-        """Scope the context, run with timing, contain failures."""
+                upstream_confidence: Optional[dict[str, float]] = None,
+                ai_enabled: bool = False) -> AgentResult:
+        """Scope the context, run with timing, contain failures, and
+        optionally add an AI narrative via the router."""
         scoped = ScopedContext(
             shared, set(self.required_context),
             {k: v for k, v in upstream.items() if k in self.depends_on},
@@ -107,6 +112,8 @@ class BaseAgent(ABC):
                                  findings=[f"Agent failed: {e}"],
                                  confidence=20.0, confidence_basis="agent error",
                                  error=str(e))
+        if ai_enabled and result.ok:
+            result.ai_narrative = self._ai_narrative(result, upstream)
         result.duration_ms = round((time.perf_counter() - t0) * 1000)
         result.requires_approval = result.requires_approval or bool(result.recommendations)
         result.confidence = float(min(max(result.confidence, 0.0), 100.0))
@@ -114,3 +121,20 @@ class BaseAgent(ABC):
                   self.name, result.confidence, len(result.findings),
                   len(result.recommendations), result.duration_ms)
         return result
+
+    def _ai_narrative(self, result: "AgentResult",
+                      upstream: dict[str, dict[str, Any]]) -> Optional[str]:
+        """Ask the router to narrate this agent's deterministic findings. The
+        agent never picks a model — it names a capability; the router decides.
+        Numbers come from `result`, never from the model."""
+        try:
+            from ai import AI
+            context = {"agent": self.name, "objective": self.objective,
+                       "findings": result.findings, "outputs": result.outputs,
+                       "confidence": result.confidence,
+                       "upstream": {k: upstream.get(k) for k in self.depends_on}}
+            resp = AI.ask(self.reasoning_capability, f"{self.name}_review", context)
+            return resp.text if resp.ok and resp.text else None
+        except Exception as e:  # AI enrichment must never break an agent
+            _log.warning("AI narrative for %s failed: %s", self.name, e)
+            return None

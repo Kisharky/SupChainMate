@@ -49,11 +49,36 @@ def _all_chunks() -> list[dict]:
     return chunks
 
 
+def _embedding_retrieve(query: str, chunks: list[dict], top_k: int) -> Optional[list[dict]]:
+    """Semantic retrieval via the embedding capability (nemotron-3-embed-1b).
+    Returns None when embeddings are unavailable so the caller falls back."""
+    try:
+        from ai import embeddings as ai_embeddings
+        if not ai_embeddings.available():
+            return None
+        doc_vecs = ai_embeddings.embed_documents([c["text"] for c in chunks])
+        q_vec = ai_embeddings.embed_query(query)
+        if doc_vecs is None or q_vec is None:
+            return None
+        from sklearn.metrics.pairwise import cosine_similarity
+        sims = cosine_similarity([q_vec], doc_vecs).ravel()
+    except Exception as e:  # any embedding failure → lexical fallback
+        _log.info("Embedding retrieval unavailable (%s) — lexical fallback", e)
+        return None
+    order = np.argsort(sims)[::-1][:top_k]
+    return [{**chunks[i], "score": round(float(sims[i]), 3), "retriever": "embedding"}
+            for i in order if sims[i] >= MIN_SCORE]
+
+
 def retrieve(query: str, top_k: int = TOP_K) -> list[dict]:
-    """Top-k chunks by TF-IDF cosine similarity: [{doc, text, score}]."""
+    """Top-k chunks: semantic (embeddings) when available, else TF-IDF +
+    char-n-gram cosine. Returns [{doc, text, score, retriever}]."""
     chunks = _all_chunks()
     if not chunks or not str(query).strip():
         return []
+    semantic = _embedding_retrieve(query, chunks, top_k)
+    if semantic is not None:
+        return semantic
     corpus = [c["text"] for c in chunks]
     try:
         from sklearn.feature_extraction.text import TfidfVectorizer
@@ -74,15 +99,22 @@ def retrieve(query: str, top_k: int = TOP_K) -> list[dict]:
     except ImportError:
         return []
     order = np.argsort(sims)[::-1][:top_k]
-    return [{**chunks[i], "score": round(float(sims[i]), 3)}
+    return [{**chunks[i], "score": round(float(sims[i]), 3), "retriever": "tfidf"}
             for i in order if sims[i] >= MIN_SCORE]
+
+
+_RAG_SYSTEM = (
+    "Answer the question using ONLY the numbered source passages provided. "
+    "Cite passages like [1], [2] after each claim. If the passages don't "
+    "contain the answer, say so plainly. Max 5 sentences.")
 
 
 def answer(query: str) -> dict:
     """
-    Answer a question from the knowledge base.
-    Returns {answer, passages, engine} — engine is 'groq' (grounded
-    composition) or 'extractive' (passages only, zero keys needed).
+    Answer a question from the knowledge base (RAG).
+    Retrieval → context builder → reasoning model (via the AI Router,
+    capability reasoning.operations; falls back to Groq/extractive).
+    Returns {answer, passages, engine}.
     """
     passages = retrieve(query)
     if not passages:
@@ -90,21 +122,19 @@ def answer(query: str) -> dict:
                            "upload the relevant SOP, policy, or contract first."),
                 "passages": [], "engine": "extractive"}
 
-    if groq_ai.is_available():
-        context_block = "\n\n".join(
-            f"[{i+1}] (from {p['doc']}):\n{p['text'][:1200]}"
-            for i, p in enumerate(passages))
-        composed = groq_ai._call(
-            messages=[
-                {"role": "system", "content":
-                    "Answer the question using ONLY the numbered source passages "
-                    "provided. Cite passages like [1], [2] after each claim. If the "
-                    "passages don't contain the answer, say so plainly. Max 5 sentences."},
-                {"role": "user", "content": f"Question: {query}\n\nSources:\n{context_block}"},
-            ],
-            max_tokens=350, temperature=0.2)
-        if composed and not composed.startswith("["):
-            return {"answer": composed, "passages": passages, "engine": "groq"}
+    context_block = "\n\n".join(
+        f"[{i+1}] (from {p['doc']}):\n{p['text'][:1200]}"
+        for i, p in enumerate(passages))
+    try:
+        from ai import AI, Capability
+        resp = AI.ask(Capability.REASONING_OPERATIONS, "knowledge_qa", context=None,
+                      system=_RAG_SYSTEM,
+                      user=f"Question: {query}\n\nSources:\n{context_block}")
+        if resp.ok and resp.text:
+            engine = resp.model_used or ("groq" if resp.fell_back else "reasoning")
+            return {"answer": resp.text, "passages": passages, "engine": engine}
+    except Exception as e:  # RAG must degrade to extractive, never fail
+        _log.info("RAG reasoning unavailable (%s) — extractive answer", e)
 
     best = passages[0]
     return {"answer": (f"Most relevant passage (from {best['doc']}, "

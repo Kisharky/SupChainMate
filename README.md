@@ -6,14 +6,14 @@
 
 *A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
 
-[![Version](https://img.shields.io/badge/version-5.3.0-brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.4.0-brightgreen)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
 [![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
 [![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-119%20passing-brightgreen)](logistics-ai-dashboard/tests)
+[![Tests](https://img.shields.io/badge/tests-136%20passing-brightgreen)](logistics-ai-dashboard/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 [Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
@@ -135,6 +135,31 @@ Each business domain is an independent agent with a single responsibility, wrapp
 
 ---
 
+## AI Architecture — provider-agnostic, capability-routed
+
+Business logic **never** calls an LLM, and agents **never** know which model they use. Every AI call flows through a router that resolves an abstract *capability* to a concrete model:
+
+```
+Business Logic (deterministic)  →  Agents  →  ai.AI (Router)  →  Capability Registry  →  Providers  →  NVIDIA NIM
+```
+
+- **`ai/` package** — `router.py` (the only component that maps capability → model), `registry.py` (capability→ModelSpec, one-line swaps), `providers/nvidia.py` (one cached OpenAI-compatible client per key, retries, timeouts, non-raising), plus capability services `reasoning · embeddings · coding · safety · ocr · vision · memory`.
+- **Capabilities, not models** — agents request `reasoning.operations`, `reasoning.executive`, `coding`, or `embedding`; the registry decides the model.
+
+| Capability | Model (default plan) | Used by |
+|---|---|---|
+| `embedding` | nemotron-3-embed-1b | RAG semantic retrieval, search |
+| `reasoning.executive` | nemotron-3-ultra-550b-a55b (deep thinking) | Executive agent synthesis, board reports |
+| `reasoning.operations` | z-ai/glm-5.2 | Inventory / Warehouse / Procurement / Logistics / Risk agents, chat copilot, RAG answers |
+| `coding` | deepseek-v4-flash (high effort) | SQL / Python / workflow generation |
+| `vision` · `ocr` · `safety` | abstractions (wire a model in the registry) | image / document / guardrail services |
+
+- **Graceful fallback everywhere** — a capability with no key falls back down its declared chain, then to Groq, then to a deterministic/extractive path. The platform runs identically with zero NVIDIA keys.
+- **Agents call `AI.ask()`** — the base class adds an AI narrative through the router when reasoning is enabled (opt-in toggle in the Agent Orchestrator); numbers still come from the deterministic engines, the LLM only narrates.
+- **Every AI call is audit-logged** via the router's memory sink.
+
+---
+
 ## Decision Center — the trust layer
 
 Every material AI recommendation flows through a human-in-the-loop **Decision Center** before it counts:
@@ -211,6 +236,12 @@ SupChainMate/
 ├── logistics-ai-dashboard/
 │   ├── app.py                    # Streamlit entry point (dashboard orchestration)
 │   ├── config.py                 # Paths, env lookup, model IDs, thresholds, logging
+│   ├── ai/                       # Provider-agnostic AI layer
+│   │   ├── router.py             #   AI.ask() — the only capability→model resolver
+│   │   ├── registry.py           #   Capability → ModelSpec plan
+│   │   ├── types.py              #   Capability, ModelSpec, AIResponse (framework-free)
+│   │   ├── reasoning.py · embeddings.py · coding.py · safety.py · ocr.py · vision.py · memory.py
+│   │   └── providers/nvidia.py   #   Cached NIM client, retries, timeouts
 │   ├── style.css                 # HUD theme
 │   ├── requirements.txt          # Pinned dependency versions
 │   ├── .env.example              # API key & SMTP template

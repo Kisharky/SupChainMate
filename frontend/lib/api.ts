@@ -69,7 +69,9 @@ export interface InventoryRow {
   safety_stock: number; service_level: string; savings_yr: number;
 }
 export interface InventoryResponse {
-  kpis: Record<string, unknown>; rows: InventoryRow[]; source: string;
+  kpis: Record<string, unknown>; rows: InventoryRow[];
+  allocation?: CarrierAllocation & { units_label?: string } | null;
+  source: string;
 }
 
 export interface Lane { from: string; to: string; status: KpiStatus; }
@@ -143,6 +145,38 @@ export interface CommercialResponse {
 }
 export interface EmailResponse { sku: string; subject: string; body: string; ticket: RepricingTicket | null; }
 
+// ---- Decision & Scenario Intelligence workspace ----
+export interface BriefRisk { title: string; severity: "high" | "medium" | "low"; area: string; detail: string; }
+export interface BriefDecision { title: string; action: string; confidence: number; impact_usd: number; area: string; }
+export interface ExecBrief {
+  summary: string; risks: BriefRisk[]; recommended: BriefDecision[];
+  financial_impact: { at_risk_usd: number; opportunity_usd: number; net_usd: number };
+  confidence: number; awaiting_approval: number;
+  kpis: { health: number; on_time: number; supplier_health: number; inventory_value_m: number };
+}
+export interface WhatChanged {
+  date: string; changes: string[]; new_risks: string[]; completed: string[];
+  realized_savings: number; unresolved: { title: string; reason: string }[];
+}
+export interface TimelineItem { id: string; title: string; stage: string; confidence: number; impact_usd: number; status: string; outcome: string | null; ts: string; }
+export interface Timeline { stages: string[]; counts: Record<string, number>; items: TimelineItem[]; }
+export interface PlanStep { step: number; agent: string; task: string; reasoning: string; uses_optimizer: boolean; status: string; }
+export interface PlanResponse { request: string; plan: PlanStep[]; narrative: string; }
+export interface CoaOption {
+  id: string; name: string; implementation_cost: number; expected_savings: number;
+  operational_risk: "low" | "medium" | "high"; service_level_impact: number; inventory_impact: string;
+  execution_time: string; confidence: number; business_outcome: string; evidence: string[];
+  optimization: string; roi: number; score: number;
+}
+export interface CoaResponse { issue: string; issue_key: string; options: CoaOption[]; recommended: string; }
+export interface ScenarioImpact { financial_usd: number; service_pp: number; logistics_pp: number; inventory_pct: number; customers_affected: number; positive: boolean; }
+export interface ScenarioResponse {
+  kind: string; label: string; magnitude: number; impact: ScenarioImpact;
+  before: Record<string, number>; after: Record<string, number>;
+  mitigations: { action: string; effect: string; cost: string }[]; narrative: string;
+}
+export interface WorkspaceCatalog { scenarios: { key: string; label: string }[]; issues: { key: string; label: string }[]; }
+
 // ---- Endpoints --------------------------------------------------------------
 export const api = {
   kpis: () => get<KpiResponse>("/api/kpis"),
@@ -160,6 +194,13 @@ export const api = {
   decide: (rec_key: string, status: DecisionStatus, note = "") =>
     post<{ ok: boolean; rec_key: string; status: string }>("/api/decisions/decide", { rec_key, status, note }),
   audit: () => get<{ entries: AuditEntry[] }>("/api/audit"),
+  wsBrief: () => get<ExecBrief>("/api/workspace/brief"),
+  wsChanged: () => get<WhatChanged>("/api/workspace/changed"),
+  wsTimeline: () => get<Timeline>("/api/workspace/timeline"),
+  wsCatalog: () => get<WorkspaceCatalog>("/api/workspace/catalog"),
+  wsPlan: (request: string) => post<PlanResponse>("/api/workspace/plan", { request }),
+  wsCoa: (issue: string) => post<CoaResponse>("/api/workspace/coa", { issue }),
+  wsScenario: (kind: string, magnitude: number) => post<ScenarioResponse>("/api/workspace/scenario", { kind, magnitude }),
   admin: () => get<AdminResponse>("/api/admin"),
   commercial: () => get<CommercialResponse>("/api/commercial"),
   repricingEmail: (sku: string) => post<EmailResponse>("/api/commercial/email", { sku }),

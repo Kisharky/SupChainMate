@@ -48,6 +48,42 @@ export default function Inventory() {
           {!err && rows.length === 0 && <tr><Td>Loading…</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td></tr>}
         </DataTable>
       </Card>
+
+      {/* Multi-DC allocation via the optimization skill (real haversine costs) */}
+      {data?.allocation?.solved && (
+        <Card className="mt-4">
+          <CardHead title="Multi-DC replenishment allocation"
+            hint={`optimizer · ${data.allocation.solver}${data.allocation.fell_back ? " (fallback)" : ""}`} />
+          <div className="p-[18px]">
+            <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+              {[
+                { l: "Optimised (km·units)", v: Math.round(data.allocation.objective).toLocaleString() },
+                { l: "vs naive baseline", v: Math.round(data.allocation.baseline).toLocaleString() },
+                { l: "Saved", v: `${data.allocation.improvement_pct.toFixed(0)}%`, good: true },
+              ].map((m) => (
+                <div key={m.l} className="rounded border p-2.5" style={{ borderColor: "var(--hairline)", background: "var(--panel-2)" }}>
+                  <div className="eyebrow">{m.l}</div>
+                  <div className="text-[1.15rem] font-bold tnum mt-0.5" style={{ color: m.good ? "var(--good)" : "var(--ink)" }}>{m.v}</div>
+                </div>
+              ))}
+            </div>
+            <DataTable head={<><Th>Distribution centre</Th><Th>Serves region</Th><Th num>Units</Th><Th num>Transport (km·u)</Th></>}>
+              {data.allocation.assignments.map((a, i) => (
+                <tr key={i}>
+                  <Td strong>{a.source}</Td>
+                  <Td><Badge status="info">{a.sink}</Badge></Td>
+                  <Td num>{Math.round(a.units).toLocaleString()}</Td>
+                  <Td num>{Math.round(a.cost).toLocaleString()}</Td>
+                </tr>
+              ))}
+            </DataTable>
+            <div className="text-[0.6875rem] text-ink-3 mt-2">
+              Sources = 3 largest hubs (DCs); sinks = regional demand ∝ customer count; cost = real Haversine distance. Solver: <b style={{ color: "var(--accent)" }}>{data.allocation.solver}</b>
+              {data.allocation.status?.plan?.allocation && <> · plan allocation → {data.allocation.status.plan.allocation}</>}.
+            </div>
+          </div>
+        </Card>
+      )}
     </AppShell>
   );
 }

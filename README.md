@@ -1,36 +1,63 @@
+<!-- ░░░ HERO ░░░ -->
 <div align="center">
 
-# SupChainMate
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0B1220,60:0E1729,100:10B981&height=210&section=header&text=SupChainMate&fontColor=EAF0F8&fontSize=62&fontAlignY=38&desc=Enterprise%20Supply%20Chain%20Decision%20Intelligence&descSize=17&descAlignY=60&animation=fadeIn" alt="SupChainMate" width="100%" />
 
-**Autonomous Supply Chain Decision System**
+<a href="#the-control-plane--reactnextjs-frontend">
+  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=600&size=22&pause=1200&color=10B981&center=true&vCenter=true&width=820&height=44&lines=Evidence-backed+decisions%2C+not+dashboards;Provider-agnostic+AI%2C+capability-routed;Every+number+computed+from+data+%C2%B7+every+decision+audited" alt="tagline" />
+</a>
 
-*A freight control tower, a team of agentic AI workers, and an inventory decision engine — turning raw order data into execution-ready plans.*
+<br/>
 
-[![Version](https://img.shields.io/badge/version-5.5.0-brightgreen)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit)](https://streamlit.io)
-[![LightGBM](https://img.shields.io/badge/LightGBM-4.0%2B-green)](https://lightgbm.readthedocs.io)
-[![Prophet](https://img.shields.io/badge/Prophet-1.1%2B-blue)](https://facebook.github.io/prophet/)
-[![Groq](https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange)](https://groq.com)
-[![NVIDIA](https://img.shields.io/badge/NVIDIA-cuOpt%20%7C%20DeepSeek-76b900)](https://build.nvidia.com)
-[![Tests](https://img.shields.io/badge/tests-139%20passing-brightgreen)](logistics-ai-dashboard/tests)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
+[![Version](https://img.shields.io/badge/version-6.0.0-10B981?style=for-the-badge)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-EAB308?style=for-the-badge)](#license)
+[![Tests](https://img.shields.io/badge/tests-139%20passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](logistics-ai-dashboard/tests)
 
-[Overview](#overview) · [Capabilities](#capabilities) · [AI Workers](#ai-workers) · [Architecture](#architecture) · [Getting Started](#getting-started) · [Configuration](#configuration) · [Testing](#testing) · [Roadmap](#roadmap)
+[![Next.js](https://img.shields.io/badge/Next.js_14-000000?logo=next.js&logoColor=white)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React_18-20232A?logo=react&logoColor=61DAFB)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Tailwind](https://img.shields.io/badge/Tailwind-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Python](https://img.shields.io/badge/Python_3.11-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Prophet](https://img.shields.io/badge/Prophet-4267B2)](https://facebook.github.io/prophet/)
+[![NVIDIA NIM](https://img.shields.io/badge/NVIDIA_NIM-76B900?logo=nvidia&logoColor=white)](https://build.nvidia.com)
+[![Leaflet](https://img.shields.io/badge/Leaflet_·_MapTiler-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
+
+<br/>
+
+**[Control Plane](#the-control-plane--reactnextjs-frontend)** · **[Decision Center](#decision-center--the-trust-layer)** · **[AI Architecture](#ai-architecture--provider-agnostic-capability-routed)** · **[Architecture](#architecture)** · **[Getting Started](#getting-started)** · **[Configuration](#configuration)**
+
+<br/>
+
+<!-- ░░░ ANIMATED DEMO ░░░ -->
+<img src="docs/images/demo.gif" alt="SupChainMate control plane walkthrough" width="92%" />
+
+<sub><i>Live walkthrough — Executive Control Tower → Decision Center → Commercial Intelligence → Logistics → Forecasting → Inventory.</i></sub>
 
 </div>
 
 ---
 
-## Dashboard
+## Screens
 
-![SupChainMate Mission Control](docs/dashboard_preview.png)
-
-*Mission Control — multi-signal disruption radar, AI auto-insights, and the decision engine on 99k live orders.*
-
-![Autonomous Workforce](docs/workforce_preview.png)
-
-*The Autonomous Workforce — five AI workers reporting live status on every load, with plain-English runbook rules.*
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/control-tower.png" alt="Executive Control Tower"/><br/><sub><b>Executive Control Tower</b> — KPIs, AI Executive Summary, live 9-agent run.</sub></td>
+    <td width="50%"><img src="docs/images/decision-center.png" alt="Decision Center"/><br/><sub><b>Decision Center</b> — evidence, confidence, impact · approve / reject / modify / escalate · audit trail.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/commercial.png" alt="Commercial Intelligence"/><br/><sub><b>Commercial Intelligence</b> — profitability, revenue leakage, margin waterfall, repricing tickets.</sub></td>
+    <td><img src="docs/images/logistics.png" alt="Logistics Command Center"/><br/><sub><b>Logistics Command Center</b> — MapTiler network map + live carrier scorecard.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/forecasting.png" alt="Forecasting"/><br/><sub><b>Forecasting</b> — Prophet forecast + weekly backtest (MAPE · MAE · RMSE · Bias).</sub></td>
+    <td><img src="docs/images/inventory.png" alt="Inventory Intelligence"/><br/><sub><b>Inventory Intelligence</b> — live per-SKU reorder points, EOQ, safety stock.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/knowledge.png" alt="Knowledge Center"/><br/><sub><b>Knowledge Center</b> — RAG answers with inline citations.</sub></td>
+    <td><img src="docs/images/administration.png" alt="Administration"/><br/><sub><b>Administration</b> — providers, masked API keys, RBAC, immutable audit log.</sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -60,6 +87,60 @@ Orders / Delivery / Location / Cost  ──►  Intelligence Layer  ──►  A
 2. **Numbers from data, words from AI** — LLMs route requests and write prose; all figures come from deterministic computation.
 3. **Graceful degradation** — every feature works with zero API keys; keys add LLM reasoning, not correctness.
 4. **Honest labelling** — simulated demo elements (carrier names, costs, transport modes) are labelled as such in the UI.
+
+---
+
+## The Control Plane — React / Next.js frontend
+
+A production-grade **React / Next.js (App Router)** control plane sits on top of the existing engines through a thin **FastAPI** layer. The Python business logic and the Streamlit app are **untouched** — the API only imports the same `modules/` and `ai/` functions and exposes them as JSON.
+
+```mermaid
+flowchart LR
+    subgraph FE["Next.js · frontend/"]
+        UI["12 screens · design system<br/>Inter · Navy/Emerald · light+dark"]
+    end
+    subgraph API["FastAPI · logistics-ai-dashboard/api/"]
+        R["/api/* · graceful degradation<br/>source = live | representative | fallback"]
+    end
+    subgraph ENG["Existing engines (unchanged)"]
+        E1["forecast · sku · control_tower"]
+        E2["agents · trust · rag"]
+        E3["cost_audit · network · geo"]
+    end
+    UI -- "fetch /api/*" --> R
+    R --> E1 & E2 & E3
+    E1 & E2 & E3 --> DB[("SQLite + Olist data")]
+```
+
+**Design system** — a single token set (Navy / Emerald / Slate / White, Inter + JetBrains Mono) drives every component; light and dark themes ship; the eight primitives (button, KPI card, table, chart, badge, nav, form, alert) compose all screens. Inspired by SAP Analytics Cloud, Microsoft Fabric, Palantir Foundry, and Linear. Reference: [`design/`](design/).
+
+**Navigation** — `Dashboard · Operations · Forecasting · Inventory · Procurement · Commercial · Warehouse · Logistics · Decisions · Knowledge · Reports · Administration`. There is **no "AI" page** — AI is woven into every workflow.
+
+| Screen | What it does | Data |
+|---|---|---|
+| **Executive Control Tower** | Six board KPIs + AI Executive Summary + live 9-agent run | 5/6 KPIs live · agents live |
+| **Decision Center** | Approve / reject / modify / escalate with evidence, confidence, impact, audit trail | live |
+| **Commercial Intelligence** | Customer profitability, revenue leakage, margin waterfall, repricing tickets, AI email drafting | live (real volumes) |
+| **Logistics Command Center** | MapTiler network map + carrier scorecard + delay feed | live |
+| **Forecasting** | Prophet forecast + weekly backtest — MAPE · MAE · RMSE · Bias | live |
+| **Inventory Intelligence** | Per-SKU reorder point / EOQ / safety stock from the decision engine | live |
+| **Knowledge Center** | RAG answers grounded in your documents, with citations | live |
+| **Administration** | AI providers, masked API keys, RBAC, ERP stubs, audit log | live |
+
+Each endpoint tags its payload `source = live | representative | fallback`, so the UI never breaks and always tells the truth about where a number came from. API keys are surfaced **presence-only and masked** — values are never returned.
+
+### Run the control plane
+
+```bash
+# 1 — API (from logistics-ai-dashboard/)
+pip install -r requirements.txt        # adds fastapi + uvicorn
+uvicorn api.main:app --reload --port 8000
+
+# 2 — Frontend (from frontend/)
+npm install && npm run dev             # http://localhost:3000
+```
+
+`next.config.mjs` proxies `/api/*` to the API, so there's no CORS to configure in dev. Set `MAPTILER_API_KEY` in `.env` for the Logistics basemap. Full handoff notes in [`frontend/README.md`](frontend/README.md).
 
 ---
 
@@ -169,8 +250,9 @@ Every material AI recommendation flows through a human-in-the-loop **Decision Ce
 - **Explainable** — each recommendation carries WHY drivers, every one backed by an evidence value from the data (demand σ, days of cover, on-time gaps, the formula used)
 - **Confidence with a stated basis** — a transparent heuristic (data support + signal strength, 20–95). The basis string says exactly what it's built from; it is deliberately *not* presented as a calibrated probability
 - **Quantified business impact** — cost savings ($/yr), stockout risk (%), and service level (%) chips on every card, computed by the same deterministic engines
-- **Approve / Reject / Modify** — modifications carry a note; decisions are stamped with actor and UTC time
+- **Approve / Reject / Modify / Escalate** — modifications and escalations carry a note; decisions are stamped with actor and UTC time
 - **Decision history + immutable audit trail** — every creation and decision event is logged to SQLite and exportable as CSV
+- **Dedicated screen** — the React control plane ships a full [Decision Center](#the-control-plane--reactnextjs-frontend) view (pending cards with evidence, one-click actions, live history and audit); the Streamlit app carries the same workflow
 
 This adapts the design patterns common across enterprise control towers (action centers, explanation drill-downs, approval workflows, audit trails) into an open implementation — patterns, not proprietary features.
 
@@ -234,10 +316,19 @@ flowchart LR
 SupChainMate/
 ├── docs/
 │   ├── index.html                # Marketing landing page (GitHub Pages ready)
-│   └── dashboard_preview.png
+│   └── images/                   # README screenshots + animated demo
+├── design/                       # Design system + tokens (Tailwind/CSS) + prototypes
+├── frontend/                     # React / Next.js control plane (App Router)
+│   ├── app/                      #   12 screens (page.tsx per route)
+│   ├── components/               #   AppShell, UI primitives, LaneMap, ForecastChart
+│   └── lib/api.ts                #   Typed client for the FastAPI backend
 ├── logistics-ai-dashboard/
 │   ├── app.py                    # Streamlit entry point (dashboard orchestration)
 │   ├── config.py                 # Paths, env lookup, model IDs, thresholds, logging
+│   ├── api/                      # FastAPI layer (JSON over modules/ + ai/, additive)
+│   │   ├── main.py               #   Endpoints: kpis, inventory, logistics, agents,
+│   │   │                         #   decisions, forecast/backtest, commercial, admin
+│   │   └── services.py           #   Compute/shape layer with graceful degradation
 │   ├── ai/                       # Provider-agnostic AI layer
 │   │   ├── router.py             #   AI.ask() — the only capability→model resolver
 │   │   ├── registry.py           #   Capability → ModelSpec plan

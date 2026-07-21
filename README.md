@@ -22,6 +22,10 @@
 [![Prophet](https://img.shields.io/badge/Prophet-4267B2)](https://facebook.github.io/prophet/)
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA_NIM-76B900?logo=nvidia&logoColor=white)](https://build.nvidia.com)
 [![Leaflet](https://img.shields.io/badge/Leaflet_·_MapTiler-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
+[![JWT](https://img.shields.io/badge/Auth-JWT_+_RBAC-000000?logo=jsonwebtokens&logoColor=white)](#authentication--access-control)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](#configuration)
+[![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)](#run-with-docker)
+[![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 
 <br/>
 
@@ -58,6 +62,144 @@
     <td><img src="docs/images/administration.png" alt="Administration"/><br/><sub><b>Administration</b> — providers, masked API keys, RBAC, immutable audit log.</sub></td>
   </tr>
 </table>
+
+---
+
+## Enterprise architecture
+
+A clean, layered system: a **Next.js** control plane over a **FastAPI** backend, an
+**auth/RBAC** gate in front of the domain, and a set of framework-free intelligence
+layers (AI Router, Optimization Router, Planner, Decision Brain) that the domain
+services compose. Identity state lives in **PostgreSQL** (or SQLite for offline
+demo); everything is containerised and CI-checked.
+
+```mermaid
+flowchart TB
+    subgraph Client["Next.js control plane"]
+        UI["12 role-gated screens · design system"]
+        AUTHFE["frontend/auth · JWT store · RouteGuard"]
+    end
+    subgraph API["FastAPI backend"]
+        GATE["auth middleware · JWT + RBAC gate"]
+        AUTH["api/auth · login / refresh / logout"]
+        SVC["api/services · workspace · commercial_intel"]
+    end
+    subgraph Intelligence["Framework-free layers (unchanged)"]
+        AIR["AI Router (provider-agnostic)"]
+        OPT["Optimization Router (cuOpt / local)"]
+        PLN["Planner (decision orchestrator)"]
+        BRN["Decision Brain (long-term memory)"]
+    end
+    subgraph Domain["Domain engines"]
+        ENG["forecast · sku · control_tower · trust · rag · cost_audit"]
+    end
+    UI -->|"fetch + Bearer"| GATE
+    AUTHFE --> AUTH
+    GATE --> SVC --> ENG
+    SVC --> AIR & OPT & PLN & BRN
+    PLN --> ENG
+    BRN -->|vectors| STORE[("SQLite vector store")]
+    AUTH --> IDDB[("PostgreSQL / SQLite<br/>identity state")]
+    ENG --> DEMO[("SQLite + Olist demo data")]
+```
+
+### Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js 14 (App Router), React 18, TypeScript, Tailwind, Leaflet |
+| Backend | FastAPI, Uvicorn, Python 3.11 |
+| Auth | JWT (HS256, rotating refresh), PBKDF2 password hashing, RBAC — stdlib crypto |
+| Data / ORM | SQLAlchemy 2.0 · PostgreSQL (prod) / SQLite (offline) |
+| AI | Provider-agnostic AI Router → NVIDIA NIM / any model · enterprise RAG |
+| ML | Prophet, LightGBM, scikit-learn, Isolation Forest |
+| Optimisation | NVIDIA cuOpt (GPU) with a local heuristic fallback |
+| Infra | Docker + Docker Compose · GitHub Actions CI |
+
+### Enterprise readiness
+
+- **Authentication & RBAC** — JWT with rotating refresh tokens, six roles, a
+  central path-based permission gate, role-filtered navigation.
+- **Dual-database** — one env var (`DATABASE_URL`) switches identity state between
+  PostgreSQL and SQLite; domain/demo data stays offline-friendly.
+- **Containerised** — `docker compose up` launches Postgres + API + frontend.
+- **CI** — every push runs backend tests, frontend lint, and a production build.
+- **Config & secrets** — everything via environment (`.env.example` provided); no
+  secrets in source.
+- **Tested** — 165+ passing tests across the domain, AI layer, optimiser, Planner,
+  Decision Brain, and auth/RBAC.
+
+---
+
+## Authentication & Access Control
+
+<img src="docs/images/login.png" alt="SupChainMate sign-in" width="420" align="right" />
+
+Authentication is **isolated** in `logistics-ai-dashboard/api/auth/` (backend) and
+`frontend/auth/` (frontend) — no business logic changed. It is enforced once, in a
+single FastAPI middleware keyed on the request path, so the domain routes are never
+touched.
+
+**Flow**
+
+```
+Login (email + password)
+   └─▶ PBKDF2 verify ─▶ issue access JWT (30m) + refresh JWT (7d, server-recorded)
+        └─▶ browser stores tokens ─▶ every API call sends `Authorization: Bearer <access>`
+             └─▶ middleware verifies signature + expiry, resolves role → permissions,
+                  enforces the path→permission map (RBAC)
+        └─▶ on 401 the client rotates the refresh token once (single-use) and retries
+        └─▶ logout revokes all refresh tokens
+```
+
+**Roles → visibility.** Six roles map to a permission set; navigation and endpoints
+are gated on permissions (never on the role name). Executive-only areas
+(Commercial, Intelligence, Reports) are invisible and `403` to a Warehouse Manager.
+
+| Role | Sees |
+| --- | --- |
+| Admin | Everything, incl. Administration |
+| Executive | Dashboard, Intelligence, Commercial, Decisions, Reports, + approve |
+| Supply Chain Manager | Operations, Forecasting, Inventory, Procurement, Warehouse, Logistics, Decisions, Planner |
+| Planner | Dashboard, Forecasting, Inventory, Planner, Decisions, Intelligence |
+| Warehouse Manager | Dashboard, Warehouse, Inventory, Logistics, Knowledge |
+| Read Only | View-only dashboards + reports (no approve) |
+
+**API example**
+
+```bash
+# 1. Log in (demo password: supchain123)
+curl -s localhost:8000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"exec@supchainmate.io","password":"supchain123"}'
+# → { "access_token": "...", "refresh_token": "...", "user": { "role": "Executive", "permissions": [...] } }
+
+# 2. Call a protected endpoint with the token
+curl -s localhost:8000/api/kpis -H "Authorization: Bearer $ACCESS_TOKEN"
+
+# 3. Rotate the access token
+curl -s localhost:8000/api/auth/refresh \
+  -H 'Content-Type: application/json' -d '{"refresh_token":"'"$REFRESH_TOKEN"'"}'
+```
+
+Demo accounts (offline mode), all with password `supchain123`:
+`admin@` · `exec@` · `scm@` · `planner@` · `warehouse@` · `viewer@supchainmate.io`.
+
+---
+
+## Run with Docker
+
+One command launches the full stack — PostgreSQL, the FastAPI backend, and the
+Next.js frontend:
+
+```bash
+cp logistics-ai-dashboard/.env.example logistics-ai-dashboard/.env   # optional: set JWT_SECRET, model keys
+docker compose up --build
+```
+
+- Frontend → http://localhost:3000  ·  API → http://localhost:8000  ·  API docs → http://localhost:8000/docs
+- Sign in with a demo account (see above). The backend seeds the six role users on
+  first boot and auto-creates the identity schema.
 
 ---
 
@@ -405,18 +547,26 @@ SupChainMate/
 ├── docs/
 │   ├── index.html                # Marketing landing page (GitHub Pages ready)
 │   └── images/                   # README screenshots + animated demo
+├── docker-compose.yml            # One-command full stack (postgres + backend + frontend)
+├── .github/workflows/ci.yml      # CI: backend tests · frontend lint + build
 ├── design/                       # Design system + tokens (Tailwind/CSS) + prototypes
 ├── frontend/                     # React / Next.js control plane (App Router)
-│   ├── app/                      #   12 screens (page.tsx per route)
-│   ├── components/               #   AppShell, UI primitives, LaneMap, ForecastChart
-│   └── lib/api.ts                #   Typed client for the FastAPI backend
+│   ├── app/                      #   screens (page.tsx per route) + login/
+│   ├── auth/                     #   AuthProvider, RouteGuard, token store (isolated)
+│   ├── components/               #   AppShell (role-gated nav), UI primitives, LaneMap
+│   ├── lib/api.ts                #   Typed client (bearer + auto-refresh on 401)
+│   └── Dockerfile                #   Multi-stage Next.js image
 ├── logistics-ai-dashboard/
 │   ├── app.py                    # Streamlit entry point (dashboard orchestration)
 │   ├── config.py                 # Paths, env lookup, model IDs, thresholds, logging
+│   ├── Dockerfile                # FastAPI image
 │   ├── api/                      # FastAPI layer (JSON over modules/ + ai/, additive)
-│   │   ├── main.py               #   Endpoints: kpis, inventory, logistics, agents,
-│   │   │                         #   decisions, forecast/backtest, commercial, admin
-│   │   └── services.py           #   Compute/shape layer with graceful degradation
+│   │   ├── main.py               #   Endpoints + auth middleware gate + startup seed
+│   │   ├── services.py           #   Compute/shape layer with graceful degradation
+│   │   ├── db.py                 #   SQLAlchemy engine (Postgres/SQLite via DATABASE_URL)
+│   │   └── auth/                 #   JWT + RBAC (security, models, service, router, rbac)
+│   ├── planner/                  # Executive decision orchestrator (registry/graph/executor)
+│   ├── brain/                    # Decision Brain — long-term memory + vector store
 │   ├── ai/                       # Provider-agnostic AI layer
 │   │   ├── router.py             #   AI.ask() — the only capability→model resolver
 │   │   ├── registry.py           #   Capability → ModelSpec plan

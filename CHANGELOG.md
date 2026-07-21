@@ -2,6 +2,19 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Freight Operations — brokerage back office
+- **Freight Operations** workspace bringing the freight-broker execution
+  workflows into one surface: carrier vetting & onboarding (FMCSA authority +
+  insurance + fraud/identity signals with a vetting checklist), load ↔ carrier
+  matching (ranked by lane fit), an instant spot-quote calculator (transparent
+  linehaul/fuel/accessorial → margin build), and inbound email triage
+  (load tender / quote request / check call / invoice / OS&D claim). Backend
+  `api/freight.py`; endpoints `/api/freight`, `/api/freight/carrier/{id}`,
+  `/api/freight/quote`; Operations-gated.
+- Infra-heavy items (voice check-calls, appointment scheduling, CRM, factoring,
+  EDI) are surfaced as roadmap, not simulated — an honest boundary.
+- Tests: 192 passing (backend); frontend lint + build clean; Playwright-verified.
+
 ## Enterprise Automation Suite — Connectors, Workers, Fraud, Documents
 - **Connectors & Integrations**: an Administration workspace answering "where does
   the data come from?" — an 8-category connector catalog (ERP/WMS/TMS/cloud/db/BI/

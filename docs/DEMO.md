@@ -134,6 +134,12 @@ and fraud prevention.*
 → the three-way match (PO ↔ Invoice ↔ Receipt) with the over-billed line flagged
 → Approve or Escalate. *Theme: AP automation with a human check.*
 
+**I. "Run the brokerage back office."**
+**Freight Ops** → the carrier vetting table → **Vet** the top (high-risk) carrier
+→ the FMCSA/insurance checklist + fraud signals → then load↔carrier matching, an
+**instant spot quote** (transparent rate build), and inbound email triage.
+*Theme: execution workflows a digital worker runs end-to-end.*
+
 ---
 
 ## 4 · Talking points if asked

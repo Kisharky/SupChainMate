@@ -206,6 +206,26 @@ export interface WorkersResponse {
   source: string;
 }
 
+// ---- Fraud & Anomaly Detection ----
+export interface FraudAlert {
+  id: string; type: string; type_label: string; icon: string; severity: string;
+  severity_status: string; entity: string; detail: string; recommended_action: string;
+  amount_at_risk: number; confidence: number; status: string; hours_ago: number;
+}
+export interface RiskEntity {
+  name: string; kind: string; risk_score: number; tier: string; tier_status: string; top_factor: string;
+}
+export interface FraudResponse {
+  summary: {
+    open_alerts: number; high_severity: number; amount_at_risk: number;
+    entities_flagged: number; duplicate_invoices: number; detection_accuracy: number;
+  };
+  checks: { name: string; coverage: number; status: string }[];
+  alerts: FraudAlert[];
+  entities: RiskEntity[];
+  source: string;
+}
+
 // ---- Decision & Scenario Intelligence workspace ----
 export interface BriefRisk { title: string; severity: "high" | "medium" | "low"; area: string; detail: string; }
 export interface BriefDecision { title: string; action: string; confidence: number; impact_usd: number; area: string; }
@@ -325,6 +345,7 @@ export const api = {
   logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
   admin: () => get<AdminResponse>("/api/admin"),
   workers: () => get<WorkersResponse>("/api/workers"),
+  fraud: () => get<FraudResponse>("/api/fraud"),
   connectors: () => get<ConnectorsResponse>("/api/connectors"),
   connectorConfig: (id: string) => get<ConnectorConfig>(`/api/connectors/config/${id}`),
   connectorTest: (id: string) => post<ConnectorTest>("/api/connectors/test", { connector_id: id }),

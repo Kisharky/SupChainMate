@@ -270,11 +270,15 @@ def test_agent_ai_narrative_via_router():
         AI._router = None
 
 
-def test_rag_uses_embedding_retriever_when_available():
+def test_rag_uses_embedding_retriever_when_available(monkeypatch):
     """When embeddings are configured, RAG retrieves semantically; otherwise
     it falls back to lexical — both return cited passages."""
     from modules import store, knowledge
     from ai.router import AI
+
+    # The embedding capability is "available" only when its key is set; make that
+    # explicit so the test is environment-independent (CI has no local .env).
+    monkeypatch.setenv("NVIDIA_EMBED_API_KEY", "test-embed-key")
 
     class EmbedProvider(FakeProvider):
         def is_configured(self, spec):
@@ -297,8 +301,9 @@ def test_rag_uses_embedding_retriever_when_available():
         assert "lead time" in hits[0]["text"].lower()
     finally:
         AI._router = None
-    # embeddings OFF (no provider) → lexical. Clear the retrieval cache since
-    # we're simulating a different runtime (cache is tested separately).
+    # embeddings OFF → lexical. Remove the key and clear the retrieval cache
+    # since we're simulating a different runtime (cache is tested separately).
+    monkeypatch.delenv("NVIDIA_EMBED_API_KEY", raising=False)
     from ai import rag
     rag._retrieval_cache.clear()
     AI.configure(AIRouter(providers={}, offline_handler=lambda c, m: None))

@@ -8,25 +8,30 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
+import { useAuth } from "@/auth/context";
 
-const NAV: { label: string; href: string; icon: string; badge?: number }[] = [
-  { label: "Dashboard", href: "/", icon: "◧" },
-  { label: "Intelligence", href: "/workspace", icon: "◆" },
-  { label: "Operations", href: "/operations", icon: "⬒" },
-  { label: "Forecasting", href: "/forecasting", icon: "◡" },
-  { label: "Inventory", href: "/inventory", icon: "▦", badge: 7 },
-  { label: "Procurement", href: "/procurement", icon: "◈" },
-  { label: "Commercial", href: "/commercial", icon: "◆" },
-  { label: "Warehouse", href: "/warehouse", icon: "▤" },
-  { label: "Logistics", href: "/logistics", icon: "◎", badge: 3 },
-  { label: "Decisions", href: "/decisions", icon: "◇" },
-  { label: "Knowledge", href: "/knowledge", icon: "◍" },
-  { label: "Reports", href: "/reports", icon: "▥" },
+const NAV: { label: string; href: string; icon: string; badge?: number; perm: string }[] = [
+  { label: "Dashboard", href: "/", icon: "◧", perm: "dashboard" },
+  { label: "Intelligence", href: "/workspace", icon: "◆", perm: "intelligence" },
+  { label: "Operations", href: "/operations", icon: "⬒", perm: "operations" },
+  { label: "Forecasting", href: "/forecasting", icon: "◡", perm: "forecasting" },
+  { label: "Inventory", href: "/inventory", icon: "▦", badge: 7, perm: "inventory" },
+  { label: "Procurement", href: "/procurement", icon: "◈", perm: "procurement" },
+  { label: "Commercial", href: "/commercial", icon: "◆", perm: "commercial" },
+  { label: "Warehouse", href: "/warehouse", icon: "▤", perm: "warehouse" },
+  { label: "Logistics", href: "/logistics", icon: "◎", badge: 3, perm: "logistics" },
+  { label: "Decisions", href: "/decisions", icon: "◇", perm: "decisions" },
+  { label: "Knowledge", href: "/knowledge", icon: "◍", perm: "knowledge" },
+  { label: "Reports", href: "/reports", icon: "▥", perm: "reports" },
 ];
 
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
   const pathname = usePathname();
+  const { user, can, logout } = useAuth();
   const [theme, setTheme] = useState<"dark" | "light" | null>(null);
+  // Role-based navigation: only show sections the user is permitted to see.
+  const nav = user ? NAV.filter((n) => can(n.perm)) : NAV;
+  const canAdmin = !user || can("administration");
 
   useEffect(() => {
     const saved = (localStorage.getItem("scm-theme") as "dark" | "light") || "dark";
@@ -52,7 +57,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             <div className="text-[10px] uppercase tracking-[.14em] text-ink-3">Decision Intelligence</div>
           </div>
         </div>
-        {NAV.map((n) => {
+        {nav.map((n) => {
           const active = pathname === n.href;
           return (
             <Link key={n.href} href={n.href}
@@ -67,10 +72,25 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           );
         })}
         <div className="mt-auto pt-4 border-t" style={{ borderColor: "var(--hairline)" }}>
-          <Link href="/administration" className="flex items-center gap-3 rounded-sm px-2.5 py-2 text-[0.8125rem] text-ink-2">
-            <span className="w-4 text-center text-ink-3">⚙</span> Administration
-          </Link>
-          <div className="flex items-center gap-3 px-2.5 py-2 text-[11px] text-ink-3">
+          {canAdmin && (
+            <Link href="/administration" className="flex items-center gap-3 rounded-sm px-2.5 py-2 text-[0.8125rem] text-ink-2">
+              <span className="w-4 text-center text-ink-3">⚙</span> Administration
+            </Link>
+          )}
+          {user && (
+            <div className="flex items-center gap-2 px-2.5 py-2">
+              <div className="grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold flex-none"
+                style={{ background: "var(--panel-2)", color: "var(--text-2)", border: "1px solid var(--hairline)" }}>
+                {user.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+              </div>
+              <div className="min-w-0">
+                <div className="text-[0.75rem] text-ink font-medium truncate">{user.name}</div>
+                <div className="text-[10px] text-ink-3 truncate">{user.role}</div>
+              </div>
+              <button onClick={logout} title="Sign out" className="ml-auto text-ink-3 hover:text-ink text-[13px]">⏻</button>
+            </div>
+          )}
+          <div className="flex items-center gap-3 px-2.5 py-1 text-[11px] text-ink-3">
             <span style={{ color: "var(--good)" }}>●</span> AI Router · operational
           </div>
         </div>

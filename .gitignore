@@ -12,3 +12,4 @@ node_modules/
 frontend/node_modules/
 frontend/.next/
 next-env.d.ts
+supchainmate_app.db

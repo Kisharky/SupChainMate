@@ -1,0 +1,53 @@
+# SupChainMate — full stack in one command:  docker compose up
+#
+#   postgres  ── identity/application state (SQLAlchemy)
+#   backend   ── FastAPI over the existing engines (AI Router, Planner, Brain…)
+#   frontend  ── Next.js control plane
+#
+# The browser calls the API directly (NEXT_PUBLIC_API_BASE); CORS is allowed for
+# the frontend origin. Secrets come from the environment / .env — never source.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: supchainmate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supchainmate}
+      POSTGRES_DB: supchainmate
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supchainmate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./logistics-ai-dashboard
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AUTH_ENABLED: "true"
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-supchain123}
+      DATABASE_URL: postgresql+psycopg2://supchainmate:${POSTGRES_PASSWORD:-supchainmate}@postgres:5432/supchainmate
+      FRONTEND_ORIGIN: http://localhost:3000
+      # Optional model keys (features degrade gracefully without them):
+      NVIDIA_REASONING_OPS_API_KEY: ${NVIDIA_REASONING_OPS_API_KEY:-}
+      MAPTILER_API_KEY: ${MAPTILER_API_KEY:-}
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

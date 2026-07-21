@@ -3,22 +3,50 @@
  * In dev, next.config.mjs rewrites /api/* to the Python server, so a relative
  * base works from the browser. Override with NEXT_PUBLIC_API_BASE if needed.
  */
+import { tokenStore } from "@/auth/store";
+
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: "no-store" });
+function authHeaders(): Record<string, string> {
+  const t = tokenStore.access();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+/** Refresh the access token once when a request 401s (session persistence). */
+async function tryRefresh(): Promise<boolean> {
+  const refresh = tokenStore.refresh();
+  if (!refresh) return false;
+  const res = await fetch(`${BASE}/api/auth/refresh`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refresh }),
+  });
+  if (!res.ok) { tokenStore.clear(); return false; }
+  const body = await res.json();
+  tokenStore.set(body.access_token, body.refresh_token, body.user);
+  return true;
+}
+
+async function request<T>(path: string, init: RequestInit, retry = true): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init, cache: "no-store",
+    headers: { ...(init.headers || {}), ...authHeaders() },
+  });
+  if (res.status === 401 && retry && !path.startsWith("/api/auth/")) {
+    if (await tryRefresh()) return request<T>(path, init, false);
+    if (typeof window !== "undefined") window.location.href = "/login";
+  }
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
+
+async function get<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "GET" });
+}
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  return request<T>(path, {
+    method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    cache: "no-store",
   });
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
-  return res.json() as Promise<T>;
 }
 
 // ---- Types (mirror api/services.py shapes) ----------------------------------
@@ -189,6 +217,8 @@ export interface ScenarioResponse {
 }
 export interface WorkspaceCatalog { scenarios: { key: string; label: string }[]; issues: { key: string; label: string }[]; }
 
+export interface AuthTokens { access_token: string; refresh_token: string; token_type: string; expires_in: number; user: import("@/auth/store").AuthUser; }
+
 // ---- Commercial Intelligence workspace ----
 export interface CiBrief {
   total_revenue: number; true_operating_cost: number; gross_margin_pct: number;
@@ -260,6 +290,10 @@ export const api = {
   brainStats: () => get<BrainStats>("/api/brain/stats"),
   brainRemember: (title: string, content: string) => post<{ ok: boolean; id: string }>("/api/brain/remember", { title, content }),
   brainIngest: () => post<BrainIngest>("/api/brain/ingest", {}),
+  // ---- auth ----
+  login: (email: string, password: string) => post<AuthTokens>("/api/auth/login", { email, password }),
+  me: () => get<import("@/auth/store").AuthUser>("/api/auth/me"),
+  logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
   admin: () => get<AdminResponse>("/api/admin"),
   commercial: () => get<CommercialResponse>("/api/commercial"),
   repricingEmail: (sku: string) => post<EmailResponse>("/api/commercial/email", { sku }),

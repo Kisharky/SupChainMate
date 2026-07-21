@@ -37,6 +37,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---- Authentication & RBAC (isolated in api/auth) ----
+from fastapi import Request  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+
+from api.auth import deps as auth_deps  # noqa: E402
+from api.auth.router import router as auth_router  # noqa: E402
+
+
+@app.middleware("http")
+async def auth_gate(request: Request, call_next):
+    """Central auth + RBAC gate — protects every /api route by path, leaving the
+    domain handlers untouched. Public paths and (optionally) offline demo mode
+    pass straight through."""
+    rejection = auth_deps.enforce(request)
+    if rejection is not None:
+        status, detail = rejection
+        return JSONResponse({"detail": detail}, status_code=status)
+    return await call_next(request)
+
+
+app.include_router(auth_router)
+
+
+@app.on_event("startup")
+def _bootstrap_identity() -> None:
+    """Create identity tables and seed demo users on first boot."""
+    try:
+        from api.db import SessionLocal, init_db
+        from api.auth import service
+        init_db()
+        db = SessionLocal()
+        try:
+            service.seed_default_users(db)
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001 — API must still boot
+        import logging
+        logging.getLogger("api").warning("identity bootstrap skipped: %s", exc)
+
 
 def _wire_decision_brain() -> None:
     """Integrate the Decision Brain with the Planner via the extensibility hook —

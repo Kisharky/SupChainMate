@@ -243,6 +243,26 @@ Business Logic (deterministic)  →  Agents  →  ai.AI (Router)  →  Capabilit
 
 ---
 
+## Optimization Layer — pluggable solvers beneath the agents
+
+The domain agents reason about the business; the hard combinatorial subproblems are delegated **downward** to a pluggable optimization layer — the same ports-and-adapters idea as the AI router, applied to solvers. Inspired by [NVIDIA's cuOpt agent-skills pattern](https://developer.nvidia.com/blog/optimize-supply-chain-decision-systems-using-nvidia-cuopt-agent-skills/): the agent recognises an optimization-shaped problem, hands it to a solver *skill*, and interprets the result — it never names a solver.
+
+```
+Domain Agent (reasons)  →  optimize.skill  →  OPT (Engine)  →  Solver Registry  →  cuOpt | local
+```
+
+- **`optimize/` package** — `engine.py` (the only component that maps *problem kind → solver*, with a fallback chain), `registry.py` (one-line solver swaps), `solvers/cuopt.py` (NVIDIA cuOpt VRP adapter), `solvers/local.py` (nearest-neighbour + 2-opt routing; least-cost transportation), and `skills.py` (the agent-facing surface).
+- **Problems, not solvers** — agents call `optimize_delivery_route(...)` / `optimize_supply_allocation(...)`; the registry routes **routing → cuOpt (fallback local)** and **allocation → local**.
+- **Graceful fallback** — with no `NVIDIA_CUOPT_API_KEY` the routing problem falls back to the local heuristic and says so (`solver: local · plan routes → cuopt → local fallback`). The layer runs identically with zero keys.
+- **Beneath the agents** — the **Warehouse** agent delegates its inter-hub routing to the skill (reporting optimised distance, % saved, and the solver), and the **Procurement** agent delegates carrier→lane volume assignment to the allocation skill. Surfaced in the UI: the **Logistics Command Center** has a one-click **⚡ Optimise routes** that redraws the network tour on the map (objective / naive baseline / savings), and **Procurement** shows a **least-cost carrier allocation** table (optimised cost vs average-cost baseline).
+
+| Problem | Skill | Primary → fallback | Objective |
+|---|---|---|---|
+| **Routing (VRP/tour)** | `optimize_delivery_route` | NVIDIA cuOpt → local (NN + 2-opt) | minimise total distance |
+| **Allocation (transportation)** | `optimize_supply_allocation` | local (least-cost) | minimise total cost, respect supply/demand |
+
+---
+
 ## Decision Center — the trust layer
 
 Every material AI recommendation flows through a human-in-the-loop **Decision Center** before it counts:
@@ -336,6 +356,11 @@ SupChainMate/
 │   │   ├── rag.py · observability.py · cache.py   #   enterprise RAG, request log, response cache
 │   │   ├── reasoning.py · embeddings.py · coding.py · safety.py · ocr.py · vision.py · memory.py
 │   │   └── providers/nvidia.py   #   Cached NIM client, retries, timeouts
+│   ├── optimize/                 # Pluggable optimization layer (beneath the agents)
+│   │   ├── engine.py             #   OPT.solve() — problem kind → solver + fallback
+│   │   ├── registry.py           #   ProblemKind → SolverSpec plan
+│   │   ├── skills.py             #   Agent-facing skills (route, allocation)
+│   │   └── solvers/              #   cuopt.py (NVIDIA cuOpt VRP) · local.py (NN+2-opt, transport)
 │   ├── style.css                 # HUD theme
 │   ├── requirements.txt          # Pinned dependency versions
 │   ├── .env.example              # API key & SMTP template

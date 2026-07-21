@@ -248,8 +248,37 @@ def procurement_snapshot() -> dict[str, Any]:
             "recommended_share": round(float(r.get("Recommended Share", 0) or 0) * 100, 1)
             if r.get("Recommended Share") is not None else None,
         } for _, r in scored.iterrows()]
-        return {"carriers": rows, "impact": _jsonable(impact)}
-    return _safe(build, {"carriers": [], "impact": {}})
+        return {"carriers": rows, "impact": _jsonable(impact),
+                "optimization": _carrier_allocation(scorecard)}
+    return _safe(build, {"carriers": [], "impact": {}, "optimization": None})
+
+
+def _carrier_allocation(scorecard) -> dict[str, Any]:
+    """Least-cost carrier→lane assignment via the optimization skill (cuOpt/local)."""
+    try:
+        import pandas as pd
+        from optimize import OPT, optimize_supply_allocation
+        cost_col = "Avg Cost/Shipment ($)"
+        if scorecard is None or cost_col not in scorecard.columns:
+            return None
+        car = scorecard.dropna(subset=[cost_col]).head(6)
+        if len(car) < 2:
+            return None
+        carriers = [str(c) for c in car["Carrier"]]
+        rates = [float(x) for x in car[cost_col]]
+        supply = [float(s) for s in car["Shipments"]]
+        lanes = ["Domestic", "Regional", "Export"]
+        lane_factor = [1.0, 1.15, 1.35]
+        total = sum(supply)
+        demand = [total * w for w in (0.5, 0.3, 0.2)]
+        cost = [[r * f for f in lane_factor] for r in rates]
+        res = optimize_supply_allocation(carriers, lanes, cost, supply, demand)
+        d = res.to_dict()
+        d["lanes"] = lanes
+        d["status"] = OPT.status()
+        return d
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # ---- Operations --------------------------------------------------------------
@@ -366,6 +395,32 @@ def logistics_snapshot() -> dict[str, Any]:
             "carriers": carriers,
         }
     return _safe(build, _LOGI_FALLBACK)
+
+
+# ---- Optimization layer (pluggable: cuOpt → local) ---------------------------
+def optimize_route() -> dict[str, Any]:
+    """Optimise the inter-hub delivery tour over the real network centroids via
+    the pluggable optimization engine (NVIDIA cuOpt when keyed, local otherwise)."""
+    def build() -> dict[str, Any]:
+        from optimize import OPT, optimize_delivery_route
+        cents = _geo_centroids().sort_values("size", ascending=False).reset_index(drop=True)
+        stops = [{"name": f"Hub {int(r['cluster'])}", "lat": float(r["lat"]),
+                  "lon": float(r["lon"]), "demand": float(r["size"])}
+                 for _, r in cents.iterrows()]
+        res = optimize_delivery_route(stops, round_trip=True)
+        d = res.to_dict()
+        # ordered points for the map polyline
+        d["tour"] = [{"name": stops[i]["name"], "lat": stops[i]["lat"], "lon": stops[i]["lon"]}
+                     for i in res.order]
+        d["status"] = OPT.status()
+        return d
+    return _safe(build, {"solved": False, "solver": "none", "tour": [], "legs": [],
+                         "objective": 0, "baseline": 0, "improvement_pct": 0, "status": {}})
+
+
+def optimize_status() -> dict[str, Any]:
+    return _safe(lambda: __import__("optimize", fromlist=["OPT"]).OPT.status(),
+                 {"plan": {}, "solvers": {}})
 
 
 # ---- Map (real geo from the Olist geolocation join) --------------------------

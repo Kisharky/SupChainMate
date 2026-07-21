@@ -150,6 +150,36 @@ class ProcurementAgent(BaseAgent):
         res.impact = Impact(cost_savings_yr=retender if retender > 0 else None)
         res.outputs = {"po_lines": len(urgent), "retender_opportunity": retender,
                        "tender_ready": pack is not None}
+
+        # Delegate carrier volume assignment to the pluggable optimization layer:
+        # a least-cost transportation problem — carriers (supply = proven volume)
+        # across demand lanes (representative distance factors), minimising cost.
+        try:
+            sc = ctx.get("scorecard")
+            cost_col = "Avg Cost/Shipment ($)"
+            if sc is not None and cost_col in getattr(sc, "columns", []):
+                car = sc.dropna(subset=[cost_col]).head(6)
+                if len(car) >= 2:
+                    from optimize import optimize_supply_allocation
+                    carriers = [str(c) for c in car["Carrier"]]
+                    rates = [float(x) for x in car[cost_col]]
+                    supply = [float(s) for s in car["Shipments"]]
+                    lanes = ["Domestic", "Regional", "Export"]        # representative demand lanes
+                    lane_factor = [1.0, 1.15, 1.35]                   # distance/complexity multipliers
+                    total = sum(supply)
+                    demand = [total * w for w in (0.5, 0.3, 0.2)]
+                    cost = [[r * f for f in lane_factor] for r in rates]
+                    alloc = optimize_supply_allocation(carriers, lanes, cost, supply, demand)
+                    if alloc.solved:
+                        res.findings.append(
+                            f"Optimised carrier allocation across {len(lanes)} demand lanes: "
+                            f"${alloc.objective:,.0f} ({alloc.improvement_pct:.0f}% below the "
+                            f"average-cost baseline) via {alloc.solver}.")
+                        res.outputs.update(alloc_cost=round(alloc.objective, 0),
+                                           alloc_saving_pct=round(alloc.improvement_pct, 1),
+                                           alloc_solver=alloc.solver)
+        except Exception:  # noqa: BLE001 — optimization is additive, never fatal
+            pass
         return res
 
 
@@ -267,6 +297,27 @@ class WarehouseAgent(BaseAgent):
         res.confidence_basis = f"{int(df.get('customers', pd.Series([0])).sum()):,} customer locations clustered"
         res.impact = Impact(other=f"network efficiency {avg_eff:.0f}%")
         res.outputs = {"avg_efficiency": round(avg_eff, 1), "worst_zone": int(worst["cluster"])}
+
+        # Delegate the hub-routing subproblem to the pluggable optimization layer
+        # (NVIDIA cuOpt when configured, local heuristic otherwise). The agent
+        # reasons about the network; the solver finds the optimal tour.
+        try:
+            if {"centroid_lat", "centroid_lon"}.issubset(df.columns) and len(df) >= 2:
+                from optimize import optimize_delivery_route
+                stops = [{"name": f"Hub {int(r['cluster'])}", "lat": float(r["centroid_lat"]),
+                          "lon": float(r["centroid_lon"]),
+                          "demand": float(r.get("customers", 1) or 1)}
+                         for _, r in df.iterrows()]
+                opt = optimize_delivery_route(stops, round_trip=True)
+                if opt.solved:
+                    res.findings.append(
+                        f"Optimised inter-hub route: {opt.objective:,.0f} km via {opt.solver} "
+                        f"({opt.improvement_pct:.0f}% shorter than the naive order).")
+                    res.outputs.update(route_km=round(opt.objective, 1),
+                                       route_saving_pct=round(opt.improvement_pct, 1),
+                                       route_solver=opt.solver)
+        except Exception:  # noqa: BLE001 — optimization is additive, never fatal
+            pass
         return res
 
 

@@ -22,13 +22,21 @@ function Fit({ data }: { data: MapResponse }) {
   return null;
 }
 
-export default function LaneMap({ data }: { data: MapResponse }) {
+export default function LaneMap({ data, tour }: { data: MapResponse; tour?: { lat: number; lon: number }[] }) {
   const hasTiles = Boolean(data.tiles_url);
+  const tourLine = tour && tour.length > 1
+    ? [...tour.map((t) => [t.lat, t.lon] as [number, number]), [tour[0].lat, tour[0].lon] as [number, number]]
+    : null;
   return (
     <MapContainer center={data.center} zoom={data.zoom} style={{ height: 340, width: "100%", background: "var(--bg-sunken)" }}
       scrollWheelZoom={false} attributionControl={hasTiles}>
       {hasTiles && <TileLayer url={data.tiles_url!} attribution={data.attribution} />}
-      {data.routes.map((r, i) => (
+      {tourLine && (
+        <Polyline positions={tourLine} pathOptions={{ color: "#10B981", weight: 3, opacity: 0.95 }}>
+          <Tooltip>Optimised delivery tour</Tooltip>
+        </Polyline>
+      )}
+      {!tourLine && data.routes.map((r, i) => (
         <Polyline key={i} positions={[[r.from.lat, r.from.lon], [r.to.lat, r.to.lon]]}
           pathOptions={{ color: COLOR[r.status], weight: 2, opacity: 0.85, dashArray: r.status === "warning" ? "6 6" : undefined }}>
           <Tooltip>{r.from.name} → {r.to.name} · {Math.round(r.distance_km)} km</Tooltip>

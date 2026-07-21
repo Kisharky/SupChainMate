@@ -83,6 +83,16 @@ def logistics_map() -> dict:
     return services.logistics_map()
 
 
+@app.get("/api/optimize/route")
+def optimize_route() -> dict:
+    return services.optimize_route()
+
+
+@app.get("/api/optimize/status")
+def optimize_status() -> dict:
+    return services.optimize_status()
+
+
 @app.get("/api/forecast")
 def forecast() -> dict:
     return services.forecast_snapshot()

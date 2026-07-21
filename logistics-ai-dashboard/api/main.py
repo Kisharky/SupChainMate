@@ -38,6 +38,38 @@ app.add_middleware(
 )
 
 
+def _wire_decision_brain() -> None:
+    """Integrate the Decision Brain with the Planner via the extensibility hook —
+    no change to the planner package. Registers a capability that recalls relevant
+    memory (past decisions + knowledge) for whatever objective is being planned."""
+    try:
+        from brain import BRAIN
+        from planner import PLANNER
+        from planner.schemas import Capability
+
+        def _recall_context(ctx: dict) -> dict:
+            c = BRAIN.context_for(ctx.get("objective", ""), top_k=4)
+            return {"summary": (f"Recalled {c['n']} relevant memory item(s) — past "
+                                f"decisions, company knowledge, feedback — for context."),
+                    "findings": [cit["title"] for cit in c["citations"][:3]],
+                    "metrics": {"recalled": c["n"]}, "confidence": 0.7}
+
+        PLANNER.register(Capability(
+            name="recall_context",
+            description="Retrieve relevant past decisions and company knowledge from the Decision Brain.",
+            required_inputs=[], outputs=["recalled"], dependencies=[], confidence=0.7,
+            priority=0, handler=_recall_context,
+            keywords=["reduce", "increase", "improve", "optimise", "optimize", "cost", "inventory",
+                      "revenue", "margin", "profit", "risk", "forecast", "demand", "supplier",
+                      "customer", "service", "holding", "leakage", "contract", "warehouse",
+                      "logistics", "route", "delivery", "pricing"]))
+    except Exception:  # noqa: BLE001 — the API must boot even if the Brain is unavailable
+        pass
+
+
+_wire_decision_brain()
+
+
 class AskRequest(BaseModel):
     query: str
 
@@ -75,6 +107,18 @@ class CommercialDecideRequest(BaseModel):
     item: str
     action: str  # APPROVED | REJECTED | SCHEDULED
     note: str = ""
+
+
+class RecallRequest(BaseModel):
+    query: str
+    kinds: list[str] | None = None
+    top_k: int = 6
+
+
+class RememberRequest(BaseModel):
+    title: str
+    content: str
+    doc_type: str = "document"
 
 
 class WorkflowRequest(BaseModel):
@@ -294,7 +338,19 @@ def ci_decide(req: CommercialDecideRequest) -> dict:
 def planner_plan(req: PlanRequest) -> dict:
     from planner import PLANNER
     try:
-        return PLANNER.plan(req.request).to_dict()
+        # Objective is passed into the shared context so the Decision Brain's
+        # recall_context capability can retrieve relevant memory.
+        decision = PLANNER.plan(req.request, context={"objective": req.request})
+        d = decision.to_dict()
+        try:  # store the decision in long-term memory
+            from brain import BRAIN
+            BRAIN.record_decision(decision.objective, decision.executive_summary,
+                                  {"run_id": decision.run_id, "confidence": decision.confidence,
+                                   "capabilities": decision.capabilities,
+                                   "financial_impact": decision.financial_impact})
+        except Exception:  # noqa: BLE001
+            pass
+        return d
     except Exception as exc:  # noqa: BLE001
         return {"objective": req.request, "executive_summary": f"Planner error: {exc}",
                 "capabilities": [], "graph": [], "tasks": [], "key_findings": [],
@@ -313,3 +369,42 @@ def planner_capabilities() -> dict:
 def planner_history(limit: int = 20) -> dict:
     from planner import PLANNER
     return {"runs": PLANNER.history(limit)}
+
+
+# ---- Decision Brain (long-term memory + knowledge) ----
+@app.post("/api/brain/recall")
+def brain_recall(req: RecallRequest) -> dict:
+    from brain import BRAIN
+    hits = BRAIN.recall(req.query, kinds=req.kinds, top_k=req.top_k)
+    return {"query": req.query, "results": [h.to_dict() for h in hits]}
+
+
+@app.post("/api/brain/answer")
+def brain_answer(req: RecallRequest) -> dict:
+    from brain import BRAIN
+    return BRAIN.answer(req.query, top_k=req.top_k)
+
+
+@app.post("/api/brain/remember")
+def brain_remember(req: RememberRequest) -> dict:
+    from brain import BRAIN
+    rid = BRAIN.add_knowledge(req.title, req.content, doc_type=req.doc_type)
+    return {"ok": True, "id": rid}
+
+
+@app.get("/api/brain/stats")
+def brain_stats() -> dict:
+    from brain import BRAIN
+    return BRAIN.stats()
+
+
+@app.get("/api/brain/recent")
+def brain_recent(limit: int = 30) -> dict:
+    from brain import BRAIN
+    return {"records": BRAIN.recent(limit)}
+
+
+@app.post("/api/brain/ingest")
+def brain_ingest() -> dict:
+    from brain import BRAIN
+    return BRAIN.ingest_existing()

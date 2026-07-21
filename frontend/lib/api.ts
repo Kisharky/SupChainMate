@@ -226,6 +226,11 @@ export interface CiPricing { recommendations: CiPricingRec[]; total_uplift: numb
 export interface CiRiskRow { id: string; account: string; region: string; scores: Record<string, number>; bands: Record<string, string>; overall: number; overall_band: string; }
 export interface CiRisk { dimensions: string[]; rows: CiRiskRow[]; }
 
+// ---- Decision Brain (long-term memory) ----
+export interface BrainHit { id: string; kind: string; title: string; snippet: string; score: number; semantic: number; lexical: number; source: string; ts: string; }
+export interface BrainStats { total: number; by_kind: Record<string, number>; embedder: string; dim: number; }
+export interface BrainIngest { ingested: Record<string, number>; stats: BrainStats; }
+
 // ---- Endpoints --------------------------------------------------------------
 export const api = {
   kpis: () => get<KpiResponse>("/api/kpis"),
@@ -251,6 +256,10 @@ export const api = {
   wsCoa: (issue: string) => post<CoaResponse>("/api/workspace/coa", { issue }),
   wsScenario: (kind: string, magnitude: number) => post<ScenarioResponse>("/api/workspace/scenario", { kind, magnitude }),
   plannerPlan: (request: string) => post<PlannerDecision>("/api/planner/plan", { request }),
+  brainRecall: (query: string, kinds?: string[]) => post<{ query: string; results: BrainHit[] }>("/api/brain/recall", { query, kinds, top_k: 8 }),
+  brainStats: () => get<BrainStats>("/api/brain/stats"),
+  brainRemember: (title: string, content: string) => post<{ ok: boolean; id: string }>("/api/brain/remember", { title, content }),
+  brainIngest: () => post<BrainIngest>("/api/brain/ingest", {}),
   admin: () => get<AdminResponse>("/api/admin"),
   commercial: () => get<CommercialResponse>("/api/commercial"),
   repricingEmail: (sku: string) => post<EmailResponse>("/api/commercial/email", { sku }),

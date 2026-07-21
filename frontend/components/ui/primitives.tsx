@@ -130,6 +130,58 @@ export function Alert({ status = "info", title, children }: { status?: KpiStatus
   );
 }
 
+/* ---- Loading / empty / error states ---- */
+type StateKind = "loading" | "error" | "empty";
+
+const STATE_TEXT: Record<StateKind, string> = {
+  loading: "Loading…",
+  error: "Couldn't reach the API — start the FastAPI backend.",
+  empty: "Nothing to show yet.",
+};
+
+/** Full-width row for a DataTable while it loads, errors, or has no data.
+ * `cols` must match the table's column count so the message spans the grid. */
+export function TableState({ cols, kind = "loading", message }: { cols: number; kind?: StateKind; message?: string }) {
+  const text = message ?? STATE_TEXT[kind];
+  const color = kind === "error" ? "var(--critical)" : "var(--text-3)";
+  return (
+    <tr>
+      <td colSpan={cols} className="px-3.5 py-8 text-center text-[0.8125rem]" style={{ color }}>
+        {kind === "loading" ? (
+          <span className="inline-flex items-center gap-2">
+            <span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
+            {text}
+          </span>
+        ) : text}
+      </td>
+    </tr>
+  );
+}
+
+/** Centered state block for card bodies that aren't tables. */
+export function EmptyState({ kind = "empty", title, hint, icon }: { kind?: StateKind; title?: string; hint?: string; icon?: ReactNode }) {
+  const heading = title ?? STATE_TEXT[kind];
+  const glyph = icon ?? (kind === "loading" ? null : kind === "error" ? "◆" : "○");
+  const color = kind === "error" ? "var(--critical)" : "var(--text-3)";
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+      {kind === "loading"
+        ? <span className="h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin" style={{ color }} aria-hidden />
+        : <span className="text-[1.5rem] leading-none" style={{ color }} aria-hidden>{glyph}</span>}
+      <div className="text-[0.9375rem] font-semibold text-ink-2">{heading}</div>
+      {hint && <div className="text-[0.8125rem] text-ink-3 max-w-sm">{hint}</div>}
+    </div>
+  );
+}
+
+/** Shimmer placeholder bar for skeleton loading layouts. */
+export function Skeleton({ className = "", w, h = "0.85em" }: { className?: string; w?: string; h?: string }) {
+  return (
+    <span className={`inline-block rounded animate-pulse align-middle ${className}`}
+      style={{ width: w ?? "100%", height: h, background: "color-mix(in srgb, var(--text) 12%, transparent)" }} />
+  );
+}
+
 /* ---- Data table ---- */
 export function DataTable({ head, children }: { head: ReactNode; children: ReactNode }) {
   return (

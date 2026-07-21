@@ -180,51 +180,6 @@ def decision_timeline() -> dict[str, Any]:
     return services._safe(build, {"stages": _STAGES, "counts": {}, "items": []})
 
 
-# ---- AI Planner — decompose a request into agent tasks -----------------------
-_AGENT_KEYWORDS = {
-    "forecast": ["forecast", "demand", "predict", "seasonal", "spike"],
-    "inventory": ["inventory", "stock", "reorder", "safety stock", "eoq", "shortage", "stockout"],
-    "procurement": ["procure", "carrier", "supplier", "tender", "rfp", "sourcing", "rate"],
-    "logistics": ["logistics", "route", "shipment", "delivery", "transport", "lane", "delay"],
-    "commercial": ["price", "pricing", "margin", "revenue", "profit", "leakage", "customer"],
-    "knowledge": ["policy", "sop", "contract", "compliance", "document", "rule"],
-}
-_AGENT_ACTIONS = {
-    "forecast": "Re-run demand forecast and flag stockout-risk windows",
-    "inventory": "Recompute reorder points / EOQ and multi-DC allocation",
-    "procurement": "Score carriers and optimise volume allocation",
-    "logistics": "Assess shipment risk and optimise routing",
-    "commercial": "Quantify margin / leakage and draft repricing",
-    "knowledge": "Retrieve governing policy and cite sources",
-}
-
-
-def plan_request(request: str) -> dict[str, Any]:
-    def build() -> dict[str, Any]:
-        text = (request or "").lower()
-        chosen = [a for a, kws in _AGENT_KEYWORDS.items() if any(k in text for k in kws)]
-        if not chosen:  # default cross-functional decomposition
-            chosen = ["forecast", "inventory", "logistics", "procurement"]
-        # Executive agent always synthesises last.
-        order = [a for a in ("forecast", "inventory", "procurement", "logistics",
-                             "commercial", "knowledge") if a in chosen]
-        plan = [{
-            "step": i + 1, "agent": a, "task": _AGENT_ACTIONS[a],
-            "reasoning": f"Request implicates {a}; delegating its sub-decision.",
-            "uses_optimizer": a in ("inventory", "procurement", "logistics"),
-            "status": "queued",
-        } for i, a in enumerate(order)]
-        plan.append({"step": len(plan) + 1, "agent": "executive",
-                     "task": "Synthesise a decision-ready brief from all specialists",
-                     "reasoning": "Bounds confidence by the weakest upstream agent.",
-                     "uses_optimizer": False, "status": "queued"})
-        narrative = (f"Decomposed the request into {len(order)} specialist task(s) "
-                     f"({', '.join(order)}) plus executive synthesis. Agents invoke "
-                     f"optimization skills through the router; none call a solver directly.")
-        return {"request": request, "plan": plan, "narrative": narrative}
-    return services._safe(build, {"request": request, "plan": [], "narrative": ""})
-
-
 # ---- Courses of Action -------------------------------------------------------
 _ISSUES = {
     "stockout": "Critical SKU below 3 days of cover",

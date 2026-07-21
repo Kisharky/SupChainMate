@@ -2,7 +2,7 @@
 /** Procurement — carrier allocation optimisation (live). */
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, KpiCard, DataTable, Th, Td, Button, Badge } from "@/components/ui/primitives";
+import { Card, CardHead, KpiCard, DataTable, Th, Td, Button, Badge, TableState } from "@/components/ui/primitives";
 import { api, ProcurementResponse } from "@/lib/api";
 
 export default function Procurement() {
@@ -42,7 +42,7 @@ export default function Procurement() {
               <Td num strong>{c.recommended_share == null ? "—" : `${c.recommended_share.toFixed(1)}%`}</Td>
             </tr>
           ))}
-          {(!data?.carriers || data.carriers.length === 0) && <tr><Td>Loading…</Td><Td> </Td><Td> </Td><Td> </Td><Td> </Td></tr>}
+          {(!data?.carriers || data.carriers.length === 0) && <TableState cols={5} kind="loading" />}
         </DataTable>
       </Card>
 

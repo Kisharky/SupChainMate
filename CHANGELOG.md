@@ -2,6 +2,27 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Portfolio Release v1.0 — Enterprise readiness & final polish
+- **Orchestration & memory**: added the **Planner** (objective → dynamic
+  capability discovery → execution DAG → merged Decision; no business logic) and
+  the offline, model-agnostic **Decision Brain** (long-term memory + semantic
+  recall), both framework-free and mirroring the AI Router's ports/registry/facade shape
+- **Optimization layer**: pluggable solvers beneath the domain agents
+  (transportation/VRP, multi-DC allocation) via a problem-kind → solver router
+  with a local fallback
+- **Enterprise**: JWT auth (rotating refresh tokens, PBKDF2 hashing) with a
+  six-role RBAC gate; SQLAlchemy identity layer over **SQLite or Postgres**
+  (`DATABASE_URL`); one-command **Docker Compose**; **GitHub Actions CI**
+  (backend tests · frontend lint+build); `.env.example` with no secrets in source
+- **Polish (behavior-preserving)**: removed superseded endpoints and orphaned
+  service/frontend code; migrated FastAPI startup to `lifespan`; added reusable
+  `TableState` / `EmptyState` / `Skeleton` design-system primitives and applied
+  consistent loading/error states across screens
+- **Docs**: guided demo walkthrough (`docs/DEMO.md`) and an eight-dimension
+  enterprise readiness audit (`docs/AUDIT.md`)
+- Tests: 165 passing across AI router, optimization, planner, brain, auth/RBAC,
+  and domain services
+
 ## v5.5.0 — Production Hardening: Observability, Caching, Enterprise RAG
 - **RAG**: new `ai/rag.py` enterprise pipeline — intelligent overlap chunking, embedding generation, **cached vector index** (chunk embeddings persisted by content hash; only new chunks are embedded), hybrid semantic+lexical ranking, citation generation, and retrieval caching (TTL, mode-aware key). `modules/knowledge.py` is now a thin adapter
 - **Observability**: `ai/observability.py` records every AI request — timestamp, capability, model, provider, latency, tokens, cached/fallback flags, errors — to SQLite; router uses it as the observer. New AI Platform Observability panel (requests, tokens, avg latency, success/cache/fallback rates, by-capability, recent log)

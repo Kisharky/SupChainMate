@@ -34,6 +34,15 @@ export interface MapPoint { name: string; lat: number; lon: number; size: number
 export interface MapRoute { from: { lat: number; lon: number; name: string }; to: { lat: number; lon: number; name: string }; status: KpiStatus; distance_km: number; }
 export interface MapResponse { tiles_url: string | null; attribution: string; center: [number, number]; zoom: number; points: MapPoint[]; routes: MapRoute[]; source: string; }
 
+export interface OptimizeLeg { from: string; to: string; distance_km: number; }
+export interface OptimizeResponse {
+  solved: boolean; solver: string; fell_back: boolean; objective: number; baseline: number;
+  improvement_pct: number; order: number[]; legs: OptimizeLeg[]; detail: string;
+  tour: { name: string; lat: number; lon: number }[];
+  status: { plan?: Record<string, string>; solvers?: Record<string, { configured: boolean }> };
+  source: string;
+}
+
 export interface ForecastPoint { ds: string; y?: number; yhat?: number; lower?: number; upper?: number; }
 export interface ForecastResponse {
   history: ForecastPoint[]; forecast: ForecastPoint[];
@@ -134,6 +143,7 @@ export const api = {
   inventory: () => get<InventoryResponse>("/api/inventory"),
   logistics: () => get<LogisticsResponse>("/api/logistics"),
   logisticsMap: () => get<MapResponse>("/api/logistics/map"),
+  optimizeRoute: () => get<OptimizeResponse>("/api/optimize/route"),
   forecast: () => get<ForecastResponse>("/api/forecast"),
   procurement: () => get<ProcurementResponse>("/api/procurement"),
   operations: () => get<OperationsResponse>("/api/operations"),

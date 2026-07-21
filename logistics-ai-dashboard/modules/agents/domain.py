@@ -267,6 +267,27 @@ class WarehouseAgent(BaseAgent):
         res.confidence_basis = f"{int(df.get('customers', pd.Series([0])).sum()):,} customer locations clustered"
         res.impact = Impact(other=f"network efficiency {avg_eff:.0f}%")
         res.outputs = {"avg_efficiency": round(avg_eff, 1), "worst_zone": int(worst["cluster"])}
+
+        # Delegate the hub-routing subproblem to the pluggable optimization layer
+        # (NVIDIA cuOpt when configured, local heuristic otherwise). The agent
+        # reasons about the network; the solver finds the optimal tour.
+        try:
+            if {"centroid_lat", "centroid_lon"}.issubset(df.columns) and len(df) >= 2:
+                from optimize import optimize_delivery_route
+                stops = [{"name": f"Hub {int(r['cluster'])}", "lat": float(r["centroid_lat"]),
+                          "lon": float(r["centroid_lon"]),
+                          "demand": float(r.get("customers", 1) or 1)}
+                         for _, r in df.iterrows()]
+                opt = optimize_delivery_route(stops, round_trip=True)
+                if opt.solved:
+                    res.findings.append(
+                        f"Optimised inter-hub route: {opt.objective:,.0f} km via {opt.solver} "
+                        f"({opt.improvement_pct:.0f}% shorter than the naive order).")
+                    res.outputs.update(route_km=round(opt.objective, 1),
+                                       route_saving_pct=round(opt.improvement_pct, 1),
+                                       route_solver=opt.solver)
+        except Exception:  # noqa: BLE001 — optimization is additive, never fatal
+            pass
         return res
 
 

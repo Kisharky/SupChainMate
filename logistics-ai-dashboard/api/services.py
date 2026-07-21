@@ -368,6 +368,32 @@ def logistics_snapshot() -> dict[str, Any]:
     return _safe(build, _LOGI_FALLBACK)
 
 
+# ---- Optimization layer (pluggable: cuOpt → local) ---------------------------
+def optimize_route() -> dict[str, Any]:
+    """Optimise the inter-hub delivery tour over the real network centroids via
+    the pluggable optimization engine (NVIDIA cuOpt when keyed, local otherwise)."""
+    def build() -> dict[str, Any]:
+        from optimize import OPT, optimize_delivery_route
+        cents = _geo_centroids().sort_values("size", ascending=False).reset_index(drop=True)
+        stops = [{"name": f"Hub {int(r['cluster'])}", "lat": float(r["lat"]),
+                  "lon": float(r["lon"]), "demand": float(r["size"])}
+                 for _, r in cents.iterrows()]
+        res = optimize_delivery_route(stops, round_trip=True)
+        d = res.to_dict()
+        # ordered points for the map polyline
+        d["tour"] = [{"name": stops[i]["name"], "lat": stops[i]["lat"], "lon": stops[i]["lon"]}
+                     for i in res.order]
+        d["status"] = OPT.status()
+        return d
+    return _safe(build, {"solved": False, "solver": "none", "tour": [], "legs": [],
+                         "objective": 0, "baseline": 0, "improvement_pct": 0, "status": {}})
+
+
+def optimize_status() -> dict[str, Any]:
+    return _safe(lambda: __import__("optimize", fromlist=["OPT"]).OPT.status(),
+                 {"plan": {}, "solvers": {}})
+
+
 # ---- Map (real geo from the Olist geolocation join) --------------------------
 @_ttl_cache(600)
 def _geo_centroids():

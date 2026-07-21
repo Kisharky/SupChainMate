@@ -287,3 +287,29 @@ def ci_risk() -> dict:
 @app.post("/api/commercial/decide")
 def ci_decide(req: CommercialDecideRequest) -> dict:
     return commercial_intel.decide(req.item, req.action, req.note)
+
+
+# ---- Planner (executive decision orchestrator) ----
+@app.post("/api/planner/plan")
+def planner_plan(req: PlanRequest) -> dict:
+    from planner import PLANNER
+    try:
+        return PLANNER.plan(req.request).to_dict()
+    except Exception as exc:  # noqa: BLE001
+        return {"objective": req.request, "executive_summary": f"Planner error: {exc}",
+                "capabilities": [], "graph": [], "tasks": [], "key_findings": [],
+                "recommended_actions": [], "financial_impact": {}, "operational_impact": {},
+                "risks": [str(exc)], "confidence": 0, "evidence": [], "kpis": [],
+                "assumptions": [], "next_steps": [], "run_id": ""}
+
+
+@app.get("/api/planner/capabilities")
+def planner_capabilities() -> dict:
+    from planner import PLANNER
+    return {"capabilities": PLANNER.capabilities()}
+
+
+@app.get("/api/planner/history")
+def planner_history(limit: int = 20) -> dict:
+    from planner import PLANNER
+    return {"runs": PLANNER.history(limit)}

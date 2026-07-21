@@ -18,6 +18,7 @@ const NAV: { label: string; href: string; icon: string; badge?: number; perm: st
   { label: "Forecasting", href: "/forecasting", icon: "◡", perm: "forecasting" },
   { label: "Inventory", href: "/inventory", icon: "▦", badge: 7, perm: "inventory" },
   { label: "Procurement", href: "/procurement", icon: "◈", perm: "procurement" },
+  { label: "Documents", href: "/documents", icon: "❑", perm: "operations" },
   { label: "Commercial", href: "/commercial", icon: "◆", perm: "commercial" },
   { label: "Warehouse", href: "/warehouse", icon: "▤", perm: "warehouse" },
   { label: "Logistics", href: "/logistics", icon: "◎", badge: 3, perm: "logistics" },

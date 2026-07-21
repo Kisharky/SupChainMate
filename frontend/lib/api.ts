@@ -206,6 +206,30 @@ export interface WorkersResponse {
   source: string;
 }
 
+// ---- Invoice & Document Intelligence ----
+export interface DocRow {
+  id: string; type: string; type_label: string; vendor: string; po_number: string;
+  amount: number; extraction_confidence: number; match_status: string;
+  discrepancy_count: number; status: string; hours_ago: number;
+}
+export interface DocumentsResponse {
+  summary: {
+    documents_processed: number; straight_through_pct: number; three_way_matched: number;
+    exceptions: number; avg_confidence: number; value_in_flight: number;
+  };
+  queue: DocRow[];
+  source: string;
+}
+export interface DocMatchLine {
+  sku: string; description: string; po_qty: number; po_price: number; po_amount: number;
+  invoice_qty: number; invoice_price: number; invoice_amount: number; receipt_qty: number; status: string;
+}
+export interface DocumentDetail {
+  ok: boolean; doc_id: string; type_label: string; vendor: string; po_number: string;
+  extraction_confidence: number; match_status: string; fields: Record<string, string>;
+  lines: DocMatchLine[]; discrepancies: string[]; recommended_action: string; source: string;
+}
+
 // ---- Fraud & Anomaly Detection ----
 export interface FraudAlert {
   id: string; type: string; type_label: string; icon: string; severity: string;
@@ -346,6 +370,8 @@ export const api = {
   admin: () => get<AdminResponse>("/api/admin"),
   workers: () => get<WorkersResponse>("/api/workers"),
   fraud: () => get<FraudResponse>("/api/fraud"),
+  documents: () => get<DocumentsResponse>("/api/documents"),
+  documentDetail: (id: string) => get<DocumentDetail>(`/api/documents/${id}`),
   connectors: () => get<ConnectorsResponse>("/api/connectors"),
   connectorConfig: (id: string) => get<ConnectorConfig>(`/api/connectors/config/${id}`),
   connectorTest: (id: string) => post<ConnectorTest>("/api/connectors/test", { connector_id: id }),

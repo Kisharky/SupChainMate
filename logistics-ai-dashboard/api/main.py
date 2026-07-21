@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from api import commercial_intel, connectors, fraud, services, workers, workspace
+from api import commercial_intel, connectors, documents, fraud, services, workers, workspace
 
 
 @asynccontextmanager
@@ -305,6 +305,17 @@ def workers_cockpit() -> dict:
 @app.get("/api/fraud")
 def fraud_overview() -> dict:
     return fraud.overview()
+
+
+# ---- Invoice & Document Intelligence ----
+@app.get("/api/documents")
+def documents_overview() -> dict:
+    return documents.overview()
+
+
+@app.get("/api/documents/{doc_id}")
+def document_detail(doc_id: str) -> dict:
+    return documents.detail(doc_id)
 
 
 # ---- Decision & Scenario Intelligence workspace ----

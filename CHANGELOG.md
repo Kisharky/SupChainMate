@@ -2,6 +2,25 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Enterprise Automation Suite — Connectors, Workers, Fraud, Documents
+- **Connectors & Integrations**: an Administration workspace answering "where does
+  the data come from?" — an 8-category connector catalog (ERP/WMS/TMS/cloud/db/BI/
+  API/files) with a configuration panel, sync dashboard, ingestion pipeline, and
+  mock data upload. Backend `api/connectors.py` is a clean plug-in seam.
+- **AI Digital Workers cockpit**: agentic automation surface — a worker roster
+  discovered dynamically from the Planner's registered capabilities, with a
+  zero-touch rate per worker and a live task queue whose exceptions route to the
+  Decision Center (`api/workers.py`).
+- **Fraud & Anomaly Detection**: trust console for duplicate invoices, double-
+  brokering, payment/price anomalies, and carrier/supplier identity risk, with an
+  entity risk register (`api/fraud.py`).
+- **Invoice & Document Intelligence**: extraction + three-way match (PO ↔ Invoice
+  ↔ Receipt) for AP audit, flagging over-billing before payment (`api/documents.py`).
+- All four are additive and UI-first — representative, labelled data over the
+  existing engines; RBAC-gated; Planner / AI Router / Decision Brain untouched.
+- Tests: 184 passing (backend); frontend lint + build clean; each surface
+  verified with a Playwright drive.
+
 ## Portfolio Release v1.0 — Enterprise readiness & final polish
 - **Orchestration & memory**: added the **Planner** (objective → dynamic
   capability discovery → execution DAG → merged Decision; no business logic) and

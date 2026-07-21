@@ -86,7 +86,7 @@ flowchart TB
     subgraph API["FastAPI backend"]
         GATE["auth middleware · JWT + RBAC gate"]
         AUTH["api/auth · login / refresh / logout"]
-        SVC["api/services · workspace · commercial_intel · connectors"]
+        SVC["api/services · workspace · commercial_intel · connectors<br/>workers · fraud · documents"]
     end
     subgraph Intelligence["Framework-free layers (unchanged)"]
         AIR["AI Router (provider-agnostic)"]
@@ -570,6 +570,9 @@ SupChainMate/
 │   │   ├── main.py               #   Endpoints + auth middleware gate + startup seed
 │   │   ├── services.py           #   Compute/shape layer with graceful degradation
 │   │   ├── connectors.py         #   Connectors & Integrations catalog (plug-in seam)
+│   │   ├── workers.py            #   AI Digital Workers cockpit (roster from capabilities)
+│   │   ├── fraud.py              #   Fraud & Anomaly Detection (duplicate/double-brokering/identity)
+│   │   ├── documents.py          #   Invoice & Document Intelligence (three-way match)
 │   │   ├── db.py                 #   SQLAlchemy engine (Postgres/SQLite via DATABASE_URL)
 │   │   └── auth/                 #   JWT + RBAC (security, models, service, router, rbac)
 │   ├── planner/                  # Executive decision orchestrator (registry/graph/executor)

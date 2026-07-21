@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from api import services, workspace
+from api import commercial_intel, services, workspace
 
 app = FastAPI(
     title="SupChainMate API",
@@ -64,6 +64,17 @@ class IssueRequest(BaseModel):
 class ScenarioRequest(BaseModel):
     kind: str
     magnitude: float = 0.6
+
+
+class InvoiceRequest(BaseModel):
+    account_id: str
+    cause: str
+
+
+class CommercialDecideRequest(BaseModel):
+    item: str
+    action: str  # APPROVED | REJECTED | SCHEDULED
+    note: str = ""
 
 
 class WorkflowRequest(BaseModel):
@@ -225,3 +236,54 @@ def workspace_coa(req: IssueRequest) -> dict:
 @app.post("/api/workspace/scenario")
 def workspace_scenario(req: ScenarioRequest) -> dict:
     return workspace.simulate_scenario(req.kind, req.magnitude)
+
+
+# ---- Commercial Intelligence workspace ----
+@app.get("/api/commercial/brief")
+def ci_brief() -> dict:
+    return commercial_intel.commercial_brief()
+
+
+@app.get("/api/commercial/profitability")
+def ci_profitability() -> dict:
+    return commercial_intel.profitability()
+
+
+@app.get("/api/commercial/accounts")
+def ci_accounts() -> dict:
+    return commercial_intel.account_list()
+
+
+@app.get("/api/commercial/customer/{account_id}")
+def ci_customer(account_id: str) -> dict:
+    return commercial_intel.customer_360(account_id)
+
+
+@app.get("/api/commercial/leakage")
+def ci_leakage() -> dict:
+    return commercial_intel.leakage_center()
+
+
+@app.post("/api/commercial/invoice")
+def ci_invoice(req: InvoiceRequest) -> dict:
+    return commercial_intel.generate_invoice(req.account_id, req.cause)
+
+
+@app.get("/api/commercial/contracts")
+def ci_contracts() -> dict:
+    return commercial_intel.contract_intelligence()
+
+
+@app.get("/api/commercial/pricing")
+def ci_pricing() -> dict:
+    return commercial_intel.pricing_optimizer()
+
+
+@app.get("/api/commercial/risk")
+def ci_risk() -> dict:
+    return commercial_intel.risk_scoring()
+
+
+@app.post("/api/commercial/decide")
+def ci_decide(req: CommercialDecideRequest) -> dict:
+    return commercial_intel.decide(req.item, req.action, req.note)

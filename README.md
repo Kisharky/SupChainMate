@@ -243,6 +243,49 @@ Business Logic (deterministic)  →  Agents  →  ai.AI (Router)  →  Capabilit
 
 ---
 
+## Decision Brain — long-term memory & knowledge (offline, model-agnostic)
+
+The **Decision Brain** is SupChainMate's long-term memory — a Hermes-style
+retrieval-augmented memory system that lets the platform *remember*. It stores
+every Planner decision, company knowledge (SOPs, policies, contracts, reports,
+supplier/customer info, notes), past recommendations and their outcomes, and user
+feedback / approvals — then retrieves the most relevant of them whenever the
+Planner needs context. It **consumes the existing systems read-only** and never
+modifies them.
+
+```
+remember ─▶ Memory Store (SQLite + embeddings, offline)
+                 ▲                         │
+   decisions · knowledge · recommendations │ semantic + lexical
+   outcomes · feedback · approvals         ▼
+                            Retriever ─▶ recall / context_for(objective)
+                                              │            │
+                                       AI Router      Planner (recall_context skill)
+                                    (synthesis, any model)
+```
+
+- **`brain/` package** — `store.py` (embedded **vector store** in SQLite — float32
+  embeddings, no external DB), `embeddings.py` (offline `LocalHashingEmbedder`
+  default; optional `RouterEmbedder` via the AI Router — swap in one place),
+  `retriever.py` (hybrid cosine + lexical), `brain.py` (typed `remember` helpers,
+  `recall`, `context_for`, `answer`, and read-only `ingest_existing`), `schemas.py`.
+- **Completely offline** — the default embedder needs no model download and no
+  network, so businesses can deploy on their own servers with open-source LLMs /
+  SLMs. The vector store is local SQLite.
+- **Model-agnostic** — any synthesis flows through the provider-agnostic AI
+  Router, so it works with OpenAI, Claude, Gemini, Ollama, Llama, Qwen, DeepSeek,
+  or any future model; embeddings are pluggable too.
+- **Integrated with the Planner without touching it** — a `recall_context`
+  capability is registered through the Planner's extensibility hook, so every plan
+  first recalls relevant memory; each resulting decision is written back to the
+  Brain (it learns over time).
+- **Surfaced** on the Knowledge Center (semantic recall across all memory kinds,
+  memory stats, "teach the Brain") and via `POST /api/brain/recall`,
+  `/api/brain/answer`, `/api/brain/remember`, `GET /api/brain/stats`,
+  `POST /api/brain/ingest`.
+
+---
+
 ## Planner — the executive decision orchestrator
 
 The **Planner** sits *above* the whole architecture and turns SupChainMate from a set of modules into a single AI executive. Given a business objective (*"Reduce inventory holding cost by 10%"*) it understands it, discovers which capabilities are required, builds a dependency graph, executes the existing systems (concurrently where independent), and merges everything into **one executive Decision**. It contains **no business logic** — every computation happens in a system that already exists, reached through a registered capability. Same ports-and-registry design as the AI Router and Optimization Router.

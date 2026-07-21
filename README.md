@@ -38,6 +38,10 @@
 
 <sub><i>Live walkthrough — Executive Control Tower → Decision Center → Commercial Intelligence → Logistics → Forecasting → Inventory.</i></sub>
 
+<br/><br/>
+
+<sub><b><a href="docs/DEMO.md">▶ Guided demo walkthrough</a></b> &nbsp;·&nbsp; <b><a href="docs/AUDIT.md">Enterprise readiness audit</a></b></sub>
+
 </div>
 
 ---
@@ -545,6 +549,8 @@ flowchart LR
 ```
 SupChainMate/
 ├── docs/
+│   ├── DEMO.md                   # Guided five-minute demo walkthrough
+│   ├── AUDIT.md                  # Enterprise readiness audit (8 dimensions)
 │   ├── index.html                # Marketing landing page (GitHub Pages ready)
 │   └── images/                   # README screenshots + animated demo
 ├── docker-compose.yml            # One-command full stack (postgres + backend + frontend)

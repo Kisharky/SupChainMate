@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from api import commercial_intel, connectors, documents, fraud, services, workers, workspace
+from api import commercial_intel, connectors, documents, fraud, freight, services, workers, workspace
 
 
 @asynccontextmanager
@@ -316,6 +316,29 @@ def documents_overview() -> dict:
 @app.get("/api/documents/{doc_id}")
 def document_detail(doc_id: str) -> dict:
     return documents.detail(doc_id)
+
+
+# ---- Freight Operations (brokerage) ----
+class QuoteRequest(BaseModel):
+    origin: str
+    destination: str
+    equipment: str = "Dry Van"
+    miles: int = 0
+
+
+@app.get("/api/freight")
+def freight_overview() -> dict:
+    return freight.overview()
+
+
+@app.get("/api/freight/carrier/{carrier_id}")
+def freight_carrier(carrier_id: str) -> dict:
+    return freight.carrier_detail(carrier_id)
+
+
+@app.post("/api/freight/quote")
+def freight_quote(req: QuoteRequest) -> dict:
+    return freight.quote(req.origin, req.destination, req.equipment, req.miles)
 
 
 # ---- Decision & Scenario Intelligence workspace ----

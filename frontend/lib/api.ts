@@ -206,6 +206,49 @@ export interface WorkersResponse {
   source: string;
 }
 
+// ---- Freight Operations (brokerage) ----
+export interface CarrierRow {
+  id: string; name: string; mc_number: string; dot_number: string;
+  authority_status: string; authority_age_days: number; insurance_status: string;
+  insurance_days_to_expiry: number; stage: string; flags: string[]; flag_count: number;
+  risk_score: number; risk_severity: string; risk_status: string; recommendation: string;
+}
+export interface LoadMatch {
+  carrier: string; carrier_id: string; fit_score: number; lane_loads: number;
+  trucks_available: number; on_time_pct: number; risk_score: number;
+}
+export interface LoadRow {
+  id: string; origin: string; destination: string; equipment: string;
+  miles: number; pickup: string; weight_lbs: number; matches: LoadMatch[];
+}
+export interface TriageRow {
+  id: string; from: string; subject: string; type: string; type_label: string;
+  type_status: string; confidence: number; extracted: Record<string, string>;
+  suggested_action: string; minutes_ago: number;
+}
+export interface FreightResponse {
+  summary: {
+    carriers_onboarded: number; pending_vetting: number; high_risk_carriers: number;
+    open_loads: number; open_claims: number; triage_queue: number;
+  };
+  carriers: CarrierRow[];
+  loads: LoadRow[];
+  triage: TriageRow[];
+  roadmap: { name: string; detail: string }[];
+  source: string;
+}
+export interface CarrierDetail {
+  ok: boolean; carrier_id: string; name: string; mc_number: string; dot_number: string;
+  stage: string; risk_score: number; risk_status: string; recommendation: string;
+  checks: { name: string; ok: boolean; detail: string }[];
+  flags: { code: string; label: string }[]; source: string;
+}
+export interface QuoteResult {
+  origin: string; destination: string; equipment: string; miles: number; transit_days: number;
+  breakdown: { label: string; amount: number; basis: string }[];
+  carrier_cost: number; margin_pct: number; all_in_rate: number; margin_usd: number; source: string;
+}
+
 // ---- Invoice & Document Intelligence ----
 export interface DocRow {
   id: string; type: string; type_label: string; vendor: string; po_number: string;
@@ -372,6 +415,10 @@ export const api = {
   fraud: () => get<FraudResponse>("/api/fraud"),
   documents: () => get<DocumentsResponse>("/api/documents"),
   documentDetail: (id: string) => get<DocumentDetail>(`/api/documents/${id}`),
+  freight: () => get<FreightResponse>("/api/freight"),
+  freightCarrier: (id: string) => get<CarrierDetail>(`/api/freight/carrier/${id}`),
+  freightQuote: (origin: string, destination: string, equipment: string, miles = 0) =>
+    post<QuoteResult>("/api/freight/quote", { origin, destination, equipment, miles }),
   connectors: () => get<ConnectorsResponse>("/api/connectors"),
   connectorConfig: (id: string) => get<ConnectorConfig>(`/api/connectors/config/${id}`),
   connectorTest: (id: string) => post<ConnectorTest>("/api/connectors/test", { connector_id: id }),

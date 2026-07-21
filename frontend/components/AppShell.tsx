@@ -22,6 +22,7 @@ const NAV: { label: string; href: string; icon: string; badge?: number; perm: st
   { label: "Commercial", href: "/commercial", icon: "◆", perm: "commercial" },
   { label: "Warehouse", href: "/warehouse", icon: "▤", perm: "warehouse" },
   { label: "Logistics", href: "/logistics", icon: "◎", badge: 3, perm: "logistics" },
+  { label: "Freight Ops", href: "/freight", icon: "⛁", perm: "operations" },
   { label: "Decisions", href: "/decisions", icon: "◇", perm: "decisions" },
   { label: "Fraud & Risk", href: "/fraud", icon: "⚑", perm: "operations" },
   { label: "Knowledge", href: "/knowledge", icon: "◍", perm: "knowledge" },

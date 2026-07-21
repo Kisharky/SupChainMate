@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, KpiCard, Badge, DataTable, Th, Td, Button } from "@/components/ui/primitives";
+import { Card, CardHead, KpiCard, Badge, DataTable, Th, Td, Button, TableState } from "@/components/ui/primitives";
 import { api, LogisticsResponse, MapResponse, OptimizeResponse } from "@/lib/api";
 
 const LaneMap = dynamic(() => import("@/components/LaneMap"), {
@@ -87,9 +87,7 @@ export default function Logistics() {
                 <Td><Badge status={gradeStatus(c.grade) as any}>{c.grade}</Badge></Td>
               </tr>
             ))}
-            {(!data?.carriers || data.carriers.length === 0) && (
-              <tr><Td>Loading…</Td><Td> </Td><Td> </Td><Td> </Td></tr>
-            )}
+            {(!data?.carriers || data.carriers.length === 0) && <TableState cols={4} kind="loading" />}
           </DataTable>
         </Card>
       </div>

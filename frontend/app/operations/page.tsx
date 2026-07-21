@@ -2,7 +2,7 @@
 /** Operations — network throughput & order-status mix (live). */
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, KpiCard } from "@/components/ui/primitives";
+import { Card, CardHead, KpiCard, EmptyState } from "@/components/ui/primitives";
 import { api, OperationsResponse } from "@/lib/api";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -44,7 +44,7 @@ export default function Operations() {
               </div>
             </div>
           ))}
-          {Object.keys(counts).length === 0 && <p className="text-ink-3 text-[0.8125rem]">Loading…</p>}
+          {Object.keys(counts).length === 0 && <EmptyState kind="loading" />}
         </div>
       </Card>
     </AppShell>

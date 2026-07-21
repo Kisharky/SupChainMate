@@ -158,21 +158,6 @@ export interface AdminResponse {
   source: string;
 }
 
-export interface RepricingTicket {
-  sku: string; current_price: number; recommended_price: number; uplift_pct: number;
-  current_margin_pct: number; annual_impact: number;
-}
-export interface CommercialResponse {
-  segments: { segment: string; orders: number; revenue: number; margin: number; margin_pct: number }[];
-  kpis: { total_revenue: number; net_margin: number; net_margin_pct: number; revenue_leakage: number; underpriced_skus: number; repricing_upside: number };
-  leakage: { freight: number; discount: number; total: number };
-  waterfall: { label: string; value: number; kind: string }[];
-  tickets: RepricingTicket[];
-  assumptions: { aov: number; gross_margin_pct: number; target_margin_pct: number };
-  source: string;
-}
-export interface EmailResponse { sku: string; subject: string; body: string; ticket: RepricingTicket | null; }
-
 // ---- Decision & Scenario Intelligence workspace ----
 export interface BriefRisk { title: string; severity: "high" | "medium" | "low"; area: string; detail: string; }
 export interface BriefDecision { title: string; action: string; confidence: number; impact_usd: number; area: string; }
@@ -188,9 +173,6 @@ export interface WhatChanged {
 }
 export interface TimelineItem { id: string; title: string; stage: string; confidence: number; impact_usd: number; status: string; outcome: string | null; ts: string; }
 export interface Timeline { stages: string[]; counts: Record<string, number>; items: TimelineItem[]; }
-export interface PlanStep { step: number; agent: string; task: string; reasoning: string; uses_optimizer: boolean; status: string; }
-export interface PlanResponse { request: string; plan: PlanStep[]; narrative: string; }
-
 // Real Planner (executive decision orchestrator)
 export interface PlannerTask { capability: string; ok: boolean; summary: string; confidence: number; duration_ms: number; error: string | null; }
 export interface PlannerDecision {
@@ -282,7 +264,6 @@ export const api = {
   wsChanged: () => get<WhatChanged>("/api/workspace/changed"),
   wsTimeline: () => get<Timeline>("/api/workspace/timeline"),
   wsCatalog: () => get<WorkspaceCatalog>("/api/workspace/catalog"),
-  wsPlan: (request: string) => post<PlanResponse>("/api/workspace/plan", { request }),
   wsCoa: (issue: string) => post<CoaResponse>("/api/workspace/coa", { issue }),
   wsScenario: (kind: string, magnitude: number) => post<ScenarioResponse>("/api/workspace/scenario", { kind, magnitude }),
   plannerPlan: (request: string) => post<PlannerDecision>("/api/planner/plan", { request }),
@@ -295,8 +276,6 @@ export const api = {
   me: () => get<import("@/auth/store").AuthUser>("/api/auth/me"),
   logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
   admin: () => get<AdminResponse>("/api/admin"),
-  commercial: () => get<CommercialResponse>("/api/commercial"),
-  repricingEmail: (sku: string) => post<EmailResponse>("/api/commercial/email", { sku }),
   ciBrief: () => get<CiBrief>("/api/commercial/brief"),
   ciProfitability: () => get<CiProfitability>("/api/commercial/profitability"),
   ciCustomer: (id: string) => get<CiCustomer>(`/api/commercial/customer/${id}`),

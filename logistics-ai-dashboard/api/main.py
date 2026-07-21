@@ -13,6 +13,7 @@ The existing Streamlit app is unaffected — this is additive.
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,10 +21,30 @@ from pydantic import BaseModel
 
 from api import commercial_intel, services, workspace
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Create identity tables and seed demo users on first boot."""
+    try:
+        from api.db import SessionLocal, init_db
+        from api.auth import service
+        init_db()
+        db = SessionLocal()
+        try:
+            service.seed_default_users(db)
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001 — API must still boot
+        import logging
+        logging.getLogger("api").warning("identity bootstrap skipped: %s", exc)
+    yield
+
+
 app = FastAPI(
     title="SupChainMate API",
     version="1.0.0",
     description="Decision-intelligence JSON API over the SupChainMate engines.",
+    lifespan=lifespan,
 )
 
 # Next.js dev server + configurable extra origins.
@@ -58,23 +79,6 @@ async def auth_gate(request: Request, call_next):
 
 
 app.include_router(auth_router)
-
-
-@app.on_event("startup")
-def _bootstrap_identity() -> None:
-    """Create identity tables and seed demo users on first boot."""
-    try:
-        from api.db import SessionLocal, init_db
-        from api.auth import service
-        init_db()
-        db = SessionLocal()
-        try:
-            service.seed_default_users(db)
-        finally:
-            db.close()
-    except Exception as exc:  # noqa: BLE001 — API must still boot
-        import logging
-        logging.getLogger("api").warning("identity bootstrap skipped: %s", exc)
 
 
 def _wire_decision_brain() -> None:
@@ -118,10 +122,6 @@ class DecideRequest(BaseModel):
     status: str  # APPROVED | REJECTED | MODIFIED | ESCALATED
     note: str = ""
     actor: str = "user"
-
-
-class EmailRequest(BaseModel):
-    sku: str
 
 
 class PlanRequest(BaseModel):
@@ -270,16 +270,6 @@ def admin() -> dict:
     return services.admin_snapshot()
 
 
-@app.get("/api/commercial")
-def commercial() -> dict:
-    return services.commercial_snapshot()
-
-
-@app.post("/api/commercial/email")
-def commercial_email(req: EmailRequest) -> dict:
-    return services.repricing_email(req.sku)
-
-
 @app.get("/api/ai/status")
 def ai_status() -> dict:
     return services.ai_status()
@@ -304,11 +294,6 @@ def workspace_timeline() -> dict:
 @app.get("/api/workspace/catalog")
 def workspace_catalog() -> dict:
     return workspace.scenario_catalog()
-
-
-@app.post("/api/workspace/plan")
-def workspace_plan(req: PlanRequest) -> dict:
-    return workspace.plan_request(req.request)
 
 
 @app.post("/api/workspace/coa")

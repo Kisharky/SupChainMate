@@ -2,7 +2,7 @@
 /** Inventory Intelligence — genuinely live engine output. */
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, DataTable, Th, Td, Badge, Button } from "@/components/ui/primitives";
+import { Card, CardHead, DataTable, Th, Td, Badge, Button, TableState } from "@/components/ui/primitives";
 import { api, InventoryResponse } from "@/lib/api";
 
 export default function Inventory() {
@@ -33,7 +33,7 @@ export default function Inventory() {
           <Th>SKU</Th><Th>Class</Th><Th num>Reorder point</Th><Th num>EOQ</Th>
           <Th num>Safety stock</Th><Th>Service</Th><Th num>Est. savings/yr</Th>
         </>}>
-          {err && <tr><Td>—</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>API unreachable — start the FastAPI backend</Td><Td>{" "}</Td></tr>}
+          {err && <TableState cols={7} kind="error" />}
           {rows.map((r) => (
             <tr key={r.sku} className="hover:bg-[color-mix(in_srgb,var(--accent)_6%,transparent)]">
               <Td strong><span className="font-mono">{r.sku}</span></Td>
@@ -45,7 +45,7 @@ export default function Inventory() {
               <Td num strong>${Math.round(r.savings_yr).toLocaleString()}</Td>
             </tr>
           ))}
-          {!err && rows.length === 0 && <tr><Td>Loading…</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td><Td>{" "}</Td></tr>}
+          {!err && rows.length === 0 && <TableState cols={7} kind="loading" />}
         </DataTable>
       </Card>
 

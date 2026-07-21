@@ -2,7 +2,7 @@
 /** Warehouse — network zones & utilisation from real geo clustering (live). */
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, KpiCard, DataTable, Th, Td, Badge } from "@/components/ui/primitives";
+import { Card, CardHead, KpiCard, DataTable, Th, Td, Badge, TableState } from "@/components/ui/primitives";
 import { api, WarehouseResponse } from "@/lib/api";
 
 export default function Warehouse() {
@@ -37,7 +37,7 @@ export default function Warehouse() {
               <Td><Badge status={utilStatus(z.utilization) as any}>{utilStatus(z.utilization) === "critical" ? "Hot" : utilStatus(z.utilization) === "warning" ? "Busy" : "Healthy"}</Badge></Td>
             </tr>
           ))}
-          {(!data?.zones || data.zones.length === 0) && <tr><Td>Loading…</Td><Td> </Td><Td> </Td><Td> </Td><Td> </Td><Td> </Td></tr>}
+          {(!data?.zones || data.zones.length === 0) && <TableState cols={6} kind="loading" />}
         </DataTable>
       </Card>
     </AppShell>

@@ -51,7 +51,13 @@ export interface ForecastResponse {
 }
 
 export interface ProcurementRow { carrier: string; score: number; on_time: number | null; current_share: number | null; recommended_share: number | null; }
-export interface ProcurementResponse { carriers: ProcurementRow[]; impact: Record<string, number>; source: string; }
+export interface AllocationAssignment { source: string; sink: string; units: number; cost: number; }
+export interface CarrierAllocation {
+  solved: boolean; solver: string; fell_back: boolean; objective: number; baseline: number;
+  improvement_pct: number; lanes: string[]; assignments: AllocationAssignment[];
+  detail: string; status: { plan?: Record<string, string> };
+}
+export interface ProcurementResponse { carriers: ProcurementRow[]; impact: Record<string, number>; optimization: CarrierAllocation | null; source: string; }
 
 export interface OperationsResponse { kpis: Record<string, number>; status_counts: Record<string, number>; source: string; }
 

@@ -254,7 +254,7 @@ Domain Agent (reasons)  →  optimize.skill  →  OPT (Engine)  →  Solver Regi
 - **`optimize/` package** — `engine.py` (the only component that maps *problem kind → solver*, with a fallback chain), `registry.py` (one-line solver swaps), `solvers/cuopt.py` (NVIDIA cuOpt VRP adapter), `solvers/local.py` (nearest-neighbour + 2-opt routing; least-cost transportation), and `skills.py` (the agent-facing surface).
 - **Problems, not solvers** — agents call `optimize_delivery_route(...)` / `optimize_supply_allocation(...)`; the registry routes **routing → cuOpt (fallback local)** and **allocation → local**.
 - **Graceful fallback** — with no `NVIDIA_CUOPT_API_KEY` the routing problem falls back to the local heuristic and says so (`solver: local · plan routes → cuopt → local fallback`). The layer runs identically with zero keys.
-- **Beneath the agents** — the **Warehouse** agent delegates its inter-hub routing to the skill and reports the optimised distance, % saved, and which solver ran; the **Logistics Command Center** exposes a one-click **⚡ Optimise routes** that redraws the network tour on the map with the objective, naive baseline, and savings.
+- **Beneath the agents** — the **Warehouse** agent delegates its inter-hub routing to the skill (reporting optimised distance, % saved, and the solver), and the **Procurement** agent delegates carrier→lane volume assignment to the allocation skill. Surfaced in the UI: the **Logistics Command Center** has a one-click **⚡ Optimise routes** that redraws the network tour on the map (objective / naive baseline / savings), and **Procurement** shows a **least-cost carrier allocation** table (optimised cost vs average-cost baseline).
 
 | Problem | Skill | Primary → fallback | Objective |
 |---|---|---|---|

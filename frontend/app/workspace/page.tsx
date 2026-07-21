@@ -8,8 +8,8 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardHead, Button, Badge } from "@/components/ui/primitives";
 import {
-  api, ExecBrief, WhatChanged, Timeline, PlanResponse, CoaResponse,
-  ScenarioResponse, WorkspaceCatalog,
+  api, ExecBrief, WhatChanged, Timeline, CoaResponse,
+  ScenarioResponse, WorkspaceCatalog, PlannerDecision,
 } from "@/lib/api";
 
 const money = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString()}`;
@@ -115,43 +115,83 @@ function ExecutiveBrief({ brief }: { brief: ExecBrief | null }) {
   );
 }
 
-/* ═══ AI Planner ═══ */
+/* ═══ AI Planner — the executive decision orchestrator ═══ */
 function AiPlanner() {
-  const [q, setQ] = useState("Stockout risk on controller boards while demand spikes in Victoria");
-  const [plan, setPlan] = useState<PlanResponse | null>(null);
+  const [q, setQ] = useState("Reduce inventory holding cost by 10%");
+  const [dec, setDec] = useState<PlannerDecision | null>(null);
   const [loading, setLoading] = useState(false);
-  const run = async () => { setLoading(true); try { setPlan(await api.wsPlan(q)); } finally { setLoading(false); } };
+  const run = async () => { setLoading(true); try { setDec(await api.plannerPlan(q)); } finally { setLoading(false); } };
+
+  const statusFor = (cap: string) => dec?.tasks.find((t) => t.capability === cap);
 
   return (
     <Card>
-      <CardHead title="AI Planner" hint="decomposes a request into agent tasks" />
+      <CardHead title="AI Planner" hint="orchestrates existing systems into one decision" />
       <div className="p-[18px]">
         <div className="flex gap-2 items-center rounded border p-1.5 pl-3" style={{ borderColor: "var(--hairline-strong)", background: "var(--bg-sunken)" }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run()}
-            className="flex-1 bg-transparent outline-none text-[0.875rem] text-ink" placeholder="Describe an operational situation…" />
+            className="flex-1 bg-transparent outline-none text-[0.875rem] text-ink" placeholder="State a business objective…" />
           <Button variant="primary" sm onClick={run} disabled={loading}>{loading ? "Planning…" : "Plan"}</Button>
         </div>
-        {plan && (
+        {dec && (
           <>
-            <p className="text-[0.8125rem] text-ink-2 mt-3">{plan.narrative}</p>
-            <div className="mt-3 flex flex-col gap-2">
-              {plan.plan.map((s) => (
-                <div key={s.step} className="flex gap-3 items-center">
-                  <div className="grid place-items-center h-6 w-6 rounded-full flex-none text-[0.75rem] font-bold"
-                    style={{ background: s.agent === "executive" ? "var(--accent)" : "var(--panel-2)", color: s.agent === "executive" ? "var(--accent-ink)" : "var(--text-2)", border: "1px solid var(--hairline)" }}>{s.step}</div>
-                  <div className="flex-1 rounded border p-2.5" style={{ borderColor: "var(--hairline)", background: "var(--panel-2)" }}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[0.8125rem] font-semibold uppercase">{s.agent}</span>
-                      {s.uses_optimizer && <Badge status="info">optimizer skill</Badge>}
-                    </div>
-                    <div className="text-[0.8125rem] text-ink-2 mt-0.5">{s.task}</div>
+            {/* Execution graph */}
+            <div className="eyebrow mt-3 mb-2">Execution graph · {dec.capabilities.length} capabilities</div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {dec.graph.map((layer, li) => (
+                <div key={li} className="flex items-center gap-2 flex-none">
+                  <div className="flex flex-col gap-1.5">
+                    {layer.map((cap) => {
+                      const t = statusFor(cap);
+                      return (
+                        <div key={cap} className="rounded border px-2.5 py-1.5" style={{ borderColor: t?.ok ? "color-mix(in srgb,var(--accent) 40%,transparent)" : "var(--hairline)", background: "var(--panel-2)" }}>
+                          <div className="text-[0.75rem] font-semibold flex items-center gap-1.5">
+                            <span style={{ color: t?.ok ? "var(--good)" : t?.error ? "var(--critical)" : "var(--text-3)" }}>{t?.ok ? "✓" : t?.error ? "✕" : "○"}</span>
+                            {cap.replace(/_/g, " ")}
+                          </div>
+                          {t && <div className="text-[0.625rem] text-ink-3">{t.confidence}% · {t.duration_ms}ms</div>}
+                        </div>
+                      );
+                    })}
                   </div>
+                  {li < dec.graph.length - 1 && <span className="text-ink-3">→</span>}
                 </div>
               ))}
+              <span className="text-ink-3">→</span>
+              <div className="rounded border px-2.5 py-1.5 flex-none" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb,var(--accent) 10%,var(--panel-2))" }}>
+                <div className="text-[0.75rem] font-semibold" style={{ color: "var(--accent)" }}>▶ executive decision</div>
+              </div>
             </div>
+
+            {/* Executive decision */}
+            <div className="mt-3 rounded-lg border p-3" style={{ borderColor: "color-mix(in srgb,var(--accent) 28%,var(--hairline))", background: "color-mix(in srgb,var(--accent) 6%,var(--panel-2))" }}>
+              <div className="flex items-center justify-between">
+                <span className="eyebrow" style={{ color: "var(--accent)" }}>Executive decision</span>
+                <div className="flex gap-2"><Badge status="info">confidence {dec.confidence}%</Badge><Badge status="good">{money(dec.financial_impact.identified_usd)} identified</Badge></div>
+              </div>
+              <p className="text-[0.9375rem] text-ink mt-2 leading-snug">{dec.executive_summary}</p>
+            </div>
+
+            <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <div>
+                <div className="eyebrow mb-1.5">Recommended actions</div>
+                {dec.recommended_actions.slice(0, 4).map((a, i) => (
+                  <div key={i} className="text-[0.75rem] text-ink-2 py-1 border-b" style={{ borderColor: "var(--hairline)" }}>
+                    <span style={{ color: "var(--accent)" }}>›</span> {a.action.length > 90 ? a.action.slice(0, 90) + "…" : a.action}
+                    {a.impact_usd ? <b className="text-ink"> · {money(a.impact_usd)}</b> : null}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="eyebrow mb-1.5">Next steps · risks</div>
+                {dec.next_steps.slice(0, 2).map((s, i) => <div key={i} className="text-[0.75rem] text-ink-2 py-0.5">→ {s.length > 80 ? s.slice(0, 80) + "…" : s}</div>)}
+                {dec.risks.slice(0, 2).map((r, i) => <div key={i} className="text-[0.75rem] py-0.5" style={{ color: "var(--warning)" }}>⚠ {r}</div>)}
+              </div>
+            </div>
+            <div className="text-[0.625rem] text-ink-3 mt-2">run {dec.run_id} · recorded to planner memory · capabilities discovered dynamically from the registry</div>
           </>
         )}
-        {!plan && <p className="text-ink-3 text-[0.8125rem] mt-3">Enter a situation — the planner routes sub-decisions to Forecasting, Inventory, Procurement, Logistics, Commercial, and Knowledge agents, then the Executive synthesises.</p>}
+        {!dec && <p className="text-ink-3 text-[0.8125rem] mt-3">State an objective (e.g. &quot;reduce inventory holding cost by 10%&quot;). The Planner discovers the required capabilities, builds an execution graph across the existing systems, runs them, and merges the results into one executive decision.</p>}
       </div>
     </Card>
   );

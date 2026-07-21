@@ -243,6 +243,31 @@ Business Logic (deterministic)  →  Agents  →  ai.AI (Router)  →  Capabilit
 
 ---
 
+## Planner — the executive decision orchestrator
+
+The **Planner** sits *above* the whole architecture and turns SupChainMate from a set of modules into a single AI executive. Given a business objective (*"Reduce inventory holding cost by 10%"*) it understands it, discovers which capabilities are required, builds a dependency graph, executes the existing systems (concurrently where independent), and merges everything into **one executive Decision**. It contains **no business logic** — every computation happens in a system that already exists, reached through a registered capability. Same ports-and-registry design as the AI Router and Optimization Router.
+
+```
+Objective ─▶ Planner ─▶ Capability Registry (discovery)
+                 │           forecast_demand · optimize_inventory · routing_optimizer
+                 │           calculate_profitability · revenue_leakage · warehouse_capacity
+                 ▼           contract_analysis · scenario_simulation · …register more…
+            Execution Graph ─▶ Executor (concurrent layers) ─▶ Aggregator ─▶ Decision
+                 │                        │                         │
+             (dependency DAG)     (existing services)       (AI Router synthesis)
+                                                                    ▼
+                                                            Planner Memory (SQLite)
+```
+
+- **`planner/` package** — `registry.py` (dynamic capability discovery — matches an objective to capability metadata, never `if inventory: …`), `graph.py` (dependency layers + cycle detection), `executor.py` (concurrent layer execution on a thread pool), `aggregator.py` (merges into a `Decision`; executive summary via the AI Router with a deterministic fallback), `memory.py` (records objective → graph → outputs → recommendation → predicted vs actual, for continuous learning), `capabilities.py` (thin adapters onto existing systems — the only files that know a service's shape), plus `schemas.py` / `prompts.py`.
+- **Self-describing capabilities** — each registers name, description, required inputs, outputs, dependencies, confidence, and priority. Registering a future one (`carbon_optimizer`, `supplier_risk`, `production_scheduler`) makes it **immediately available to the Planner with no core change**.
+- **One executive Decision** — executive summary, key findings, recommended actions, financial impact, operational impact, risks, confidence (bounded by the weakest capability), supporting evidence, KPIs, assumptions, and next steps.
+- **Surfaced** as the *AI Planner* on the Decision Intelligence screen (renders the live execution graph + the merged decision) and via `POST /api/planner/plan`, `GET /api/planner/capabilities`, `GET /api/planner/history`.
+
+> Why not a graph framework (e.g. LangGraph)? By design the Planner mirrors the existing framework-free layers — the orchestration is a DAG over synchronous services and needs no durable/streaming runtime. The capability registry is the seam: if durable execution, checkpointing, or human-in-the-loop interrupts are ever needed, the same registry can be driven by such a runtime without touching the domain systems.
+
+---
+
 ## Optimization Layer — pluggable solvers beneath the agents
 
 The domain agents reason about the business; the hard combinatorial subproblems are delegated **downward** to a pluggable optimization layer — the same ports-and-adapters idea as the AI router, applied to solvers. Inspired by [NVIDIA's cuOpt agent-skills pattern](https://developer.nvidia.com/blog/optimize-supply-chain-decision-systems-using-nvidia-cuopt-agent-skills/): the agent recognises an optimization-shaped problem, hands it to a solver *skill*, and interprets the result — it never names a solver.

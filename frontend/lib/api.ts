@@ -162,6 +162,18 @@ export interface TimelineItem { id: string; title: string; stage: string; confid
 export interface Timeline { stages: string[]; counts: Record<string, number>; items: TimelineItem[]; }
 export interface PlanStep { step: number; agent: string; task: string; reasoning: string; uses_optimizer: boolean; status: string; }
 export interface PlanResponse { request: string; plan: PlanStep[]; narrative: string; }
+
+// Real Planner (executive decision orchestrator)
+export interface PlannerTask { capability: string; ok: boolean; summary: string; confidence: number; duration_ms: number; error: string | null; }
+export interface PlannerDecision {
+  objective: string; executive_summary: string; key_findings: string[];
+  recommended_actions: { action: string; impact_usd: number; confidence: number; capability?: string }[];
+  financial_impact: { identified_usd: number; actions: number };
+  operational_impact: Record<string, number>; risks: string[]; confidence: number;
+  evidence: string[]; kpis: { name: string; value: number | string }[];
+  assumptions: string[]; next_steps: string[]; capabilities: string[];
+  graph: string[][]; tasks: PlannerTask[]; run_id: string;
+}
 export interface CoaOption {
   id: string; name: string; implementation_cost: number; expected_savings: number;
   operational_risk: "low" | "medium" | "high"; service_level_impact: number; inventory_impact: string;
@@ -238,6 +250,7 @@ export const api = {
   wsPlan: (request: string) => post<PlanResponse>("/api/workspace/plan", { request }),
   wsCoa: (issue: string) => post<CoaResponse>("/api/workspace/coa", { issue }),
   wsScenario: (kind: string, magnitude: number) => post<ScenarioResponse>("/api/workspace/scenario", { kind, magnitude }),
+  plannerPlan: (request: string) => post<PlannerDecision>("/api/planner/plan", { request }),
   admin: () => get<AdminResponse>("/api/admin"),
   commercial: () => get<CommercialResponse>("/api/commercial"),
   repricingEmail: (sku: string) => post<EmailResponse>("/api/commercial/email", { sku }),

@@ -130,6 +130,46 @@ export function Alert({ status = "info", title, children }: { status?: KpiStatus
   );
 }
 
+/* ---- Progress bar ---- */
+export function Progress({ value, status = "good", className = "" }:
+  { value: number; status?: KpiStatus; className?: string }) {
+  const pct = Math.max(0, Math.min(100, value));
+  return (
+    <div className={`h-1.5 w-full rounded-full overflow-hidden ${className}`} style={{ background: "var(--hairline)" }}
+      role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: STATUS_COLOR[status] }} />
+    </div>
+  );
+}
+
+/* ---- Modal / drawer ---- */
+export function Modal({ open, onClose, title, subtitle, children, footer, wide }:
+  { open: boolean; onClose: () => void; title: string; subtitle?: string;
+    children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8"
+      style={{ background: "color-mix(in srgb, var(--bg) 45%, rgba(0,0,0,0.62))", backdropFilter: "blur(2px)" }}
+      onClick={onClose} role="dialog" aria-modal aria-label={title}>
+      <div className={`w-full my-auto ${wide ? "max-w-3xl" : "max-w-lg"}`} onClick={(e) => e.stopPropagation()}>
+        <Card>
+          <div className="flex items-start justify-between gap-3 px-[18px] py-3.5 border-b" style={{ borderColor: "var(--hairline)" }}>
+            <div className="min-w-0">
+              <div className="text-[0.9375rem] font-semibold">{title}</div>
+              {subtitle && <div className="text-[0.75rem] text-ink-3 mt-0.5">{subtitle}</div>}
+            </div>
+            <button onClick={onClose} aria-label="Close" className="text-ink-3 hover:text-ink text-[15px] leading-none flex-none">✕</button>
+          </div>
+          <div className="p-[18px]">{children}</div>
+          {footer && (
+            <div className="flex items-center justify-end gap-2 px-[18px] py-3 border-t" style={{ borderColor: "var(--hairline)" }}>{footer}</div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 /* ---- Loading / empty / error states ---- */
 type StateKind = "loading" | "error" | "empty";
 

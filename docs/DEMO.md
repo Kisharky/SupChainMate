@@ -110,6 +110,30 @@ merge into one Decision. *Theme: orchestration.*
 Sign out, sign back in as **Read Only** → note Administration is gone and
 approve buttons are inert. *Theme: enterprise RBAC.*
 
+**E. "Where does the data come from?"**
+Administration → **Connectors** → show the connector catalog (ERP, WMS, TMS,
+cloud, databases, BI, APIs, files) → open **Configure** on SAP S/4HANA → **Test
+Connection** → then the data pipeline (Source → Validation → Transformation →
+Decision Brain → Planner → Executive Dashboard). *Theme: the full narrative —
+data sources feed the decisions.*
+
+**F. "Show me the AI doing the work."**
+**Workforce** → the digital-worker roster (each is a real platform capability)
+with a **zero-touch rate** per worker → the live task queue where auto-completed
+tasks post to the audit trail and exceptions route to the Decision Center.
+*Theme: agentic automation, human-in-the-loop on exceptions.*
+
+**G. "Catch the money leaving the door."**
+**Fraud & Risk** → the anomaly feed (duplicate invoice, double-brokering,
+identity risk) with amount-at-risk and a recommended action → **Send to Decision
+Center** → the entity risk register scoring carriers/suppliers. *Theme: trust
+and fraud prevention.*
+
+**H. "Audit an invoice before we pay it."**
+**Documents** → the document queue (exceptions first) → **Review** an exception
+→ the three-way match (PO ↔ Invoice ↔ Receipt) with the over-billed line flagged
+→ Approve or Escalate. *Theme: AP automation with a human check.*
+
 ---
 
 ## 4 · Talking points if asked

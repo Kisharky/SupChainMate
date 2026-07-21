@@ -67,6 +67,20 @@ def test_rbac_forbids_wrong_role(client):
     assert client.get("/api/warehouse", headers=h).status_code == 200
     assert client.get("/api/commercial/brief", headers=h).status_code == 403
     assert client.get("/api/workspace/brief", headers=h).status_code == 403
+    assert client.get("/api/workers", headers=h).status_code == 403  # intelligence-gated
+    assert client.get("/api/fraud", headers=h).status_code == 403     # operations-gated
+    assert client.get("/api/documents", headers=h).status_code == 403  # operations-gated
+
+
+def test_connectors_require_admin(client):
+    # Read-only cannot reach the admin-only connectors surface.
+    viewer = _login(client, "viewer@supchainmate.io")
+    hv = {"Authorization": f"Bearer {viewer.json()['access_token']}"}
+    assert client.get("/api/connectors", headers=hv).status_code == 403
+    # Admin can.
+    admin = _login(client, "admin@supchainmate.io")
+    ha = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    assert client.get("/api/connectors", headers=ha).status_code == 200
 
 
 def test_refresh_rotation_is_single_use(client):

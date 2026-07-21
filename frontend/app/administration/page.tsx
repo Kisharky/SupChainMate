@@ -2,6 +2,7 @@
 /** Administration — users, roles, API keys (masked), AI providers, ERP, audit. */
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { AdminNav } from "@/components/AdminNav";
 import { Card, CardHead, Badge, DataTable, Th, Td } from "@/components/ui/primitives";
 import { api, AdminResponse } from "@/lib/api";
 
@@ -18,8 +19,10 @@ export default function Administration() {
         <p className="text-ink-2 mt-1.5 text-[0.9375rem]">Users, roles, credentials, AI providers, and integrations — with a full audit trail.</p>
       </div>
 
+      <AdminNav />
+
       <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <Card>
+        <Card id="users" className="scroll-mt-24">
           <CardHead title="Users" hint={`${d?.users.length ?? 0} members`} />
           <DataTable head={<><Th>Name</Th><Th>Role</Th><Th>Status</Th></>}>
             {(d?.users ?? []).map((u) => (
@@ -32,7 +35,7 @@ export default function Administration() {
           </DataTable>
         </Card>
 
-        <Card>
+        <Card id="roles" className="scroll-mt-24">
           <CardHead title="Roles & permissions" hint="RBAC" />
           <DataTable head={<><Th>Role</Th><Th>View</Th><Th>Run</Th><Th>Approve</Th><Th>Admin</Th></>}>
             {(d?.roles ?? []).map((r) => (
@@ -44,7 +47,7 @@ export default function Administration() {
           </DataTable>
         </Card>
 
-        <Card>
+        <Card id="settings" className="scroll-mt-24">
           <CardHead title="API keys" hint="values never exposed" />
           <DataTable head={<><Th>Key</Th><Th>Purpose</Th><Th>Status</Th></>}>
             {(d?.api_keys ?? []).map((k) => (
@@ -85,7 +88,7 @@ export default function Administration() {
             ))}
           </div>
         </Card>
-        <Card>
+        <Card id="audit" className="scroll-mt-24">
           <CardHead title="Audit log" hint="immutable" />
           <div className="px-[18px] py-1.5 max-h-[320px] overflow-y-auto">
             {(d?.audit ?? []).slice(0, 40).map((e, i) => (

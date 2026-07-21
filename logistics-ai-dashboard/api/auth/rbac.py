@@ -97,8 +97,12 @@ EXACT_PERMISSIONS: dict[str, Permission] = {
 }
 PREFIX_PERMISSIONS: list[tuple[str, Permission]] = [
     ("/api/admin", Permission.ADMINISTRATION),
+    ("/api/connectors", Permission.ADMINISTRATION),
     ("/api/commercial", Permission.COMMERCIAL),
     ("/api/workspace", Permission.INTELLIGENCE),
+    ("/api/workers", Permission.INTELLIGENCE),
+    ("/api/fraud", Permission.OPERATIONS),
+    ("/api/documents", Permission.OPERATIONS),
     ("/api/planner", Permission.PLANNER),
     ("/api/reports", Permission.REPORTS),
 ]

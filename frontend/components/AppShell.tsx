@@ -13,14 +13,17 @@ import { useAuth } from "@/auth/context";
 const NAV: { label: string; href: string; icon: string; badge?: number; perm: string }[] = [
   { label: "Dashboard", href: "/", icon: "◧", perm: "dashboard" },
   { label: "Intelligence", href: "/workspace", icon: "◆", perm: "intelligence" },
+  { label: "Workforce", href: "/workforce", icon: "❖", perm: "intelligence" },
   { label: "Operations", href: "/operations", icon: "⬒", perm: "operations" },
   { label: "Forecasting", href: "/forecasting", icon: "◡", perm: "forecasting" },
   { label: "Inventory", href: "/inventory", icon: "▦", badge: 7, perm: "inventory" },
   { label: "Procurement", href: "/procurement", icon: "◈", perm: "procurement" },
+  { label: "Documents", href: "/documents", icon: "❑", perm: "operations" },
   { label: "Commercial", href: "/commercial", icon: "◆", perm: "commercial" },
   { label: "Warehouse", href: "/warehouse", icon: "▤", perm: "warehouse" },
   { label: "Logistics", href: "/logistics", icon: "◎", badge: 3, perm: "logistics" },
   { label: "Decisions", href: "/decisions", icon: "◇", perm: "decisions" },
+  { label: "Fraud & Risk", href: "/fraud", icon: "⚑", perm: "operations" },
   { label: "Knowledge", href: "/knowledge", icon: "◍", perm: "knowledge" },
   { label: "Reports", href: "/reports", icon: "▥", perm: "reports" },
 ];
@@ -72,11 +75,39 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           );
         })}
         <div className="mt-auto pt-4 border-t" style={{ borderColor: "var(--hairline)" }}>
-          {canAdmin && (
-            <Link href="/administration" className="flex items-center gap-3 rounded-sm px-2.5 py-2 text-[0.8125rem] text-ink-2">
-              <span className="w-4 text-center text-ink-3">⚙</span> Administration
-            </Link>
-          )}
+          {canAdmin && (() => {
+            const inAdmin = pathname.startsWith("/administration");
+            const subItems = [
+              { label: "Users", href: "/administration#users" },
+              { label: "Roles", href: "/administration#roles" },
+              { label: "Audit Logs", href: "/administration#audit" },
+              { label: "Settings", href: "/administration#settings" },
+              { label: "Connectors", href: "/administration/connectors" },
+            ];
+            return (
+              <div>
+                <Link href="/administration"
+                  className="flex items-center gap-3 rounded-sm px-2.5 py-2 text-[0.8125rem]"
+                  style={{ color: inAdmin ? "var(--text)" : "var(--text-2)" }}>
+                  <span className="w-4 text-center" style={{ color: inAdmin ? "var(--accent)" : "var(--text-3)" }}>⚙</span> Administration
+                </Link>
+                {inAdmin && (
+                  <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l pl-2.5" style={{ borderColor: "var(--hairline)" }}>
+                    {subItems.map((s) => {
+                      const active = s.href === "/administration/connectors" && pathname === "/administration/connectors";
+                      return (
+                        <Link key={s.label} href={s.href}
+                          className="rounded-sm px-2 py-1.5 text-[0.75rem] transition"
+                          style={{ color: active ? "var(--accent)" : "var(--text-3)" }}>
+                          {s.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {user && (
             <div className="flex items-center gap-2 px-2.5 py-2">
               <div className="grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold flex-none"

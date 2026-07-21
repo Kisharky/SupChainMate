@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from api import commercial_intel, services, workspace
+from api import commercial_intel, connectors, documents, fraud, services, workers, workspace
 
 
 @asynccontextmanager
@@ -270,9 +270,52 @@ def admin() -> dict:
     return services.admin_snapshot()
 
 
+# ---- Connectors & Integrations (enterprise administration) ----
+class ConnectorRequest(BaseModel):
+    connector_id: str
+
+
+@app.get("/api/connectors")
+def connectors_catalog() -> dict:
+    return connectors.catalog()
+
+
+@app.get("/api/connectors/config/{connector_id}")
+def connector_config(connector_id: str) -> dict:
+    return connectors.config_schema(connector_id)
+
+
+@app.post("/api/connectors/test")
+def connector_test(req: ConnectorRequest) -> dict:
+    return connectors.test_connection(req.connector_id)
+
+
 @app.get("/api/ai/status")
 def ai_status() -> dict:
     return services.ai_status()
+
+
+# ---- AI Digital Workers cockpit ----
+@app.get("/api/workers")
+def workers_cockpit() -> dict:
+    return workers.cockpit()
+
+
+# ---- Fraud & Anomaly Detection ----
+@app.get("/api/fraud")
+def fraud_overview() -> dict:
+    return fraud.overview()
+
+
+# ---- Invoice & Document Intelligence ----
+@app.get("/api/documents")
+def documents_overview() -> dict:
+    return documents.overview()
+
+
+@app.get("/api/documents/{doc_id}")
+def document_detail(doc_id: str) -> dict:
+    return documents.detail(doc_id)
 
 
 # ---- Decision & Scenario Intelligence workspace ----

@@ -177,6 +177,43 @@ export interface ScenarioResponse {
 }
 export interface WorkspaceCatalog { scenarios: { key: string; label: string }[]; issues: { key: string; label: string }[]; }
 
+// ---- Commercial Intelligence workspace ----
+export interface CiBrief {
+  total_revenue: number; true_operating_cost: number; gross_margin_pct: number;
+  net_margin: number; net_margin_pct: number; revenue_leakage: number; profit_uplift: number;
+  customers_action: number; accounts_total: number; summary: string;
+  recommendations: { title: string; detail: string; impact_usd: number; confidence: number; account: string }[];
+}
+export interface CiRankRow { id: string; name: string; region: string; revenue: number; true_cost: number; net_margin: number; net_margin_pct: number; action: boolean; }
+export interface CiWaterfall { label: string; value: number; kind: string; }
+export interface CiProfitability { ranking: CiRankRow[]; waterfall: CiWaterfall[]; heatmap: { categories: string[]; rows: { account: string; cells: number[] }[] }; }
+export interface CiCustomer {
+  id: string; name: string; region: string; orders: number; revenue: number; cogs: number;
+  serve_cost: number; true_cost: number; net_margin: number; net_margin_pct: number; gross_margin_pct: number;
+  activities: Record<string, number>; freight: number; returns_pct: number; storage_util: number;
+  dso: number; pay_on_time: number; sla_target: number; sla_actual: number; vol_trend: number;
+  leakage: Record<string, number>; leakage_total: number; contract: Record<string, number | boolean>;
+  insights: string[]; forecast_next_qtr_orders: number; revenue_gap: number;
+  inventory_profile: { skus: number; days_cover: number; storage_util: number };
+}
+export interface CiLeakage {
+  annual_leakage: number; recoverable: number; affected_customers: number;
+  by_cause: { cause: string; amount: number; detail: string }[];
+  items: { account: string; cause: string; cause_label: string; amount: number; root_cause: string; recoverable: number }[];
+}
+export interface CiContract {
+  account: string; region: string; terms: Record<string, number>; contractual_pick: number; actual_pick: number;
+  net_margin_pct: number; unprofitable: boolean; pick_underpriced: boolean; renewal_soon: boolean;
+}
+export interface CiContracts { contracts: CiContract[]; unprofitable_count: number; renewals_90d: number; }
+export interface CiPricingRec {
+  id: string; account: string; region: string; net_margin_pct: number; changes: Record<string, string>;
+  profit_uplift: number; churn_risk_pct: number; confidence: number; negotiation: string; evidence: string[];
+}
+export interface CiPricing { recommendations: CiPricingRec[]; total_uplift: number; }
+export interface CiRiskRow { id: string; account: string; region: string; scores: Record<string, number>; bands: Record<string, string>; overall: number; overall_band: string; }
+export interface CiRisk { dimensions: string[]; rows: CiRiskRow[]; }
+
 // ---- Endpoints --------------------------------------------------------------
 export const api = {
   kpis: () => get<KpiResponse>("/api/kpis"),
@@ -204,6 +241,15 @@ export const api = {
   admin: () => get<AdminResponse>("/api/admin"),
   commercial: () => get<CommercialResponse>("/api/commercial"),
   repricingEmail: (sku: string) => post<EmailResponse>("/api/commercial/email", { sku }),
+  ciBrief: () => get<CiBrief>("/api/commercial/brief"),
+  ciProfitability: () => get<CiProfitability>("/api/commercial/profitability"),
+  ciCustomer: (id: string) => get<CiCustomer>(`/api/commercial/customer/${id}`),
+  ciLeakage: () => get<CiLeakage>("/api/commercial/leakage"),
+  ciContracts: () => get<CiContracts>("/api/commercial/contracts"),
+  ciPricing: () => get<CiPricing>("/api/commercial/pricing"),
+  ciRisk: () => get<CiRisk>("/api/commercial/risk"),
+  ciInvoice: (account_id: string, cause: string) => post<{ invoice_no: string; account: string; line_item: string; amount: number; detail: string; status: string }>("/api/commercial/invoice", { account_id, cause }),
+  ciDecide: (item: string, action: string, note = "") => post<{ ok: boolean; item: string; status: string }>("/api/commercial/decide", { item, action, note }),
   knowledgeAsk: (query: string) => post<KnowledgeAnswer>("/api/knowledge/ask", { query }),
   runWorkflow: (workflow = "full_control_tower", ai_enabled = false) =>
     post<WorkflowRun>("/api/agents/run", { workflow, ai_enabled }),

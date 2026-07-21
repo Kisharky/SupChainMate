@@ -11,6 +11,7 @@ import { ReactNode, useEffect, useState } from "react";
 
 const NAV: { label: string; href: string; icon: string; badge?: number }[] = [
   { label: "Dashboard", href: "/", icon: "◧" },
+  { label: "Intelligence", href: "/workspace", icon: "◆" },
   { label: "Operations", href: "/operations", icon: "⬒" },
   { label: "Forecasting", href: "/forecasting", icon: "◡" },
   { label: "Inventory", href: "/inventory", icon: "▦", badge: 7 },

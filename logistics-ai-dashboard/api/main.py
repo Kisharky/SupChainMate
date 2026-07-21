@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from api import services
+from api import services, workspace
 
 app = FastAPI(
     title="SupChainMate API",
@@ -51,6 +51,19 @@ class DecideRequest(BaseModel):
 
 class EmailRequest(BaseModel):
     sku: str
+
+
+class PlanRequest(BaseModel):
+    request: str
+
+
+class IssueRequest(BaseModel):
+    issue: str
+
+
+class ScenarioRequest(BaseModel):
+    kind: str
+    magnitude: float = 0.6
 
 
 class WorkflowRequest(BaseModel):
@@ -176,3 +189,39 @@ def commercial_email(req: EmailRequest) -> dict:
 @app.get("/api/ai/status")
 def ai_status() -> dict:
     return services.ai_status()
+
+
+# ---- Decision & Scenario Intelligence workspace ----
+@app.get("/api/workspace/brief")
+def workspace_brief() -> dict:
+    return workspace.executive_brief()
+
+
+@app.get("/api/workspace/changed")
+def workspace_changed() -> dict:
+    return workspace.whats_changed()
+
+
+@app.get("/api/workspace/timeline")
+def workspace_timeline() -> dict:
+    return workspace.decision_timeline()
+
+
+@app.get("/api/workspace/catalog")
+def workspace_catalog() -> dict:
+    return workspace.scenario_catalog()
+
+
+@app.post("/api/workspace/plan")
+def workspace_plan(req: PlanRequest) -> dict:
+    return workspace.plan_request(req.request)
+
+
+@app.post("/api/workspace/coa")
+def workspace_coa(req: IssueRequest) -> dict:
+    return workspace.courses_of_action(req.issue)
+
+
+@app.post("/api/workspace/scenario")
+def workspace_scenario(req: ScenarioRequest) -> dict:
+    return workspace.simulate_scenario(req.kind, req.magnitude)

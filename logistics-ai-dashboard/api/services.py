@@ -95,7 +95,8 @@ def inventory_snapshot() -> dict[str, Any]:
                 "service_level": str(r.get("Svc Level", "—")),
                 "savings_yr": float(r.get("Est. Savings/yr ($)", 0) or 0),
             })
-        return {"kpis": _jsonable(kpis), "rows": rows}
+        return {"kpis": _jsonable(kpis), "rows": rows,
+                "allocation": _inventory_allocation()}
 
     return _safe(build, {
         "kpis": {"SKUs": 1204, "A-class": 168, "Est. Savings/yr": "$0.9M"},
@@ -108,6 +109,39 @@ def inventory_snapshot() -> dict[str, Any]:
              "safety_stock": 180, "service_level": "92%", "savings_yr": 15400},
         ],
     })
+
+
+# ---- Multi-DC inventory allocation (real haversine costs, allocation skill) ---
+def _inventory_allocation() -> Optional[dict[str, Any]]:
+    """Distribute replenishment across distribution centres to regional demand at
+    minimum transport cost. Sources = the 3 largest hubs (DCs); sinks = all hubs
+    (regional demand ∝ customer count); cost = real Haversine distance (km). Solved
+    by the pluggable allocation skill (cuOpt-swappable)."""
+    try:
+        from optimize import OPT, optimize_supply_allocation
+        from optimize.solvers.local import _haversine
+        cents = _geo_centroids().sort_values("size", ascending=False).reset_index(drop=True)
+        if len(cents) < 3:
+            return None
+        regions = [{"name": f"Region {int(r['cluster'])}", "lat": float(r["lat"]),
+                    "lon": float(r["lon"]), "demand": float(r["size"])} for _, r in cents.iterrows()]
+        total_demand = sum(r["demand"] for r in regions)
+        dcs = regions[:3]  # three largest hubs act as distribution centres
+        # DC capacity split by size, with 25% headroom so the problem is feasible
+        dc_weight = [d["demand"] for d in dcs]
+        wsum = sum(dc_weight)
+        supply = [total_demand * (w / wsum) * 1.25 for w in dc_weight]
+        cost = [[_haversine(dc["lat"], dc["lon"], rg["lat"], rg["lon"]) for rg in regions] for dc in dcs]
+        res = optimize_supply_allocation(
+            [d["name"].replace("Region", "DC") for d in dcs],
+            [r["name"] for r in regions], cost,
+            supply, [r["demand"] for r in regions])
+        d = res.to_dict()
+        d["status"] = OPT.status()
+        d["units_label"] = "km·units"
+        return d
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # ---- Executive KPIs ----------------------------------------------------------

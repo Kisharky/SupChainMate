@@ -158,6 +158,34 @@ export interface AdminResponse {
   source: string;
 }
 
+// ---- Connectors & Integrations ----
+export interface Connector {
+  id: string; name: string; icon: string; description: string;
+  connected: boolean; category: string; auth: string;
+}
+export interface ConnectorCategory { category: string; auth: string; connectors: Connector[]; }
+export interface ConnectorsResponse {
+  categories: ConnectorCategory[];
+  summary: {
+    active_connections: number; connected_systems: number; last_sync: string;
+    data_health: number; failed_connections: number; daily_records: number;
+  };
+  sync: {
+    last_sync: string; next_sync: string; records_imported: number; records_failed: number;
+    duration_s: number; status: string; frequency: string; progress: number;
+  };
+  pipeline: { stage: string; detail: string; kind: string }[];
+  source: string;
+}
+export interface ConnectorConfig {
+  ok: boolean; connector_id: string; name: string; category: string;
+  auth: string; connected: boolean; fields: string[]; source: string;
+}
+export interface ConnectorTest {
+  ok: boolean; connector_id: string; name: string; status: string;
+  message: string; latency_ms: number; source: string;
+}
+
 // ---- Decision & Scenario Intelligence workspace ----
 export interface BriefRisk { title: string; severity: "high" | "medium" | "low"; area: string; detail: string; }
 export interface BriefDecision { title: string; action: string; confidence: number; impact_usd: number; area: string; }
@@ -276,6 +304,9 @@ export const api = {
   me: () => get<import("@/auth/store").AuthUser>("/api/auth/me"),
   logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
   admin: () => get<AdminResponse>("/api/admin"),
+  connectors: () => get<ConnectorsResponse>("/api/connectors"),
+  connectorConfig: (id: string) => get<ConnectorConfig>(`/api/connectors/config/${id}`),
+  connectorTest: (id: string) => post<ConnectorTest>("/api/connectors/test", { connector_id: id }),
   ciBrief: () => get<CiBrief>("/api/commercial/brief"),
   ciProfitability: () => get<CiProfitability>("/api/commercial/profitability"),
   ciCustomer: (id: string) => get<CiCustomer>(`/api/commercial/customer/${id}`),

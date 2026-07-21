@@ -63,7 +63,7 @@
   </tr>
   <tr>
     <td><img src="docs/images/knowledge.png" alt="Knowledge Center"/><br/><sub><b>Knowledge Center</b> — RAG answers with inline citations.</sub></td>
-    <td><img src="docs/images/administration.png" alt="Administration"/><br/><sub><b>Administration</b> — providers, masked API keys, RBAC, immutable audit log.</sub></td>
+    <td><img src="docs/images/administration.png" alt="Administration"/><br/><sub><b>Administration</b> — providers, masked API keys, RBAC, immutable audit log, and Connectors (enterprise integrations).</sub></td>
   </tr>
 </table>
 
@@ -86,7 +86,7 @@ flowchart TB
     subgraph API["FastAPI backend"]
         GATE["auth middleware · JWT + RBAC gate"]
         AUTH["api/auth · login / refresh / logout"]
-        SVC["api/services · workspace · commercial_intel"]
+        SVC["api/services · workspace · commercial_intel · connectors"]
     end
     subgraph Intelligence["Framework-free layers (unchanged)"]
         AIR["AI Router (provider-agnostic)"]
@@ -569,6 +569,7 @@ SupChainMate/
 │   ├── api/                      # FastAPI layer (JSON over modules/ + ai/, additive)
 │   │   ├── main.py               #   Endpoints + auth middleware gate + startup seed
 │   │   ├── services.py           #   Compute/shape layer with graceful degradation
+│   │   ├── connectors.py         #   Connectors & Integrations catalog (plug-in seam)
 │   │   ├── db.py                 #   SQLAlchemy engine (Postgres/SQLite via DATABASE_URL)
 │   │   └── auth/                 #   JWT + RBAC (security, models, service, router, rbac)
 │   ├── planner/                  # Executive decision orchestrator (registry/graph/executor)

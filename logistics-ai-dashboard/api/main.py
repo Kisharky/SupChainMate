@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from api import commercial_intel, services, workspace
+from api import commercial_intel, connectors, services, workspace
 
 
 @asynccontextmanager
@@ -268,6 +268,26 @@ def reports() -> dict:
 @app.get("/api/admin")
 def admin() -> dict:
     return services.admin_snapshot()
+
+
+# ---- Connectors & Integrations (enterprise administration) ----
+class ConnectorRequest(BaseModel):
+    connector_id: str
+
+
+@app.get("/api/connectors")
+def connectors_catalog() -> dict:
+    return connectors.catalog()
+
+
+@app.get("/api/connectors/config/{connector_id}")
+def connector_config(connector_id: str) -> dict:
+    return connectors.config_schema(connector_id)
+
+
+@app.post("/api/connectors/test")
+def connector_test(req: ConnectorRequest) -> dict:
+    return connectors.test_connection(req.connector_id)
 
 
 @app.get("/api/ai/status")

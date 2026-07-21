@@ -110,6 +110,13 @@ merge into one Decision. *Theme: orchestration.*
 Sign out, sign back in as **Read Only** → note Administration is gone and
 approve buttons are inert. *Theme: enterprise RBAC.*
 
+**E. "Where does the data come from?"**
+Administration → **Connectors** → show the connector catalog (ERP, WMS, TMS,
+cloud, databases, BI, APIs, files) → open **Configure** on SAP S/4HANA → **Test
+Connection** → then the data pipeline (Source → Validation → Transformation →
+Decision Brain → Planner → Executive Dashboard). *Theme: the full narrative —
+data sources feed the decisions.*
+
 ---
 
 ## 4 · Talking points if asked

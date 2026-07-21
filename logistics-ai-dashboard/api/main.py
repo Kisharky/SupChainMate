@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from api import commercial_intel, connectors, services, workspace
+from api import commercial_intel, connectors, services, workers, workspace
 
 
 @asynccontextmanager
@@ -293,6 +293,12 @@ def connector_test(req: ConnectorRequest) -> dict:
 @app.get("/api/ai/status")
 def ai_status() -> dict:
     return services.ai_status()
+
+
+# ---- AI Digital Workers cockpit ----
+@app.get("/api/workers")
+def workers_cockpit() -> dict:
+    return workers.cockpit()
 
 
 # ---- Decision & Scenario Intelligence workspace ----

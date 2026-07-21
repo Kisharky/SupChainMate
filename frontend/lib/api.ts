@@ -186,6 +186,26 @@ export interface ConnectorTest {
   message: string; latency_ms: number; source: string;
 }
 
+// ---- AI Digital Workers cockpit ----
+export interface Worker {
+  id: string; name: string; skill: string; domain: string; status: string;
+  zero_touch_pct: number; tasks_today: number; exceptions: number; confidence: number; outputs: string[];
+}
+export interface WorkerTask {
+  id: string; worker: string; worker_id: string; domain: string; task: string;
+  state: string; state_label: string; state_status: string;
+  confidence: number; impact_usd: number; minutes_ago: number;
+}
+export interface WorkersResponse {
+  workers: Worker[];
+  summary: {
+    active_workers: number; total_workers: number; tasks_automated_today: number;
+    zero_touch_pct: number; hours_saved_week: number; awaiting_approval: number; escalated: number;
+  };
+  queue: WorkerTask[];
+  source: string;
+}
+
 // ---- Decision & Scenario Intelligence workspace ----
 export interface BriefRisk { title: string; severity: "high" | "medium" | "low"; area: string; detail: string; }
 export interface BriefDecision { title: string; action: string; confidence: number; impact_usd: number; area: string; }
@@ -304,6 +324,7 @@ export const api = {
   me: () => get<import("@/auth/store").AuthUser>("/api/auth/me"),
   logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
   admin: () => get<AdminResponse>("/api/admin"),
+  workers: () => get<WorkersResponse>("/api/workers"),
   connectors: () => get<ConnectorsResponse>("/api/connectors"),
   connectorConfig: (id: string) => get<ConnectorConfig>(`/api/connectors/config/${id}`),
   connectorTest: (id: string) => post<ConnectorTest>("/api/connectors/test", { connector_id: id }),

@@ -67,6 +67,7 @@ def test_rbac_forbids_wrong_role(client):
     assert client.get("/api/warehouse", headers=h).status_code == 200
     assert client.get("/api/commercial/brief", headers=h).status_code == 403
     assert client.get("/api/workspace/brief", headers=h).status_code == 403
+    assert client.get("/api/workers", headers=h).status_code == 403  # intelligence-gated
 
 
 def test_connectors_require_admin(client):

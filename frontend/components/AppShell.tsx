@@ -13,6 +13,7 @@ import { useAuth } from "@/auth/context";
 const NAV: { label: string; href: string; icon: string; badge?: number; perm: string }[] = [
   { label: "Dashboard", href: "/", icon: "◧", perm: "dashboard" },
   { label: "Intelligence", href: "/workspace", icon: "◆", perm: "intelligence" },
+  { label: "Workforce", href: "/workforce", icon: "❖", perm: "intelligence" },
   { label: "Operations", href: "/operations", icon: "⬒", perm: "operations" },
   { label: "Forecasting", href: "/forecasting", icon: "◡", perm: "forecasting" },
   { label: "Inventory", href: "/inventory", icon: "▦", badge: 7, perm: "inventory" },

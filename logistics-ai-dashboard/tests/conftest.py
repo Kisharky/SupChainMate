@@ -13,6 +13,10 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Domain tests exercise business logic, not the HTTP auth gate — disable auth by
+# default so endpoint tests run tokenless. tests/test_auth.py opts back in.
+os.environ.setdefault("AUTH_ENABLED", "false")
+
 from ai.router import AI, AIRouter
 from modules import store
 

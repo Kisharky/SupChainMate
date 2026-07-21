@@ -22,5 +22,11 @@ streamlit-folium==0.27.2
 fastapi==0.139.2
 uvicorn[standard]==0.38.0
 
+# Auth & identity state (JWT/password hashing use only the stdlib — no native
+# crypto dependency). SQLAlchemy holds identity state; psycopg2 enables Postgres
+# (SQLite is the offline-demo default, selected via DATABASE_URL).
+SQLAlchemy==2.0.51
+psycopg2-binary==2.9.9
+
 # Development / testing
 pytest==9.1.1

@@ -134,6 +134,20 @@ and fraud prevention.*
 → the three-way match (PO ↔ Invoice ↔ Receipt) with the over-billed line flagged
 → Approve or Escalate. *Theme: AP automation with a human check.*
 
+**I. "Run the brokerage back office."**
+**Freight Ops** → the carrier vetting table → **Vet** the top (high-risk) carrier
+→ the FMCSA/insurance checklist + fraud signals → then load↔carrier matching, an
+**instant spot quote** (transparent rate build), and inbound email triage.
+*Theme: execution workflows a digital worker runs end-to-end.*
+
+**J. "Where is the network at risk right now?"**
+**Risk Radar** → the **Supply Chain Risk Index** + live brief → toggle disruption
+layers (weather, ports, suppliers, labour, customs, geopolitical, carrier) →
+switch **Flat map ↔ 3D globe** → a convergence alert (e.g. Port of Shanghai,
+3 signals) → **Inspect node** for the signal breakdown and why it's flagged →
+Send to Decision Center. *Theme: signal convergence — the board shows decisions,
+not noise.*
+
 ---
 
 ## 4 · Talking points if asked

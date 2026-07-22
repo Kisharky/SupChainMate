@@ -544,6 +544,7 @@ export const api = {
   dataDatasets: () => get<DatasetsResponse>("/api/data/datasets"),
   dataPreview: (id: string) => get<PreviewResult>(`/api/data/preview/${id}`),
   dataQuality: () => get<QualityResponse>("/api/data/quality"),
+  dataActive: () => get<{ source: string; orders_dataset: string | null; customers_dataset: string | null; demo_dataset: string }>("/api/data/active"),
   dataDelete: (id: string) => request<{ ok: boolean; id: string }>(`/api/data/dataset/${id}`, { method: "DELETE" }),
   radar: () => get<RadarResponse>("/api/radar"),
   radarNode: (id: string) => get<RadarNodeDetail>(`/api/radar/node/${id}`),

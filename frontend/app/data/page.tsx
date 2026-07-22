@@ -45,6 +45,7 @@ export default function DataHub() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [confirmDel, setConfirmDel] = useState<Dataset | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [active, setActive] = useState<{ source: string; orders_dataset: string | null; customers_dataset: string | null; demo_dataset: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const toast = useCallback((msg: string, status: Toast["status"] = "good") => {
@@ -56,6 +57,7 @@ export default function DataHub() {
   const refresh = useCallback(() => {
     api.dataDatasets().then((d: DatasetsResponse) => setDatasets(d.datasets)).catch(() => setDatasets([]));
     api.dataQuality().then(setQuality).catch(() => setQuality(null));
+    api.dataActive().then(setActive).catch(() => setActive(null));
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -83,6 +85,20 @@ export default function DataHub() {
           it&apos;s indexed straight into the Knowledge Center and Decision Brain.
         </p>
       </div>
+
+      {/* ---- Active data source banner ---- */}
+      {active && (
+        <div className="mb-5">
+          <Alert status={active.source === "imported" ? "good" : "info"}
+            title={active.source === "imported" ? "Live data source: your imported data" : "Live data source: demo (Olist)"}>
+            {active.source === "imported"
+              ? <>Every module — Control Tower, Commercial, Customer 360, Planner, Forecasting — is now reading your imported data
+                 {active.customers_dataset ? <> (customers: <b>{active.customers_dataset}</b>)</> : null}
+                 {active.orders_dataset ? <> (orders: <b>{active.orders_dataset}</b>)</> : null}. Delete all imports to revert to the demo.</>
+              : <>The platform is running on the bundled demo dataset (<b>{active.demo_dataset}</b>). Import a customers or orders dataset below and the whole platform switches to it automatically.</>}
+          </Alert>
+        </div>
+      )}
 
       {/* ---- Data quality KPIs ---- */}
       <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>

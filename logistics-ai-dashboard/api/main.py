@@ -413,6 +413,12 @@ def data_quality() -> dict:
     return data_hub.quality()
 
 
+@app.get("/api/data/active")
+def data_active() -> dict:
+    from api import data_source
+    return data_source.active_summary()
+
+
 @app.delete("/api/data/dataset/{dataset_id}")
 def data_delete(dataset_id: str) -> dict:
     return data_hub.delete(dataset_id)

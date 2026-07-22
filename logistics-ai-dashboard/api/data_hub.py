@@ -28,9 +28,18 @@ import config
 
 _log = config.get_logger(__name__)
 
-_DIR = os.path.join("data", "data_hub")
-_UPLOADS = os.path.join(_DIR, "files")
-_DB = os.path.join(_DIR, "registry.db")
+# Paths are resolved at call time so DATA_HUB_DIR can relocate the store
+# (tests point it at a temp dir to stay isolated on the demo dataset).
+def _base_dir() -> str:
+    return os.environ.get("DATA_HUB_DIR") or os.path.join("data", "data_hub")
+
+
+def _uploads_dir() -> str:
+    return os.path.join(_base_dir(), "files")
+
+
+def _db_path() -> str:
+    return os.path.join(_base_dir(), "registry.db")
 
 # Canonical target schema fields the mapping UI maps raw columns onto.
 CANONICAL_FIELDS = [
@@ -90,8 +99,8 @@ for _canon, _alts in {
 # ── storage ───────────────────────────────────────────────────────────────────
 
 def _conn() -> sqlite3.Connection:
-    os.makedirs(_UPLOADS, exist_ok=True)
-    conn = sqlite3.connect(_DB)
+    os.makedirs(_uploads_dir(), exist_ok=True)
+    conn = sqlite3.connect(_db_path())
     conn.execute("""CREATE TABLE IF NOT EXISTS datasets (
         id TEXT PRIMARY KEY, name TEXT, filename TEXT, ext TEXT, type TEXT, type_label TEXT,
         source_guess TEXT, confidence REAL, rows INTEGER, columns TEXT, mapping TEXT,
@@ -225,8 +234,8 @@ def upload(filename: str, content: bytes) -> dict[str, Any]:
     mapping = _suggest_mapping(columns)
     validation = _validate(df, mapping)
     did = uuid.uuid4().hex[:12]
-    os.makedirs(_UPLOADS, exist_ok=True)
-    path = os.path.join(_UPLOADS, f"{did}__{filename}")
+    os.makedirs(_uploads_dir(), exist_ok=True)
+    path = os.path.join(_uploads_dir(), f"{did}__{filename}")
     with open(path, "wb") as fh:
         fh.write(content)
     rec = {
@@ -383,7 +392,17 @@ def do_import(did: str, mapping: Optional[dict[str, str]], options: dict[str, bo
     rec["indexed"] = 1
     rec["imported_by"] = imported_by
     rec["imported_at"] = now
+    _invalidate_data_caches()   # platform switches to the imported data immediately
     return {"ok": True, "dataset": _public(rec), "index": index_summary}
+
+
+def _invalidate_data_caches() -> None:
+    """Clear derived snapshots so the data-source switch takes effect at once."""
+    try:
+        from api import services
+        services.clear_data_caches()
+    except Exception:  # noqa: BLE001 — cache invalidation is best-effort
+        pass
 
 
 def reindex(did: str, options: dict[str, bool]) -> dict[str, Any]:
@@ -449,6 +468,7 @@ def delete(did: str) -> dict[str, Any]:
             conn.execute("DELETE FROM datasets WHERE id=?", (did,))
     finally:
         conn.close()
+    _invalidate_data_caches()   # revert to the demo (or next dataset) immediately
     return {"ok": True, "id": did}
 
 
@@ -457,6 +477,26 @@ def filepath(did: str) -> Optional[tuple[str, str]]:
     if rec is None or not rec.get("filepath") or not os.path.exists(rec["filepath"]):
         return None
     return rec["filepath"], rec["filename"]
+
+
+# ── data-source resolution (used by api/data_source.py) ───────────────────────
+
+def active_dataset(types: list[str]) -> Optional[dict[str, Any]]:
+    """The most recent IMPORTED dataset whose type is in ``types`` — or None.
+    Full record (incl. filepath + mapping) so the resolver can normalise it."""
+    best: Optional[dict[str, Any]] = None
+    for rec in datasets()["datasets"]:
+        if rec["status"] != "imported" or rec["type"] not in types:
+            continue
+        if best is None or (rec.get("imported_at") or 0) > (best.get("imported_at") or 0):
+            best = rec
+    return _load(best["id"]) if best else None
+
+
+def read_dataset(record: dict[str, Any]):
+    """Load a dataset's raw DataFrame from disk (raises if the file is gone)."""
+    with open(record["filepath"], "rb") as fh:
+        return _read_dataframe(fh.read(), record["ext"])
 
 
 def quality() -> dict[str, Any]:

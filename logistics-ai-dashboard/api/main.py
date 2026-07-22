@@ -20,8 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from api import (
-    commercial_intel, connectors, data_hub, documents, fraud, freight, risk_radar,
-    services, workers, workspace,
+    commercial_intel, connectors, customers, data_hub, documents, fraud, freight,
+    risk_radar, services, workers, workspace,
 )
 
 
@@ -425,6 +425,56 @@ def data_download(dataset_id: str):
         return JSONResponse({"detail": "not found"}, status_code=404)
     path, name = fp
     return FileResponse(path, filename=name)
+
+
+# ---- Customer 360 (single source of truth per customer) ----
+class ChatRequest(BaseModel):
+    message: str
+
+
+@app.get("/api/customers")
+def customers_list() -> dict:
+    return customers.list_customers()
+
+
+@app.get("/api/customers/{customer_id}")
+def customer_detail(customer_id: str) -> dict:
+    return customers.detail(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/orders")
+def customer_orders(customer_id: str) -> dict:
+    return customers.orders(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/shipments")
+def customer_shipments(customer_id: str) -> dict:
+    return customers.shipments(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/forecast")
+def customer_forecast(customer_id: str) -> dict:
+    return customers.forecast(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/recommendations")
+def customer_recommendations(customer_id: str) -> dict:
+    return customers.recommendations(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/timeline")
+def customer_timeline(customer_id: str) -> dict:
+    return customers.timeline(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/brain")
+def customer_brain(customer_id: str) -> dict:
+    return customers.brain(customer_id)
+
+
+@app.post("/api/customers/{customer_id}/chat")
+def customer_chat(customer_id: str, req: ChatRequest) -> dict:
+    return customers.chat(customer_id, req.message)
 
 
 # ---- Decision & Scenario Intelligence workspace ----

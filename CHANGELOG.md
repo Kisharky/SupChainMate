@@ -2,6 +2,25 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Data Hub — enterprise data onboarding
+- **Data Hub** workspace: bring your own operational data (CSV/Excel/JSON) with no
+  code. Drag & drop → AI dataset detection (13 types + plausible source guess &
+  confidence) → column mapping to a canonical schema (with manual override) →
+  validation report (rows, missing, duplicates, invalid dates, health score) →
+  import. Backend `api/data_hub.py` (isolated SQLite registry + raw-file store);
+  additive endpoints under `/api/data/*`; a new DATA_HUB permission for
+  operational roles.
+- **Real, offline indexing**: on import, the dataset is pushed into the
+  Knowledge/RAG store (`modules.store.add_document`) and the Decision Brain
+  (`BRAIN.add_knowledge` / `record_entity`), so the Knowledge Center and Planner
+  immediately retrieve the uploaded data. Verified end-to-end.
+- Data-quality dashboard, connector cards (CSV/Excel/JSON active; SAP/Oracle/
+  Dynamics/NetSuite/Odoo roadmap), imported-datasets registry with preview /
+  reindex / delete / download, toasts, skeletons, empty states.
+- Orchestrates existing systems only — no business module, Brain, Planner, or AI
+  Router logic modified.
+- Tests: 204 passing (backend); frontend lint + build clean; Playwright-verified.
+
 ## Disruption & Risk Radar — signal convergence
 - **Disruption & Risk Radar** workspace: a composite **Supply Chain Risk Index**,
   7 toggleable disruption layers (weather, ports, suppliers, labour, customs,

@@ -35,6 +35,7 @@ class Permission(str, Enum):
     ADMINISTRATION = "administration"
     PLANNER = "planner"
     APPROVE = "approve"                 # act on decisions/recommendations
+    DATA_HUB = "data_hub"               # onboard / import operational data
 
 
 _ALL = set(Permission)
@@ -48,22 +49,23 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.DECISIONS, Permission.REPORTS, Permission.KNOWLEDGE,
         Permission.FORECASTING, Permission.INVENTORY, Permission.LOGISTICS,
         Permission.PROCUREMENT, Permission.OPERATIONS, Permission.WAREHOUSE,
-        Permission.PLANNER, Permission.APPROVE,
+        Permission.PLANNER, Permission.APPROVE, Permission.DATA_HUB,
     },
     Role.SUPPLY_CHAIN_MANAGER: {
         Permission.DASHBOARD, Permission.INTELLIGENCE, Permission.OPERATIONS,
         Permission.FORECASTING, Permission.INVENTORY, Permission.PROCUREMENT,
         Permission.WAREHOUSE, Permission.LOGISTICS, Permission.DECISIONS,
         Permission.KNOWLEDGE, Permission.REPORTS, Permission.PLANNER, Permission.APPROVE,
+        Permission.DATA_HUB,
     },
     Role.PLANNER: {
         Permission.DASHBOARD, Permission.FORECASTING, Permission.INVENTORY,
         Permission.PLANNER, Permission.KNOWLEDGE, Permission.DECISIONS,
-        Permission.INTELLIGENCE,
+        Permission.INTELLIGENCE, Permission.DATA_HUB,
     },
     Role.WAREHOUSE_MANAGER: {
         Permission.DASHBOARD, Permission.WAREHOUSE, Permission.INVENTORY,
-        Permission.LOGISTICS, Permission.KNOWLEDGE,
+        Permission.LOGISTICS, Permission.KNOWLEDGE, Permission.DATA_HUB,
     },
     Role.READ_ONLY: {
         Permission.DASHBOARD, Permission.FORECASTING, Permission.INVENTORY,
@@ -105,6 +107,7 @@ PREFIX_PERMISSIONS: list[tuple[str, Permission]] = [
     ("/api/documents", Permission.OPERATIONS),
     ("/api/freight", Permission.OPERATIONS),
     ("/api/radar", Permission.OPERATIONS),
+    ("/api/data", Permission.DATA_HUB),
     ("/api/planner", Permission.PLANNER),
     ("/api/reports", Permission.REPORTS),
 ]

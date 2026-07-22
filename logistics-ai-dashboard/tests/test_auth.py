@@ -85,6 +85,16 @@ def test_connectors_require_admin(client):
     assert client.get("/api/connectors", headers=ha).status_code == 200
 
 
+def test_data_hub_permission(client):
+    # Data Hub is open to operational roles (incl. Warehouse Manager), not Read Only.
+    viewer = _login(client, "viewer@supchainmate.io")
+    hv = {"Authorization": f"Bearer {viewer.json()['access_token']}"}
+    assert client.get("/api/data/datasets", headers=hv).status_code == 403
+    wh = _login(client, "warehouse@supchainmate.io")
+    hw = {"Authorization": f"Bearer {wh.json()['access_token']}"}
+    assert client.get("/api/data/datasets", headers=hw).status_code == 200
+
+
 def test_refresh_rotation_is_single_use(client):
     r = _login(client, "admin@supchainmate.io")
     refresh = r.json()["refresh_token"]

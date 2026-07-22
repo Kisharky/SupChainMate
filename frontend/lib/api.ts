@@ -206,6 +206,42 @@ export interface WorkersResponse {
   source: string;
 }
 
+// ---- Data Hub ----
+export interface DhValidation {
+  rows: number; missing_values: number; duplicate_records: number; invalid_dates: number;
+  unknown_skus: number; invalid_supplier_ids: number; warnings: string[]; errors: string[]; health_score: number;
+}
+export interface Dataset {
+  id: string; name: string; filename: string; ext: string; type: string; type_label: string;
+  source_guess: string; confidence: number; rows: number; columns: string[];
+  mapping: Record<string, string>; validation: DhValidation; stats: Record<string, number>;
+  status: string; health: number; indexed: number; imported_by: string;
+  created_at: number; imported_at: number | null;
+}
+export interface UploadResult {
+  ok: boolean; error?: string; dataset: Dataset; sample: Record<string, unknown>[];
+  canonical_fields: string[]; detection_message: string;
+}
+export interface DatasetsResponse { datasets: Dataset[]; source: string; }
+export interface PreviewResult {
+  ok: boolean; error?: string; id: string; name: string; columns: string[];
+  mapping: Record<string, string>; rows: Record<string, unknown>[];
+}
+export interface ImportResult {
+  ok: boolean; error?: string; dataset: Dataset;
+  index: { documents: number; entities: number; knowledge: number };
+}
+export interface QualityResponse {
+  kpis: {
+    data_quality: number; duplicate_rate: number; missing_rate: number; datasets: number;
+    imported: number; total_rows: number; last_refresh: number | null; most_recent: string;
+  };
+  history: { name: string; rows: number; health: number; at: number; type: string }[];
+  completeness: { name: string; completeness: number }[];
+  source: string;
+}
+export type BrainOptions = Record<string, boolean>;
+
 // ---- Disruption & Risk Radar ----
 export interface RadarSignal { layer: string; layer_name: string; severity: number; }
 export interface RadarNode {
@@ -453,6 +489,20 @@ export const api = {
   fraud: () => get<FraudResponse>("/api/fraud"),
   documents: () => get<DocumentsResponse>("/api/documents"),
   documentDetail: (id: string) => get<DocumentDetail>(`/api/documents/${id}`),
+  // ---- Data Hub ----
+  dataUpload: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<UploadResult>("/api/data/upload", { method: "POST", body: fd });
+  },
+  dataMap: (id: string, mapping: Record<string, string>) => post<{ ok: boolean; mapping: Record<string, string> }>("/api/data/map", { id, mapping }),
+  dataImport: (id: string, options: BrainOptions, mapping?: Record<string, string>, imported_by?: string) =>
+    post<ImportResult>("/api/data/import", { id, options, mapping, imported_by }),
+  dataIndex: (id: string, options: BrainOptions) => post<{ ok: boolean; index: { documents: number; entities: number; knowledge: number } }>("/api/data/index", { id, options }),
+  dataDatasets: () => get<DatasetsResponse>("/api/data/datasets"),
+  dataPreview: (id: string) => get<PreviewResult>(`/api/data/preview/${id}`),
+  dataQuality: () => get<QualityResponse>("/api/data/quality"),
+  dataDelete: (id: string) => request<{ ok: boolean; id: string }>(`/api/data/dataset/${id}`, { method: "DELETE" }),
   radar: () => get<RadarResponse>("/api/radar"),
   radarNode: (id: string) => get<RadarNodeDetail>(`/api/radar/node/${id}`),
   freight: () => get<FreightResponse>("/api/freight"),

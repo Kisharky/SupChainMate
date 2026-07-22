@@ -28,6 +28,7 @@ const NAV: { label: string; href: string; icon: string; badge?: number; perm: st
   { label: "Risk Radar", href: "/radar", icon: "◉", perm: "operations" },
   { label: "Knowledge", href: "/knowledge", icon: "◍", perm: "knowledge" },
   { label: "Reports", href: "/reports", icon: "▥", perm: "reports" },
+  { label: "Data Hub", href: "/data", icon: "⊞", perm: "data_hub" },
 ];
 
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {

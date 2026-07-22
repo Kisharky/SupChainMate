@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from api import (
-    commercial_intel, connectors, documents, fraud, freight, risk_radar,
+    commercial_intel, connectors, data_hub, documents, fraud, freight, risk_radar,
     services, workers, workspace,
 )
 
@@ -353,6 +353,78 @@ def radar_overview() -> dict:
 @app.get("/api/radar/node/{node_id}")
 def radar_node(node_id: str) -> dict:
     return risk_radar.node_detail(node_id)
+
+
+# ---- Data Hub (enterprise data onboarding) ----
+from fastapi import File, UploadFile  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+
+
+class MapRequest(BaseModel):
+    id: str
+    mapping: dict[str, str]
+
+
+class ImportRequest(BaseModel):
+    id: str
+    mapping: dict[str, str] | None = None
+    options: dict[str, bool] = {}
+    imported_by: str = "Enterprise User"
+
+
+class IndexRequest(BaseModel):
+    id: str
+    options: dict[str, bool] = {}
+
+
+@app.post("/api/data/upload")
+async def data_upload(file: UploadFile = File(...)) -> dict:
+    content = await file.read()
+    return data_hub.upload(file.filename or "upload.csv", content)
+
+
+@app.post("/api/data/map")
+def data_map(req: MapRequest) -> dict:
+    return data_hub.set_mapping(req.id, req.mapping)
+
+
+@app.post("/api/data/import")
+def data_import(req: ImportRequest) -> dict:
+    return data_hub.do_import(req.id, req.mapping, req.options, req.imported_by)
+
+
+@app.post("/api/data/index")
+def data_index(req: IndexRequest) -> dict:
+    return data_hub.reindex(req.id, req.options)
+
+
+@app.get("/api/data/datasets")
+def data_datasets() -> dict:
+    return data_hub.datasets()
+
+
+@app.get("/api/data/preview/{dataset_id}")
+def data_preview(dataset_id: str) -> dict:
+    return data_hub.preview(dataset_id)
+
+
+@app.get("/api/data/quality")
+def data_quality() -> dict:
+    return data_hub.quality()
+
+
+@app.delete("/api/data/dataset/{dataset_id}")
+def data_delete(dataset_id: str) -> dict:
+    return data_hub.delete(dataset_id)
+
+
+@app.get("/api/data/download/{dataset_id}")
+def data_download(dataset_id: str):
+    fp = data_hub.filepath(dataset_id)
+    if fp is None:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    path, name = fp
+    return FileResponse(path, filename=name)
 
 
 # ---- Decision & Scenario Intelligence workspace ----

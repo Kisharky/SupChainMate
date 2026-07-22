@@ -206,6 +206,84 @@ export interface WorkersResponse {
   source: string;
 }
 
+// ---- Customer 360 ----
+export interface CustomerListItem {
+  id: string; name: string; region: string; industry: string; country: string;
+  account_status: string; health_score: number; risk_score: number; risk_band: string;
+  risk_status: string; revenue: number; net_margin_pct: number; orders: number;
+}
+export interface CustomersListResponse { customers: CustomerListItem[]; source: string; }
+export interface CustomerRisk {
+  overall: number; band: string; status: string; trend: string; explanation: string;
+  dimensions: { name: string; score: number }[];
+}
+export interface CustomerDetail {
+  ok: boolean; id: string; name: string; region: string; industry: string; country: string;
+  relationship_manager: string; account_status: string; health_score: number; risk_score: number;
+  risk_band: string; risk_status: string;
+  exec_summary: { text: string; bullets: string[]; confidence: number; generated_by: string };
+  commercial: { revenue: number; profit: number; margin_pct: number; orders: number; aov: number; clv: number; outstanding: number; gross_margin_pct: number };
+  revenue_trend: { period: string; value: number }[];
+  margin_trend: { period: string; value: number }[];
+  top_products: { name: string; revenue: number }[];
+  insights: string[]; risk: CustomerRisk;
+  knowledge: { documents: { doc: string; snippet: string; score: number }[]; count: number };
+  source: string;
+}
+export interface CustomerOrders { orders: { order_no: string; status: string; warehouse: string; eta: string; carrier: string; value: number }[]; }
+export interface CustomerShipments {
+  history: { shipment_no: string; carrier: string; status: string; lead_time_days: number; on_time: boolean }[];
+  map: { points: { name: string; lat: number; lon: number; status: string }[] };
+  current_deliveries: number; late_deliveries: number; avg_lead_time: number;
+  carrier_performance: { carrier: string; shipments: number; on_time_pct: number }[];
+}
+export interface CustomerForecast {
+  historical: { period: string; demand: number }[]; predicted: { period: string; demand: number }[];
+  coverage_days: number; stockout_probability: number; suggested_replenishment: number;
+}
+export interface CustomerRecs {
+  recommendations: { id: string; title: string; reasoning: string; status: string; business_impact: string; estimated_savings: number; confidence: number }[];
+}
+export interface CustomerTimeline { events: { type: string; label: string; status: string; detail: string; hours_ago: number }[]; }
+export interface CustomerBrain { total: number; customer: string; groups: Record<string, { title: string; snippet: string; score: number }[]>; }
+export interface CustomerChat { ok: boolean; answer: string; engine: string; context: string; }
+
+// ---- Data Hub ----
+export interface DhValidation {
+  rows: number; missing_values: number; duplicate_records: number; invalid_dates: number;
+  unknown_skus: number; invalid_supplier_ids: number; warnings: string[]; errors: string[]; health_score: number;
+}
+export interface Dataset {
+  id: string; name: string; filename: string; ext: string; type: string; type_label: string;
+  source_guess: string; confidence: number; rows: number; columns: string[];
+  mapping: Record<string, string>; validation: DhValidation; stats: Record<string, number>;
+  status: string; health: number; indexed: number; imported_by: string;
+  created_at: number; imported_at: number | null;
+}
+export interface UploadResult {
+  ok: boolean; error?: string; dataset: Dataset; sample: Record<string, unknown>[];
+  canonical_fields: string[]; detection_message: string;
+}
+export interface DatasetsResponse { datasets: Dataset[]; source: string; }
+export interface PreviewResult {
+  ok: boolean; error?: string; id: string; name: string; columns: string[];
+  mapping: Record<string, string>; rows: Record<string, unknown>[];
+}
+export interface ImportResult {
+  ok: boolean; error?: string; dataset: Dataset;
+  index: { documents: number; entities: number; knowledge: number };
+}
+export interface QualityResponse {
+  kpis: {
+    data_quality: number; duplicate_rate: number; missing_rate: number; datasets: number;
+    imported: number; total_rows: number; last_refresh: number | null; most_recent: string;
+  };
+  history: { name: string; rows: number; health: number; at: number; type: string }[];
+  completeness: { name: string; completeness: number }[];
+  source: string;
+}
+export type BrainOptions = Record<string, boolean>;
+
 // ---- Disruption & Risk Radar ----
 export interface RadarSignal { layer: string; layer_name: string; severity: number; }
 export interface RadarNode {
@@ -453,8 +531,33 @@ export const api = {
   fraud: () => get<FraudResponse>("/api/fraud"),
   documents: () => get<DocumentsResponse>("/api/documents"),
   documentDetail: (id: string) => get<DocumentDetail>(`/api/documents/${id}`),
+  // ---- Data Hub ----
+  dataUpload: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<UploadResult>("/api/data/upload", { method: "POST", body: fd });
+  },
+  dataMap: (id: string, mapping: Record<string, string>) => post<{ ok: boolean; mapping: Record<string, string> }>("/api/data/map", { id, mapping }),
+  dataImport: (id: string, options: BrainOptions, mapping?: Record<string, string>, imported_by?: string) =>
+    post<ImportResult>("/api/data/import", { id, options, mapping, imported_by }),
+  dataIndex: (id: string, options: BrainOptions) => post<{ ok: boolean; index: { documents: number; entities: number; knowledge: number } }>("/api/data/index", { id, options }),
+  dataDatasets: () => get<DatasetsResponse>("/api/data/datasets"),
+  dataPreview: (id: string) => get<PreviewResult>(`/api/data/preview/${id}`),
+  dataQuality: () => get<QualityResponse>("/api/data/quality"),
+  dataActive: () => get<{ source: string; orders_dataset: string | null; customers_dataset: string | null; demo_dataset: string }>("/api/data/active"),
+  dataDelete: (id: string) => request<{ ok: boolean; id: string }>(`/api/data/dataset/${id}`, { method: "DELETE" }),
   radar: () => get<RadarResponse>("/api/radar"),
   radarNode: (id: string) => get<RadarNodeDetail>(`/api/radar/node/${id}`),
+  // ---- Customer 360 ----
+  customers: () => get<CustomersListResponse>("/api/customers"),
+  customer: (id: string) => get<CustomerDetail>(`/api/customers/${id}`),
+  customerOrders: (id: string) => get<CustomerOrders>(`/api/customers/${id}/orders`),
+  customerShipments: (id: string) => get<CustomerShipments>(`/api/customers/${id}/shipments`),
+  customerForecast: (id: string) => get<CustomerForecast>(`/api/customers/${id}/forecast`),
+  customerRecommendations: (id: string) => get<CustomerRecs>(`/api/customers/${id}/recommendations`),
+  customerTimeline: (id: string) => get<CustomerTimeline>(`/api/customers/${id}/timeline`),
+  customerBrain: (id: string) => get<CustomerBrain>(`/api/customers/${id}/brain`),
+  customerChat: (id: string, message: string) => post<CustomerChat>(`/api/customers/${id}/chat`, { message }),
   freight: () => get<FreightResponse>("/api/freight"),
   freightCarrier: (id: string) => get<CarrierDetail>(`/api/freight/carrier/${id}`),
   freightQuote: (origin: string, destination: string, equipment: string, miles = 0) =>

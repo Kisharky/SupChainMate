@@ -113,19 +113,23 @@ def _account_from(region: str, name: str, orders: int) -> dict[str, Any]:
 
 @services._ttl_cache(600)
 def _accounts() -> list[dict[str, Any]]:
-    """Build named enterprise accounts from real regional order volumes."""
-    import pandas as pd
-    orders = pd.read_csv("data/olist_orders_dataset.csv", usecols=["order_id", "customer_id"])
-    customers = pd.read_csv("data/olist_customers_dataset.csv", usecols=["customer_id", "customer_state"])
+    """Build named enterprise accounts from regional order volumes — reading the
+    active dataset (imported ERP data when present, else the Olist demo)."""
+    from api import data_source
+    orders = data_source.orders_min()                       # [order_id, customer_id]
+    customers = data_source.customers_states(["customer_id", "customer_state"])
     by_state = (orders.merge(customers, on="customer_id", how="left")
                 .groupby("customer_state").size().reset_index(name="orders")
                 .sort_values("orders", ascending=False))
+    imported = data_source.active_source() == "imported"
     accts = []
     for _, r in by_state.iterrows():
         st = str(r["customer_state"])
         name = _REGION_NAMES.get(st)
         if not name:
-            continue
+            if not imported:
+                continue                    # demo: keep only the named accounts (unchanged)
+            name = st.title() if st and st != "nan" else "Unassigned"  # imported region → account
         accts.append(_account_from(st, name, int(r["orders"])))
     accts.sort(key=lambda a: a["net_margin"], reverse=True)
     return accts

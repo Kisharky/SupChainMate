@@ -20,6 +20,8 @@ import functools
 import time
 from typing import Any, Callable
 
+from api import data_source
+
 # ---- Representative fallback values (match the design spec / demo data) -------
 _FALLBACK_KPIS = {
     "supply_chain_health": {"value": 96, "unit": "%", "delta": 1.4, "status": "good"},
@@ -41,6 +43,12 @@ def _safe(builder: Callable[[], dict[str, Any]], fallback: dict[str, Any]) -> di
         return {**fallback, "source": "fallback", "detail": f"{type(exc).__name__}: {exc}"}
 
 
+# Registry of every _ttl_cache clear fn, so a data-source change (a Data Hub
+# import/delete) can invalidate all derived snapshots at once — the platform then
+# switches to the newly-imported data immediately rather than after the TTL.
+_DATA_CACHES: list[Callable[[], None]] = []
+
+
 def _ttl_cache(seconds: int):
     """Tiny time-boxed memoiser for zero-arg builders."""
     def deco(fn):
@@ -55,8 +63,18 @@ def _ttl_cache(seconds: int):
             cache["v"] = (time.time(), val)
             return val
         wrapped.cache_clear = cache.clear  # type: ignore[attr-defined]
+        _DATA_CACHES.append(cache.clear)
         return wrapped
     return deco
+
+
+def clear_data_caches() -> None:
+    """Invalidate every derived snapshot (called after a Data Hub import/delete)."""
+    for clear in _DATA_CACHES:
+        try:
+            clear()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 # ---- Inventory ---------------------------------------------------------------
@@ -64,7 +82,7 @@ def _ttl_cache(seconds: int):
 def _inventory_frame():
     """Real per-SKU plan from the shared decision engine (cached 5 min)."""
     from modules import forecast, sku
-    orders = forecast.load_orders()
+    orders = data_source.forecast_orders()
     # The SKU engine keys on an ``order_date`` column; the Olist CSV names it
     # ``order_purchase_timestamp`` (Streamlit renames it in the same way).
     if "order_date" not in orders.columns and "order_purchase_timestamp" in orders.columns:
@@ -229,7 +247,7 @@ def _health_status(score: float) -> str:
 def _forecast_frame():
     """Prophet demand forecast over the Olist order history (cached 15 min)."""
     from modules import forecast
-    orders = forecast.load_orders()
+    orders = data_source.forecast_orders()
     daily = forecast.daily_demand(orders)
     # daily_demand adds an ``external_signal`` regressor; the module's
     # run_forecast doesn't populate it for future dates, so drive Prophet
@@ -320,7 +338,7 @@ def operations_snapshot() -> dict[str, Any]:
     def build() -> dict[str, Any]:
         from modules import forecast, optimization
         shipments, sk, _ = _shipments()
-        orders = forecast.load_orders()
+        orders = data_source.forecast_orders()
         net = optimization.network_summary(orders) or {}
         status_counts = shipments["status"].value_counts().to_dict()
         return {
@@ -364,7 +382,7 @@ def _shipments():
     """
     import pandas as pd
     from modules import control_tower
-    orders = pd.read_csv("data/olist_orders_dataset.csv")
+    orders = data_source.orders_dataset()
     orders = control_tower.assign_demo_carriers(orders)
     shipments = control_tower.prepare_shipments(orders)
     kpis = control_tower.shipment_kpis(shipments)
@@ -463,7 +481,7 @@ def _geo_centroids():
     """KMeans hub centroids over real customer lat/lon (cached 10 min)."""
     import pandas as pd
     from modules import network
-    customers = pd.read_csv("data/olist_customers_dataset.csv")
+    customers = data_source.customers_geo()
     coords = network.prepare_customer_data(customers)
     clustered = network.run_clustering(coords, n_clusters=6)
     cents = clustered.groupby("cluster").agg(
@@ -641,7 +659,7 @@ def _backtest(holdout_weeks: int = 10):
     import pandas as pd
     from prophet import Prophet
     from modules import forecast
-    orders = forecast.load_orders()
+    orders = data_source.forecast_orders()
     daily = forecast.daily_demand(orders)[["ds", "y"]].sort_values("ds")
     weekly = (daily.set_index("ds")["y"].resample("W").sum().reset_index())
     # Trim trailing partial weeks (near-zero tail) so MAPE stays meaningful.

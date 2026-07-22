@@ -86,7 +86,7 @@ flowchart TB
     subgraph API["FastAPI backend"]
         GATE["auth middleware · JWT + RBAC gate"]
         AUTH["api/auth · login / refresh / logout"]
-        SVC["api/services · workspace · commercial_intel · connectors<br/>workers · fraud · documents · freight · risk_radar"]
+        SVC["api/services · workspace · commercial_intel · connectors<br/>workers · fraud · documents · freight · risk_radar · data_hub · customers"]
     end
     subgraph Intelligence["Framework-free layers (unchanged)"]
         AIR["AI Router (provider-agnostic)"]
@@ -104,7 +104,9 @@ flowchart TB
     PLN --> ENG
     BRN -->|vectors| STORE[("SQLite vector store")]
     AUTH --> IDDB[("PostgreSQL / SQLite<br/>identity state")]
-    ENG --> DEMO[("SQLite + Olist demo data")]
+    ENG --> DS["data_source · active dataset"]
+    DS --> HUB[("Data Hub imports")]
+    DS --> DEMO[("Olist demo data (fallback)")]
 ```
 
 ### Tech stack
@@ -575,6 +577,9 @@ SupChainMate/
 │   │   ├── documents.py          #   Invoice & Document Intelligence (three-way match)
 │   │   ├── freight.py            #   Freight Operations (carrier vetting · matching · quoting · triage)
 │   │   ├── risk_radar.py         #   Disruption & Risk Radar (signal convergence · risk index · layers)
+│   │   ├── data_hub.py           #   Data Hub — data onboarding (parse · detect · map · validate · index)
+│   │   ├── customers.py          #   Customer 360 — aggregator (reuses commercial_intel · Brain · RAG)
+│   │   ├── data_source.py        #   Centralized data-access layer (imported data ▸ else Olist demo)
 │   │   ├── db.py                 #   SQLAlchemy engine (Postgres/SQLite via DATABASE_URL)
 │   │   └── auth/                 #   JWT + RBAC (security, models, service, router, rbac)
 │   ├── planner/                  # Executive decision orchestrator (registry/graph/executor)

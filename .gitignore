@@ -13,3 +13,6 @@ frontend/node_modules/
 frontend/.next/
 next-env.d.ts
 supchainmate_app.db
+
+# Data Hub uploads + registry (runtime, per-deployment)
+logistics-ai-dashboard/data/data_hub/

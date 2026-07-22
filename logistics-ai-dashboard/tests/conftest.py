@@ -17,6 +17,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # default so endpoint tests run tokenless. tests/test_auth.py opts back in.
 os.environ.setdefault("AUTH_ENABLED", "false")
 
+# Isolate the Data Hub registry so the data-source resolver stays on the bundled
+# demo data during tests (a real import in dev must never leak into the suite).
+import tempfile  # noqa: E402
+os.environ.setdefault("DATA_HUB_DIR", tempfile.mkdtemp(prefix="scm-datahub-test-"))
+
 from ai.router import AI, AIRouter
 from modules import store
 

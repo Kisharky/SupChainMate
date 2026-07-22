@@ -20,8 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from api import (
-    commercial_intel, connectors, documents, fraud, freight, risk_radar,
-    services, workers, workspace,
+    commercial_intel, connectors, customers, data_hub, documents, fraud, freight,
+    risk_radar, services, workers, workspace,
 )
 
 
@@ -353,6 +353,134 @@ def radar_overview() -> dict:
 @app.get("/api/radar/node/{node_id}")
 def radar_node(node_id: str) -> dict:
     return risk_radar.node_detail(node_id)
+
+
+# ---- Data Hub (enterprise data onboarding) ----
+from fastapi import File, UploadFile  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+
+
+class MapRequest(BaseModel):
+    id: str
+    mapping: dict[str, str]
+
+
+class ImportRequest(BaseModel):
+    id: str
+    mapping: dict[str, str] | None = None
+    options: dict[str, bool] = {}
+    imported_by: str = "Enterprise User"
+
+
+class IndexRequest(BaseModel):
+    id: str
+    options: dict[str, bool] = {}
+
+
+@app.post("/api/data/upload")
+async def data_upload(file: UploadFile = File(...)) -> dict:
+    content = await file.read()
+    return data_hub.upload(file.filename or "upload.csv", content)
+
+
+@app.post("/api/data/map")
+def data_map(req: MapRequest) -> dict:
+    return data_hub.set_mapping(req.id, req.mapping)
+
+
+@app.post("/api/data/import")
+def data_import(req: ImportRequest) -> dict:
+    return data_hub.do_import(req.id, req.mapping, req.options, req.imported_by)
+
+
+@app.post("/api/data/index")
+def data_index(req: IndexRequest) -> dict:
+    return data_hub.reindex(req.id, req.options)
+
+
+@app.get("/api/data/datasets")
+def data_datasets() -> dict:
+    return data_hub.datasets()
+
+
+@app.get("/api/data/preview/{dataset_id}")
+def data_preview(dataset_id: str) -> dict:
+    return data_hub.preview(dataset_id)
+
+
+@app.get("/api/data/quality")
+def data_quality() -> dict:
+    return data_hub.quality()
+
+
+@app.get("/api/data/active")
+def data_active() -> dict:
+    from api import data_source
+    return data_source.active_summary()
+
+
+@app.delete("/api/data/dataset/{dataset_id}")
+def data_delete(dataset_id: str) -> dict:
+    return data_hub.delete(dataset_id)
+
+
+@app.get("/api/data/download/{dataset_id}")
+def data_download(dataset_id: str):
+    fp = data_hub.filepath(dataset_id)
+    if fp is None:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    path, name = fp
+    return FileResponse(path, filename=name)
+
+
+# ---- Customer 360 (single source of truth per customer) ----
+class ChatRequest(BaseModel):
+    message: str
+
+
+@app.get("/api/customers")
+def customers_list() -> dict:
+    return customers.list_customers()
+
+
+@app.get("/api/customers/{customer_id}")
+def customer_detail(customer_id: str) -> dict:
+    return customers.detail(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/orders")
+def customer_orders(customer_id: str) -> dict:
+    return customers.orders(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/shipments")
+def customer_shipments(customer_id: str) -> dict:
+    return customers.shipments(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/forecast")
+def customer_forecast(customer_id: str) -> dict:
+    return customers.forecast(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/recommendations")
+def customer_recommendations(customer_id: str) -> dict:
+    return customers.recommendations(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/timeline")
+def customer_timeline(customer_id: str) -> dict:
+    return customers.timeline(customer_id)
+
+
+@app.get("/api/customers/{customer_id}/brain")
+def customer_brain(customer_id: str) -> dict:
+    return customers.brain(customer_id)
+
+
+@app.post("/api/customers/{customer_id}/chat")
+def customer_chat(customer_id: str, req: ChatRequest) -> dict:
+    return customers.chat(customer_id, req.message)
 
 
 # ---- Decision & Scenario Intelligence workspace ----

@@ -2,6 +2,44 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Fully data-driven — centralized data-source layer
+- **`api/data_source.py`**: a single data-access layer every analytical module
+  reads through. When a company has imported its own ERP/CSV data via the Data
+  Hub, the resolver returns that data — normalised through the Data Hub's stored
+  column mappings — otherwise it falls back to the bundled Olist demo. It keys on
+  which canonical columns a dataset carries (order_id / customer / region), not
+  the fuzzy detected type, so arbitrary ERP exports (including denormalised
+  single-file uploads) are picked up.
+- **Migrated** commercial_intel and services read sites to the resolver — only
+  the data source moved; all calculations and business logic are unchanged, and
+  demo behaviour is byte-for-byte identical when nothing is imported.
+- **Immediate switch**: a Data Hub import/delete invalidates the derived-snapshot
+  caches (`services.clear_data_caches`), so the whole platform — Executive Tower,
+  Commercial, Customer 360, Planner, Forecasting, Reports — switches at once.
+- `/api/data/active` + a live "active data source" banner on the Data Hub page;
+  `DATA_HUB_DIR` makes the registry relocatable so tests stay on the demo data.
+- Verified end-to-end: importing an orders export re-drives Customer 360 +
+  Commercial with real per-region counts; deleting it reverts to the demo.
+
+## Data Hub — enterprise data onboarding
+- **Data Hub** workspace: bring your own operational data (CSV/Excel/JSON) with no
+  code. Drag & drop → AI dataset detection (13 types + plausible source guess &
+  confidence) → column mapping to a canonical schema (with manual override) →
+  validation report (rows, missing, duplicates, invalid dates, health score) →
+  import. Backend `api/data_hub.py` (isolated SQLite registry + raw-file store);
+  additive endpoints under `/api/data/*`; a new DATA_HUB permission for
+  operational roles.
+- **Real, offline indexing**: on import, the dataset is pushed into the
+  Knowledge/RAG store (`modules.store.add_document`) and the Decision Brain
+  (`BRAIN.add_knowledge` / `record_entity`), so the Knowledge Center and Planner
+  immediately retrieve the uploaded data. Verified end-to-end.
+- Data-quality dashboard, connector cards (CSV/Excel/JSON active; SAP/Oracle/
+  Dynamics/NetSuite/Odoo roadmap), imported-datasets registry with preview /
+  reindex / delete / download, toasts, skeletons, empty states.
+- Orchestrates existing systems only — no business module, Brain, Planner, or AI
+  Router logic modified.
+- Tests: 204 passing (backend); frontend lint + build clean; Playwright-verified.
+
 ## Disruption & Risk Radar — signal convergence
 - **Disruption & Risk Radar** workspace: a composite **Supply Chain Risk Index**,
   7 toggleable disruption layers (weather, ports, suppliers, labour, customs,

@@ -5,6 +5,7 @@
  * leakage · contract intelligence · AI pricing optimiser · customer risk scoring.
  */
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardHead, Button, Badge, DataTable, Th, Td } from "@/components/ui/primitives";
 import {
@@ -142,7 +143,7 @@ function Profitability({ prof, onOpen }: { prof: CiProfitability | null; onOpen:
                 {(prof?.ranking ?? []).map((r) => (
                   <tr key={r.id} onClick={() => onOpen(r.id)} className="cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_7%,transparent)]">
                     <td className="px-3 py-2 border-b" style={{ borderColor: "var(--hairline)" }}>
-                      <span className="text-ink font-medium">{r.name}</span> <span className="text-ink-3 text-[0.6875rem]">{r.region}</span>
+                      <Link href={`/customers/${r.id}`} onClick={(e) => e.stopPropagation()} className="font-medium hover:underline" style={{ color: "var(--accent)" }}>{r.name}</Link> <span className="text-ink-3 text-[0.6875rem]">{r.region}</span>
                       {r.action && <span className="ml-1.5"><Badge status="warning">action</Badge></span>}
                     </td>
                     <td className="px-3 py-2 border-b text-right tnum text-ink-2" style={{ borderColor: "var(--hairline)" }}>{money(r.revenue)}</td>

@@ -140,6 +140,14 @@ and fraud prevention.*
 **instant spot quote** (transparent rate build), and inbound email triage.
 *Theme: execution workflows a digital worker runs end-to-end.*
 
+**K. "Onboard our own data — no code."**
+**Data Hub** → drag an inventory Excel/CSV export in → AI detects it (e.g.
+"NetSuite Inventory Export, 61%") → confirm the column mapping → check the
+validation health score → tick the Decision Brain indexing options → **Import &
+index** → the dataset lands in the registry, and the **Knowledge Center** can
+immediately answer questions about it. *Theme: bring-your-own-data → instant
+operational intelligence.*
+
 **J. "Where is the network at risk right now?"**
 **Risk Radar** → the **Supply Chain Risk Index** + live brief → toggle disruption
 layers (weather, ports, suppliers, labour, customs, geopolitical, carrier) →

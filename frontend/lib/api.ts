@@ -206,6 +206,44 @@ export interface WorkersResponse {
   source: string;
 }
 
+// ---- Disruption & Risk Radar ----
+export interface RadarSignal { layer: string; layer_name: string; severity: number; }
+export interface RadarNode {
+  id: string; name: string; type: string; lat: number; lon: number; region: string;
+  risk_score: number; band: string; status: string; signals: Record<string, number>;
+  convergence: number; top_signals: RadarSignal[];
+}
+export interface RadarLane {
+  id: string; from_id: string; to_id: string; from: string; to: string;
+  from_lat: number; from_lon: number; to_lat: number; to_lon: number;
+  risk_score: number; band: string; status: string; convergence: number; categories: string[];
+}
+export interface RadarLayerEvent { node_id: string; node: string; lat: number; lon: number; severity: number; band: string; }
+export interface RadarLayer {
+  id: string; name: string; icon: string; color: string; active_events: number; events: RadarLayerEvent[];
+}
+export interface RadarAlert {
+  id: string; scope: string; ref_id: string; name: string; region: string;
+  convergence: number; categories: string[]; composite_score: number; band: string;
+  status: string; critical: boolean; why: string; recommended_action: string;
+}
+export interface RadarResponse {
+  index: {
+    score: number; band: string; status: string; critical_alerts: number; converging_alerts: number;
+    by_category: { id: string; name: string; severity: number; band: string }[];
+    by_region: { region: string; score: number; band: string }[];
+  };
+  nodes: RadarNode[]; lanes: RadarLane[]; layers: RadarLayer[]; alerts: RadarAlert[];
+  brief: string; converge_at: number; source: string;
+}
+export interface RadarNodeDetail {
+  ok: boolean; node_id: string; name: string; type: string; region: string;
+  risk_score: number; band: string; status: string; convergence: number;
+  signals: { layer: string; layer_name: string; severity: number; active: boolean }[];
+  why: string; recommended_action: string;
+  lanes: { to: string; risk_score: number; band: string }[]; source: string;
+}
+
 // ---- Freight Operations (brokerage) ----
 export interface CarrierRow {
   id: string; name: string; mc_number: string; dot_number: string;
@@ -415,6 +453,8 @@ export const api = {
   fraud: () => get<FraudResponse>("/api/fraud"),
   documents: () => get<DocumentsResponse>("/api/documents"),
   documentDetail: (id: string) => get<DocumentDetail>(`/api/documents/${id}`),
+  radar: () => get<RadarResponse>("/api/radar"),
+  radarNode: (id: string) => get<RadarNodeDetail>(`/api/radar/node/${id}`),
   freight: () => get<FreightResponse>("/api/freight"),
   freightCarrier: (id: string) => get<CarrierDetail>(`/api/freight/carrier/${id}`),
   freightQuote: (origin: string, destination: string, equipment: string, miles = 0) =>

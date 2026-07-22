@@ -104,6 +104,7 @@ PREFIX_PERMISSIONS: list[tuple[str, Permission]] = [
     ("/api/fraud", Permission.OPERATIONS),
     ("/api/documents", Permission.OPERATIONS),
     ("/api/freight", Permission.OPERATIONS),
+    ("/api/radar", Permission.OPERATIONS),
     ("/api/planner", Permission.PLANNER),
     ("/api/reports", Permission.REPORTS),
 ]

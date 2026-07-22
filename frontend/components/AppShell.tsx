@@ -25,6 +25,7 @@ const NAV: { label: string; href: string; icon: string; badge?: number; perm: st
   { label: "Freight Ops", href: "/freight", icon: "⛁", perm: "operations" },
   { label: "Decisions", href: "/decisions", icon: "◇", perm: "decisions" },
   { label: "Fraud & Risk", href: "/fraud", icon: "⚑", perm: "operations" },
+  { label: "Risk Radar", href: "/radar", icon: "◉", perm: "operations" },
   { label: "Knowledge", href: "/knowledge", icon: "◍", perm: "knowledge" },
   { label: "Reports", href: "/reports", icon: "▥", perm: "reports" },
 ];

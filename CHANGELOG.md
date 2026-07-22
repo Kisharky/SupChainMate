@@ -2,6 +2,22 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Disruption & Risk Radar — signal convergence
+- **Disruption & Risk Radar** workspace: a composite **Supply Chain Risk Index**,
+  7 toggleable disruption layers (weather, ports, suppliers, labour, customs,
+  geopolitical, carrier), and a **convergence engine** that flags a node/lane only
+  when several independent signals line up — cutting alert noise rather than
+  adding to it. Convergence alerts carry a "why" narrative + recommended action
+  and route to the Decision Center. Backend `api/risk_radar.py`; endpoints
+  `/api/radar`, `/api/radar/node/{id}`; Operations-gated.
+- **Dual map engine**: a flat Leaflet map and a 3D globe (globe.gl / three, no
+  external textures, lazy-loaded so three.js stays out of the shared bundle),
+  toggled in the UI. Real node coordinates so both render legitimately.
+- Adapted from geopolitical situational-awareness monitors, translated to supply
+  chain — convergence + composite index + layers, offline-first.
+- Tests: 198 passing (backend); frontend lint + build clean; Playwright-verified
+  (flat map, 3D globe, layer toggles, node convergence modal).
+
 ## Freight Operations — brokerage back office
 - **Freight Operations** workspace bringing the freight-broker execution
   workflows into one surface: carrier vetting & onboarding (FMCSA authority +

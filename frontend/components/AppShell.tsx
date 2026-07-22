@@ -10,35 +10,68 @@ import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/auth/context";
 
-const NAV: { label: string; href: string; icon: string; badge?: number; perm: string }[] = [
-  { label: "Dashboard", href: "/", icon: "◧", perm: "dashboard" },
-  { label: "Intelligence", href: "/workspace", icon: "◆", perm: "intelligence" },
-  { label: "Workforce", href: "/workforce", icon: "❖", perm: "intelligence" },
-  { label: "Operations", href: "/operations", icon: "⬒", perm: "operations" },
-  { label: "Forecasting", href: "/forecasting", icon: "◡", perm: "forecasting" },
-  { label: "Inventory", href: "/inventory", icon: "▦", badge: 7, perm: "inventory" },
-  { label: "Procurement", href: "/procurement", icon: "◈", perm: "procurement" },
-  { label: "Documents", href: "/documents", icon: "❑", perm: "operations" },
-  { label: "Commercial", href: "/commercial", icon: "◆", perm: "commercial" },
-  { label: "Customers", href: "/customers", icon: "◐", perm: "commercial" },
-  { label: "Warehouse", href: "/warehouse", icon: "▤", perm: "warehouse" },
-  { label: "Logistics", href: "/logistics", icon: "◎", badge: 3, perm: "logistics" },
-  { label: "Freight Ops", href: "/freight", icon: "⛁", perm: "operations" },
-  { label: "Decisions", href: "/decisions", icon: "◇", perm: "decisions" },
-  { label: "Fraud & Risk", href: "/fraud", icon: "⚑", perm: "operations" },
-  { label: "Risk Radar", href: "/radar", icon: "◉", perm: "operations" },
-  { label: "Knowledge", href: "/knowledge", icon: "◍", perm: "knowledge" },
-  { label: "Reports", href: "/reports", icon: "▥", perm: "reports" },
-  { label: "Data Hub", href: "/data", icon: "⊞", perm: "data_hub" },
+type NavItem = { label: string; href: string; icon: string; badge?: number; perm: string };
+
+// Grouped IA — same destinations, organised into scannable clusters (the flat
+// 18-item rail was overwhelming). Groups with no visible items are hidden, and
+// role-based permissions still filter each item.
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  { label: "", items: [
+    { label: "Dashboard", href: "/", icon: "◧", perm: "dashboard" },
+  ] },
+  { label: "Decisions & AI", items: [
+    { label: "Intelligence", href: "/workspace", icon: "◆", perm: "intelligence" },
+    { label: "Decisions", href: "/decisions", icon: "◇", perm: "decisions" },
+    { label: "Workforce", href: "/workforce", icon: "❖", perm: "intelligence" },
+    { label: "Knowledge", href: "/knowledge", icon: "◍", perm: "knowledge" },
+  ] },
+  { label: "Supply Chain", items: [
+    { label: "Operations", href: "/operations", icon: "⬒", perm: "operations" },
+    { label: "Forecasting", href: "/forecasting", icon: "◡", perm: "forecasting" },
+    { label: "Inventory", href: "/inventory", icon: "▦", badge: 7, perm: "inventory" },
+    { label: "Procurement", href: "/procurement", icon: "◈", perm: "procurement" },
+    { label: "Warehouse", href: "/warehouse", icon: "▤", perm: "warehouse" },
+    { label: "Logistics", href: "/logistics", icon: "◎", badge: 3, perm: "logistics" },
+    { label: "Freight Ops", href: "/freight", icon: "⛁", perm: "operations" },
+  ] },
+  { label: "Commercial", items: [
+    { label: "Commercial", href: "/commercial", icon: "◆", perm: "commercial" },
+    { label: "Customers", href: "/customers", icon: "◐", perm: "commercial" },
+    { label: "Documents", href: "/documents", icon: "❑", perm: "operations" },
+  ] },
+  { label: "Risk & Trust", items: [
+    { label: "Risk Radar", href: "/radar", icon: "◉", perm: "operations" },
+    { label: "Fraud & Risk", href: "/fraud", icon: "⚑", perm: "operations" },
+  ] },
+  { label: "Insights", items: [
+    { label: "Reports", href: "/reports", icon: "▥", perm: "reports" },
+  ] },
 ];
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link href={item.href}
+      className="flex items-center gap-3 rounded-sm px-2.5 py-2 text-[0.8125rem] font-medium border transition"
+      style={active
+        ? { background: "color-mix(in srgb,var(--accent) 14%,transparent)", color: "var(--text)", borderColor: "color-mix(in srgb,var(--accent) 34%,transparent)" }
+        : { color: "var(--text-2)", borderColor: "transparent" }}>
+      <span className="w-4 text-center text-[13px]" style={{ color: active ? "var(--accent)" : "var(--text-3)" }}>{item.icon}</span>
+      {item.label}
+      {item.badge && <span className="ml-auto rounded-full bg-critical px-1.5 text-[10px] font-bold text-white">{item.badge}</span>}
+    </Link>
+  );
+}
 
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
   const pathname = usePathname();
   const { user, can, logout } = useAuth();
   const [theme, setTheme] = useState<"dark" | "light" | null>(null);
-  // Role-based navigation: only show sections the user is permitted to see.
-  const nav = user ? NAV.filter((n) => can(n.perm)) : NAV;
+  // Role-based navigation: only show groups/items the user is permitted to see.
+  const groups = NAV_GROUPS
+    .map((g) => ({ ...g, items: user ? g.items.filter((n) => can(n.perm)) : g.items }))
+    .filter((g) => g.items.length > 0);
   const canAdmin = !user || can("administration");
+  const canData = !user || can("data_hub");
 
   useEffect(() => {
     const saved = (localStorage.getItem("scm-theme") as "dark" | "light") || "dark";
@@ -64,21 +97,17 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             <div className="text-[10px] uppercase tracking-[.14em] text-ink-3">Decision Intelligence</div>
           </div>
         </div>
-        {nav.map((n) => {
-          const active = pathname === n.href;
-          return (
-            <Link key={n.href} href={n.href}
-              className="flex items-center gap-3 rounded-sm px-2.5 py-2 text-[0.8125rem] font-medium border transition"
-              style={active
-                ? { background: "color-mix(in srgb,var(--accent) 14%,transparent)", color: "var(--text)", borderColor: "color-mix(in srgb,var(--accent) 34%,transparent)" }
-                : { color: "var(--text-2)", borderColor: "transparent" }}>
-              <span className="w-4 text-center text-[13px]" style={{ color: active ? "var(--accent)" : "var(--text-3)" }}>{n.icon}</span>
-              {n.label}
-              {n.badge && <span className="ml-auto rounded-full bg-critical px-1.5 text-[10px] font-bold text-white">{n.badge}</span>}
-            </Link>
-          );
-        })}
-        <div className="mt-auto pt-4 border-t" style={{ borderColor: "var(--hairline)" }}>
+        {groups.map((g, gi) => (
+          <div key={g.label || `g${gi}`} className="flex flex-col gap-0.5">
+            {g.label && (
+              <div className="px-2.5 pt-3 pb-1 text-[10px] uppercase tracking-[.14em] font-semibold text-ink-3">{g.label}</div>
+            )}
+            {g.items.map((n) => <NavLink key={n.href} item={n} active={pathname === n.href} />)}
+          </div>
+        ))}
+        <div className="mt-auto pt-4 border-t flex flex-col gap-0.5" style={{ borderColor: "var(--hairline)" }}>
+          <div className="px-2.5 pb-1 text-[10px] uppercase tracking-[.14em] font-semibold text-ink-3">Data &amp; Admin</div>
+          {canData && <NavLink item={{ label: "Data Hub", href: "/data", icon: "⊞", perm: "data_hub" }} active={pathname === "/data"} />}
           {canAdmin && (() => {
             const inAdmin = pathname.startsWith("/administration");
             const subItems = [

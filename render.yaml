@@ -5,7 +5,9 @@
 # wires the env vars. Then add the custom domain api.yuktiai.app to the service
 # (Settings → Custom Domains) and point DNS at it (see DEPLOY.md).
 #
-# The frontend is deployed separately on Vercel (yuktiai.app) — see DEPLOY.md.
+# The apex yuktiai.app hosts the Yukti marketing site; SupChainMate is its
+# flagship demo on a subdomain — frontend at app.yuktiai.app (Vercel), this API
+# at api.yuktiai.app. See DEPLOY.md.
 
 services:
   - type: web
@@ -20,7 +22,7 @@ services:
       - key: AUTH_ENABLED
         value: "true"
       - key: FRONTEND_ORIGIN         # allows CORS from the Vercel frontend
-        value: https://yuktiai.app
+        value: https://app.yuktiai.app
       - key: JWT_SECRET              # strong secret, generated & kept by Render
         generateValue: true
       - key: DATABASE_URL            # identity state in managed Postgres

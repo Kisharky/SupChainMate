@@ -4,17 +4,22 @@ The apex **`yuktiai.app` hosts the Yukti** marketing site. SupChainMate ships
 **beside it on a subdomain**, so it becomes Yukti's live proof-of-work rather than
 replacing the homepage.
 
+**Cost: $0.** Use the **same Vercel and Render accounts you already have for
+Yukti** — just add SupChainMate as *additional free projects* (both free tiers
+allow many projects/services per account). It can't be a *branch* of the Yukti
+deployment — different app, different framework — but it costs nothing extra.
+
 Topology: **frontend on Vercel** (`app.yuktiai.app`) + **backend on Render**
-(`api.yuktiai.app`) + **managed Postgres** (identity state). The browser only ever
-talks to `app.yuktiai.app` — Vercel proxies `/api/*` to the backend — so there are
-no CORS headaches and download links keep working.
+(`api.yuktiai.app`), SQLite (no database to manage). The browser only ever talks
+to `app.yuktiai.app` — Vercel proxies `/api/*` to the backend — so there are no
+CORS headaches and download links keep working.
 
 ```
 Browser ──▶ app.yuktiai.app (Vercel, Next.js)      yuktiai.app ─▶ Yukti site
                  │  /api/* rewritten (proxied) to ▼   (links to the demo)
-                 └────────────▶ api.yuktiai.app (Render, FastAPI) ──▶ Postgres
+                 └────────────▶ api.yuktiai.app (Render free, FastAPI)
                                         │
-                                        └─▶ Olist demo data (in the image)
+                                        └─▶ Olist demo data + SQLite (in the image)
 ```
 
 > **Fitting into the Yukti site:** add a "Featured Work / Case Study" card that
@@ -26,10 +31,11 @@ Browser ──▶ app.yuktiai.app (Vercel, Next.js)      yuktiai.app ─▶ Yukt
 
 ## 1 · Backend → Render (`api.yuktiai.app`)
 
-1. **Render dashboard → New → Blueprint**, pick this repo. Render reads
-   [`render.yaml`](render.yaml): it builds the FastAPI image
-   (`logistics-ai-dashboard/Dockerfile`), provisions the free Postgres, and sets
-   `JWT_SECRET` (generated), `FRONTEND_ORIGIN`, `DATABASE_URL`, `AUTH_ENABLED`.
+1. On **your existing Render account** → **New → Blueprint**, pick this repo.
+   Render reads [`render.yaml`](render.yaml): it builds the FastAPI image
+   (`logistics-ai-dashboard/Dockerfile`) as a **free** web service and sets
+   `JWT_SECRET` (generated), `FRONTEND_ORIGIN`, `DATABASE_URL` (SQLite),
+   `AUTH_ENABLED`. No database resource to create.
 2. When prompted, set **`DEMO_PASSWORD`** (the shared password for the six demo
    roles) — or leave the default `supchain123` for a showcase.
 3. After the first deploy, open the service → **Settings → Custom Domains → Add**
@@ -38,10 +44,13 @@ Browser ──▶ app.yuktiai.app (Vercel, Next.js)      yuktiai.app ─▶ Yukt
 4. Health check `/api/health` is public, so Render marks the service healthy
    without a token.
 
-> Free tier note: the filesystem is ephemeral, so **Decision Brain memory and
-> Data Hub uploads reset on each redeploy** (identity lives in Postgres, so
-> logins persist; demo users re-seed on boot). To persist everything, upgrade to
-> a paid instance and uncomment the `disk:` block in `render.yaml`.
+> **Free-tier behaviour:** the service **sleeps after ~15 min idle** (the first
+> visit wakes it in ~30–60s, then it's fast), and the filesystem is ephemeral —
+> demo users re-seed on boot so **logins always work**, while uploads / Decision
+> Brain memory reset on redeploy. If the 512 MB RAM strains the ML forecasting,
+> the app falls back to representative data automatically (it never crashes the
+> request). To stop sleeping + persist everything, bump that one service to
+> `starter` and add the `disk:` block in `render.yaml` — optional, only if needed.
 
 ## 2 · Frontend → Vercel (`app.yuktiai.app`)
 

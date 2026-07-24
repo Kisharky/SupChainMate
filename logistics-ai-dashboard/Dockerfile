@@ -21,5 +21,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8000
 
-# Production server. Override DATABASE_URL / JWT_SECRET via the environment.
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Production server. Binds to $PORT when the platform sets one (Render, etc.),
+# else 8000 for local/docker-compose. Override DATABASE_URL / JWT_SECRET /
+# FRONTEND_ORIGIN via the environment.
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

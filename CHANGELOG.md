@@ -2,6 +2,22 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Agentic Ops Workflows — the detect→decide→act loop, made legible
+- Added an **Agentic Ops Workflows** section to the Workforce page: a small set of
+  signature freight workflows shown as a full **detect → diagnose → decide →
+  execute → report** loop, each ending in a one-line resolution narrative
+  ("resolved at 02:51 · ~$26.2k saved · why"), with agent/human actor chips and
+  the guardrails the agent worked within.
+- Three headline workflows: **carrier OTIF drift** (caught 6 weeks early),
+  **autonomous overnight re-route** of at-risk consignments (auto-resolved within
+  guardrails), and **proactive peak-capacity lock-in** (contracted rates locked
+  8 weeks ahead of the spot scramble). Awaiting-approval workflows route to the
+  Decision Center.
+- Backend `api/agentic_ops.py` + `/api/agentic-ops` (Intelligence-gated);
+  representative + labelled (the *execute* step is simulated), reusing the
+  Workforce / Decision Center / Planner / Risk Radar layers — no new AI engine.
+- Tests: 217 passing (backend); frontend lint + build clean; Playwright-verified.
+
 ## Fully data-driven — centralized data-source layer
 - **`api/data_source.py`**: a single data-access layer every analytical module
   reads through. When a company has imported its own ERP/CSV data via the Data

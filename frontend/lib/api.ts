@@ -389,6 +389,20 @@ export interface DocumentDetail {
   lines: DocMatchLine[]; discrepancies: string[]; recommended_action: string; source: string;
 }
 
+// ---- Agentic Ops Workflows ----
+export interface AgenticStep { phase: string; phase_label: string; actor: string; detail: string; done: boolean; }
+export interface AgenticWorkflow {
+  id: string; kind: string; kind_label: string; title: string; trigger: string;
+  status: string; status_label: string; status_kind: string; when: string;
+  saved_usd: number; confidence: number; guardrails: string[]; one_liner: string;
+  steps: AgenticStep[]; auto: boolean;
+}
+export interface AgenticOpsResponse {
+  workflows: AgenticWorkflow[];
+  summary: { workflows_run: number; auto_resolved: number; awaiting_approval: number; total_saved: number; avg_confidence: number };
+  loop: string[]; source: string;
+}
+
 // ---- Fraud & Anomaly Detection ----
 export interface FraudAlert {
   id: string; type: string; type_label: string; icon: string; severity: string;
@@ -528,6 +542,7 @@ export const api = {
   logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
   admin: () => get<AdminResponse>("/api/admin"),
   workers: () => get<WorkersResponse>("/api/workers"),
+  agenticOps: () => get<AgenticOpsResponse>("/api/agentic-ops"),
   fraud: () => get<FraudResponse>("/api/fraud"),
   documents: () => get<DocumentsResponse>("/api/documents"),
   documentDetail: (id: string) => get<DocumentDetail>(`/api/documents/${id}`),

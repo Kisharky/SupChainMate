@@ -1,26 +1,41 @@
-# Deploying SupChainMate to yuktiai.app
+# Deploying SupChainMate as Yukti's flagship demo
 
-Topology: **frontend on Vercel** (`yuktiai.app`) + **backend on Render**
-(`api.yuktiai.app`) + **managed Postgres** (identity state). The browser only
-ever talks to `yuktiai.app` — Vercel proxies `/api/*` to the backend — so there
-are no CORS headaches and download links keep working.
+The apex **`yuktiai.app` hosts the Yukti** marketing site. SupChainMate ships
+**beside it on a subdomain**, so it becomes Yukti's live proof-of-work rather than
+replacing the homepage.
+
+**Cost: $0.** Use the **same Vercel and Render accounts you already have for
+Yukti** — just add SupChainMate as *additional free projects* (both free tiers
+allow many projects/services per account). It can't be a *branch* of the Yukti
+deployment — different app, different framework — but it costs nothing extra.
+
+Topology: **frontend on Vercel** (`app.yuktiai.app`) + **backend on Render**
+(`api.yuktiai.app`), SQLite (no database to manage). The browser only ever talks
+to `app.yuktiai.app` — Vercel proxies `/api/*` to the backend — so there are no
+CORS headaches and download links keep working.
 
 ```
-Browser ──▶ yuktiai.app (Vercel, Next.js)
-                 │  /api/* rewritten (proxied) to ▼
-                 └────────────▶ api.yuktiai.app (Render, FastAPI) ──▶ Postgres
+Browser ──▶ app.yuktiai.app (Vercel, Next.js)      yuktiai.app ─▶ Yukti site
+                 │  /api/* rewritten (proxied) to ▼   (links to the demo)
+                 └────────────▶ api.yuktiai.app (Render free, FastAPI)
                                         │
-                                        └─▶ Olist demo data (in the image)
+                                        └─▶ Olist demo data + SQLite (in the image)
 ```
+
+> **Fitting into the Yukti site:** add a "Featured Work / Case Study" card that
+> links to `https://app.yuktiai.app` (live demo) and the GitHub repo — positioned
+> under *About*, *For Teams*, or a *Work* page. Yukti sells the AI-automation
+> blueprint; SupChainMate is the evidence the team can build it.
 
 ---
 
 ## 1 · Backend → Render (`api.yuktiai.app`)
 
-1. **Render dashboard → New → Blueprint**, pick this repo. Render reads
-   [`render.yaml`](render.yaml): it builds the FastAPI image
-   (`logistics-ai-dashboard/Dockerfile`), provisions the free Postgres, and sets
-   `JWT_SECRET` (generated), `FRONTEND_ORIGIN`, `DATABASE_URL`, `AUTH_ENABLED`.
+1. On **your existing Render account** → **New → Blueprint**, pick this repo.
+   Render reads [`render.yaml`](render.yaml): it builds the FastAPI image
+   (`logistics-ai-dashboard/Dockerfile`) as a **free** web service and sets
+   `JWT_SECRET` (generated), `FRONTEND_ORIGIN`, `DATABASE_URL` (SQLite),
+   `AUTH_ENABLED`. No database resource to create.
 2. When prompted, set **`DEMO_PASSWORD`** (the shared password for the six demo
    roles) — or leave the default `supchain123` for a showcase.
 3. After the first deploy, open the service → **Settings → Custom Domains → Add**
@@ -29,12 +44,18 @@ Browser ──▶ yuktiai.app (Vercel, Next.js)
 4. Health check `/api/health` is public, so Render marks the service healthy
    without a token.
 
-> Free tier note: the filesystem is ephemeral, so **Decision Brain memory and
-> Data Hub uploads reset on each redeploy** (identity lives in Postgres, so
-> logins persist; demo users re-seed on boot). To persist everything, upgrade to
-> a paid instance and uncomment the `disk:` block in `render.yaml`.
+> **Free-tier behaviour:** the service **sleeps after ~15 min idle** (the first
+> visit wakes it in ~30–60s, then it's fast), and the filesystem is ephemeral —
+> demo users re-seed on boot so **logins always work**, while uploads / Decision
+> Brain memory reset on redeploy. If the 512 MB RAM strains the ML forecasting,
+> the app falls back to representative data automatically (it never crashes the
+> request). To stop sleeping + persist everything, bump that one service to
+> `starter` and add the `disk:` block in `render.yaml` — optional, only if needed.
 
-## 2 · Frontend → Vercel (`yuktiai.app`)
+## 2 · Frontend → Vercel (`app.yuktiai.app`)
+
+Use a **separate Vercel project** from the Yukti site (this repo). The apex
+`yuktiai.app` project is untouched.
 
 1. **Vercel → Add New Project**, import this repo.
 2. Set **Root Directory = `frontend`** (Vercel auto-detects Next.js 14).
@@ -44,20 +65,20 @@ Browser ──▶ yuktiai.app (Vercel, Next.js)
    | `API_PROXY_TARGET` | `https://api.yuktiai.app` |
 
    That's it — leave `NEXT_PUBLIC_API_BASE` **unset**. `next.config.mjs` then
-   rewrites `yuktiai.app/api/*` → `api.yuktiai.app/api/*` server-side, so the
+   rewrites `app.yuktiai.app/api/*` → `api.yuktiai.app/api/*` server-side, so the
    browser stays same-origin.
-4. Deploy, then **Project → Settings → Domains → Add** `yuktiai.app` (and
-   optionally `www`). Vercel shows the exact A/CNAME record to add.
+4. Deploy, then **Project → Settings → Domains → Add** `app.yuktiai.app`. Vercel
+   shows the exact CNAME to add.
 
-## 3 · DNS (at your registrar for yuktiai.app)
+## 3 · DNS (at your registrar — add subdomains, leave the apex alone)
 
-Add the records Vercel and Render display when you add each domain. Typically:
+The apex `yuktiai.app` keeps pointing at Yukti. Add only the two subdomains
+(Vercel/Render show the exact targets when you add each domain):
 
 | Host | Type | Points to | For |
 |------|------|-----------|-----|
-| `@` (apex) | A | `76.76.21.21` | Vercel (yuktiai.app) |
-| `www` | CNAME | `cname.vercel-dns.com` | Vercel (optional) |
-| `api` | CNAME | `your-service.onrender.com` | Render (api.yuktiai.app) |
+| `app` | CNAME | `cname.vercel-dns.com` | Vercel — `app.yuktiai.app` (SupChainMate UI) |
+| `api` | CNAME | `your-service.onrender.com` | Render — `api.yuktiai.app` (SupChainMate API) |
 
 DNS + TLS propagate in a few minutes to a couple of hours; Vercel and Render
 issue Let's Encrypt certificates automatically.
@@ -66,7 +87,7 @@ issue Let's Encrypt certificates automatically.
 
 ```bash
 curl https://api.yuktiai.app/api/health          # {"status":"ok",...}
-open  https://yuktiai.app                          # login screen
+open  https://app.yuktiai.app                      # login screen
 # sign in with a demo account (exec@supchainmate.io / your DEMO_PASSWORD)
 ```
 
@@ -92,5 +113,5 @@ Then confirm the control plane loads live data and the Data Hub upload works.
 
 Prefer a single box? `docker compose up` (see [README](README.md#run-with-docker))
 runs frontend + backend + Postgres together; put Caddy or nginx in front to
-terminate TLS for `yuktiai.app` and route `/api` to the backend. `render.yaml`
+terminate TLS for `app.yuktiai.app` and route `/api` to the backend. `render.yaml`
 and the Vercel steps above are the managed-hosting path.

@@ -579,6 +579,7 @@ SupChainMate/
 │   │   ├── risk_radar.py         #   Disruption & Risk Radar (signal convergence · risk index · layers)
 │   │   ├── data_hub.py           #   Data Hub — data onboarding (parse · detect · map · validate · index)
 │   │   ├── customers.py          #   Customer 360 — aggregator (reuses commercial_intel · Brain · RAG)
+│   │   ├── agentic_ops.py        #   Agentic Ops Workflows (detect→diagnose→decide→execute→report)
 │   │   ├── data_source.py        #   Centralized data-access layer (imported data ▸ else Olist demo)
 │   │   ├── db.py                 #   SQLAlchemy engine (Postgres/SQLite via DATABASE_URL)
 │   │   └── auth/                 #   JWT + RBAC (security, models, service, router, rbac)

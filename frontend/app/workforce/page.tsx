@@ -9,17 +9,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import {
-  Card, CardHead, KpiCard, Badge, Progress, DataTable, Th, Td, EmptyState, Alert,
+  Card, CardHead, KpiCard, Badge, Button, Progress, DataTable, Th, Td, EmptyState, Alert,
 } from "@/components/ui/primitives";
-import { api, WorkersResponse } from "@/lib/api";
+import { api, WorkersResponse, AgenticOpsResponse, AgenticWorkflow } from "@/lib/api";
 
 const compact = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n);
 
 export default function Workforce() {
   const [d, setD] = useState<WorkersResponse | null>(null);
+  const [ops, setOps] = useState<AgenticOpsResponse | null>(null);
   const [err, setErr] = useState(false);
   useEffect(() => { api.workers().then(setD).catch(() => setErr(true)); }, []);
+  useEffect(() => { api.agenticOps().then(setOps).catch(() => {}); }, []);
 
   const s = d?.summary;
 
@@ -50,6 +52,25 @@ export default function Workforce() {
       </div>
 
       {err && <Alert status="critical" title="API unreachable">Start the FastAPI backend to load the digital workforce.</Alert>}
+
+      {/* ---- Agentic ops workflows (detect → diagnose → decide → execute → report) ---- */}
+      <div className="flex items-end justify-between gap-3 mb-3 flex-wrap">
+        <div>
+          <h2 className="text-[1.25rem] font-semibold tracking-tight">Agentic ops workflows</h2>
+          <div className="text-[0.75rem] text-ink-3 mt-0.5">
+            {(ops?.loop ?? ["detect", "diagnose", "decide", "execute", "report"]).map((p, i, a) => (
+              <span key={p}>{p}{i < a.length - 1 ? " → " : ""}</span>
+            ))}
+          </div>
+        </div>
+        {ops && <div className="text-[0.75rem] text-ink-3">
+          <b className="text-ink tnum">${compact(ops.summary.total_saved)}</b> saved · {ops.summary.auto_resolved} auto-resolved · {ops.summary.awaiting_approval} awaiting approval
+        </div>}
+      </div>
+      <div className="grid gap-3 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
+        {(ops?.workflows ?? []).map((w) => <WorkflowCard key={w.id} w={w} />)}
+        {!ops && <Card><EmptyState kind="loading" /></Card>}
+      </div>
 
       {/* ---- Worker roster ---- */}
       <div className="flex items-center justify-between mb-3">
@@ -113,5 +134,75 @@ export default function Workforce() {
         </div>
       </Card>
     </AppShell>
+  );
+}
+
+const PHASE_COLOR: Record<string, string> = {
+  detect: "var(--info)", diagnose: "var(--text-2)", decide: "var(--accent)",
+  execute: "var(--warning)", report: "var(--good)",
+};
+function WorkflowCard({ w }: { w: AgenticWorkflow }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card className="p-4 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[0.6875rem] uppercase tracking-wider" style={{ color: "var(--accent)" }}>{w.kind_label}</div>
+          <div className="font-semibold text-[0.9375rem] mt-0.5">{w.title}</div>
+        </div>
+        <Badge status={w.status_kind as "good" | "warning" | "info"}>{w.status_label}</Badge>
+      </div>
+      <p className="text-[0.8125rem] text-ink-2 leading-snug">{w.trigger}</p>
+
+      {/* phase pips */}
+      <div className="flex items-center gap-1">
+        {w.steps.map((st, i) => (
+          <div key={st.phase} className="flex items-center gap-1 flex-1">
+            <span className="h-1.5 flex-1 rounded-full" title={st.phase_label}
+              style={{ background: st.done ? PHASE_COLOR[st.phase] : "var(--hairline)", opacity: st.done ? 0.9 : 0.5 }} />
+            {i < w.steps.length - 1 && <span className="text-[8px] text-ink-3">›</span>}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 text-[0.75rem] text-ink-3 flex-wrap">
+        <span>Saved <b className="tnum" style={{ color: "var(--good)" }}>${compact(w.saved_usd)}</b></span>
+        <span>Confidence <b className="text-ink tnum">{w.confidence}%</b></span>
+        <span>· {w.when}</span>
+      </div>
+
+      <div className="rounded border p-2.5 text-[0.75rem]" style={{ borderColor: "var(--hairline)", background: "var(--panel-2)", color: w.auto ? "var(--good)" : "var(--warning)" }}>
+        {w.auto ? "✓" : "⏳"} {w.one_liner}
+      </div>
+
+      {open && (
+        <div className="flex flex-col gap-2 mt-1">
+          {w.steps.map((st) => (
+            <div key={st.phase} className="flex gap-2.5">
+              <span className="mt-1 h-2 w-2 rounded-full flex-none" style={{ background: st.done ? PHASE_COLOR[st.phase] : "var(--hairline-strong)" }} />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[0.75rem] font-semibold" style={{ color: PHASE_COLOR[st.phase] }}>{st.phase_label}</span>
+                  <span className="text-[0.5625rem] uppercase tracking-wider rounded px-1 py-0.5"
+                    style={{ background: "var(--panel)", border: "1px solid var(--hairline)", color: st.actor === "agent" ? "var(--accent)" : "var(--text-3)" }}>{st.actor}</span>
+                  {!st.done && <span className="text-[0.625rem] text-ink-3">pending</span>}
+                </div>
+                <div className="text-[0.75rem] text-ink-2 mt-0.5">{st.detail}</div>
+              </div>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {w.guardrails.map((g) => (
+              <span key={g} className="text-[0.625rem] text-ink-3 border rounded-full px-2 py-0.5" style={{ borderColor: "var(--hairline)" }}>⛨ {g}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 mt-auto">
+        <Button sm variant="ghost" onClick={() => setOpen((o) => !o)}>{open ? "Hide loop" : "View loop"}</Button>
+        {w.status === "awaiting_approval" && <Link href="/decisions"><Badge status="warning">Review in Decision Center</Badge></Link>}
+      </div>
+    </Card>
   );
 }

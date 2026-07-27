@@ -20,8 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from api import (
-    commercial_intel, connectors, customers, data_hub, documents, fraud, freight,
-    risk_radar, services, workers, workspace,
+    agentic_ops, commercial_intel, connectors, customers, data_hub, documents, fraud,
+    freight, risk_radar, services, workers, workspace,
 )
 
 
@@ -302,6 +302,11 @@ def ai_status() -> dict:
 @app.get("/api/workers")
 def workers_cockpit() -> dict:
     return workers.cockpit()
+
+
+@app.get("/api/agentic-ops")
+def agentic_ops_workflows() -> dict:
+    return agentic_ops.workflows()
 
 
 # ---- Fraud & Anomaly Detection ----

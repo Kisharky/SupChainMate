@@ -5,7 +5,9 @@
 # wires the env vars. Then add the custom domain api.yuktiai.app to the service
 # (Settings → Custom Domains) and point DNS at it (see DEPLOY.md).
 #
-# The frontend is deployed separately on Vercel (yuktiai.app) — see DEPLOY.md.
+# The apex yuktiai.app hosts the Yukti marketing site; SupChainMate is its
+# flagship demo on a subdomain — frontend at app.yuktiai.app (Vercel), this API
+# at api.yuktiai.app. See DEPLOY.md.
 
 services:
   - type: web
@@ -20,31 +22,25 @@ services:
       - key: AUTH_ENABLED
         value: "true"
       - key: FRONTEND_ORIGIN         # allows CORS from the Vercel frontend
-        value: https://yuktiai.app
+        value: https://app.yuktiai.app
       - key: JWT_SECRET              # strong secret, generated & kept by Render
         generateValue: true
-      - key: DATABASE_URL            # identity state in managed Postgres
-        fromDatabase:
-          name: supchainmate-db
-          property: connectionString
+      - key: DATABASE_URL            # SQLite — zero to manage, nothing to expire.
+        value: sqlite:///data/supchainmate_app.db
       # Demo login password (all six seeded roles). Change or remove before a
       # truly public launch; documented in DEPLOY.md.
       - key: DEMO_PASSWORD
         sync: false
-      # --- Optional: persist Decision Brain + Data Hub uploads across deploys ---
-      # Requires a paid instance with a disk (below). On free tier these live on
-      # the ephemeral filesystem and reset on each redeploy (fine for a demo).
-      # - key: DATA_HUB_DIR
-      #   value: /var/data/data_hub
 
-    # Uncomment on a paid plan to keep SQLite (brain/planner/data_hub) + uploads:
+    # Free tier: the instance sleeps after ~15 min idle (first hit wakes it in
+    # ~30-60s) and the filesystem is ephemeral — demo users re-seed on boot, so
+    # logins always work; uploads/brain memory reset on redeploy. To persist
+    # everything + stop sleeping, upgrade to 'starter' and add a disk:
+    # plan: starter
     # disk:
     #   name: scm-data
-    #   mountPath: /var/data
+    #   mountPath: /var/data          # then set DATABASE_URL=sqlite:////var/data/app.db
     #   sizeGB: 1
-
-databases:
-  - name: supchainmate-db
-    plan: free                       # free Postgres (note: 90-day expiry on free)
-    databaseName: supchainmate
-    ipAllowList: []                  # only reachable from Render's network
+    #
+    # Prefer managed Postgres instead of SQLite? Add a `databases:` block and set
+    # DATABASE_URL via fromDatabase — psycopg2 is already in requirements.

@@ -3,127 +3,159 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SupChainMate — Autonomous Supply Chain Decision System</title>
-<meta name="description" content="An open-source supply chain intelligence platform: freight control tower, agentic AI copilot, cost audit, health checks, and inventory decision engine.">
+<title>SupChainMate — Supply Chain Decision Intelligence</title>
+<meta name="description" content="Supply-chain decision intelligence: demand forecasting, inventory optimisation, logistics and an audited AI decision layer. Next.js + FastAPI, running on the public Olist dataset.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SupChainMate — Supply Chain Decision Intelligence">
+<meta property="og:description" content="Evidence-backed supply-chain decisions, not dashboards. Forecasting, inventory, logistics and an audited AI decision layer on the public Olist dataset.">
+<meta property="og:image" content="https://kisharky.github.io/SupChainMate/images/control-tower.png">
+<meta property="og:url" content="https://kisharky.github.io/SupChainMate/">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   :root {
-    --bg: #0D0D10; --panel: #151518; --line: #222228;
-    --red: #FF003C; --cyan: #00D4FF; --green: #00E676; --yellow: #FBC02D;
-    --text: #CCCCCC; --dim: #777;
+    --bg: #0B1220; --panel: #0E1729; --panel-2: #111c31; --line: #1d2a42;
+    --accent: #10B981; --accent-dim: rgba(16,185,129,.12);
+    --text: #EAF0F8; --muted: #93A1B8; --code: #0a0f1a;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: var(--bg); color: var(--text);
-         font-family: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
-         line-height: 1.6; }
-  a { color: var(--cyan); text-decoration: none; }
-  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 20px; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); line-height: 1.6;
+         font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
 
-  header { padding: 90px 0 60px; text-align: center; border-bottom: 1px solid var(--red); }
-  .logo { font-size: 0.8rem; letter-spacing: 0.35em; color: var(--red); text-transform: uppercase; }
-  h1 { color: #fff; font-size: clamp(2rem, 6vw, 3.6rem); letter-spacing: 0.06em;
-       text-transform: uppercase; margin: 14px 0 18px; line-height: 1.15; }
-  .tagline { color: var(--dim); max-width: 640px; margin: 0 auto 34px; font-size: 0.95rem; }
-  .cta { display: inline-block; border: 1px solid var(--red); color: #fff; background: var(--red);
-         padding: 13px 34px; letter-spacing: 0.12em; text-transform: uppercase; font-size: 0.8rem; }
-  .cta.ghost { background: transparent; color: var(--cyan); border-color: var(--cyan); margin-left: 10px; }
-  .cta:hover { filter: brightness(1.2); }
+  header { padding: 88px 0 56px; text-align: center; }
+  .eyebrow { font-size: .78rem; letter-spacing: .28em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  h1 { font-size: clamp(2rem, 5.5vw, 3.4rem); line-height: 1.12; margin: 16px 0 18px; letter-spacing: -.02em; }
+  .lede { color: var(--muted); max-width: 680px; margin: 0 auto; font-size: 1.05rem; }
+  .note { color: var(--muted); max-width: 680px; margin: 18px auto 0; font-size: .88rem;
+          border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 16px; }
+  .ctas { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: .92rem;
+         border: 1px solid var(--accent); }
+  .btn.primary { background: var(--accent); color: #05110c; }
+  .btn.ghost { color: var(--text); border-color: var(--line); background: var(--panel); }
+  .btn:hover { text-decoration: none; filter: brightness(1.1); }
 
-  .strip { border-bottom: 1px solid var(--line); padding: 26px 0; text-align: center;
-           color: var(--dim); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; }
-  .strip b { color: var(--text); }
+  .strip { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 0;
+           text-align: center; color: var(--muted); font-size: .85rem; }
+  .strip b { color: var(--text); font-weight: 600; }
 
-  section { padding: 70px 0; border-bottom: 1px solid var(--line); }
-  h2 { color: #fff; text-transform: uppercase; letter-spacing: 0.15em; font-size: 1.3rem;
-       margin-bottom: 8px; }
-  .sub { color: var(--dim); font-size: 0.8rem; margin-bottom: 36px; }
+  section { padding: 64px 0; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 1.5rem; letter-spacing: -.01em; margin-bottom: 6px; }
+  .sub { color: var(--muted); margin-bottom: 28px; max-width: 720px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--red);
-          padding: 22px; }
-  .card.cyan { border-top-color: var(--cyan); }
-  .card.green { border-top-color: var(--green); }
-  .card.yellow { border-top-color: var(--yellow); }
-  .card h3 { color: #fff; font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase;
-             margin-bottom: 10px; }
-  .card p { font-size: 0.8rem; color: #999; }
+  .demo { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); }
 
-  .shot { width: 100%; border: 1px solid var(--line); display: block; }
-  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 760px) { .modes { grid-template-columns: 1fr; } }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .card h3 { font-size: 1rem; margin-bottom: 6px; }
+  .card p { color: var(--muted); font-size: .92rem; }
+  .card .tag { display: inline-block; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase;
+               color: var(--accent); background: var(--accent-dim); border-radius: 999px; padding: 2px 10px; margin-bottom: 10px; }
 
-  ul.plain { list-style: none; font-size: 0.8rem; color: #999; }
-  ul.plain li { padding: 4px 0 4px 18px; position: relative; }
-  ul.plain li::before { content: "▸"; position: absolute; left: 0; color: var(--red); }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  figure { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  figure img { border-bottom: 1px solid var(--line); width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
+  figcaption { padding: 12px 16px; font-size: .88rem; color: var(--muted); }
+  figcaption b { color: var(--text); }
 
-  footer { padding: 50px 0; text-align: center; color: var(--dim); font-size: 0.72rem; }
+  ol.principles { counter-reset: p; list-style: none; display: grid; gap: 12px;
+                  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  ol.principles li { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; color: var(--muted); font-size: .92rem; }
+  ol.principles li b { display: block; color: var(--text); margin-bottom: 4px; }
+
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+        overflow-x: auto; font-size: .86rem; line-height: 1.7; }
+  code { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace; color: #cfe9dd; }
+  pre .c { color: #6b7a93; }
+
+  footer { padding: 36px 0 48px; text-align: center; color: var(--muted); font-size: .88rem; }
+
+  @media (max-width: 520px) {
+    header { padding: 56px 0 40px; }
+    .shots { grid-template-columns: 1fr; }
+    section { padding: 48px 0; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <div class="wrap">
-    <div class="logo">⬡ SupChainMate</div>
-    <h1>Beyond dashboards.<br>An autonomous supply chain decision system.</h1>
-    <p class="tagline">
-      Open-source supply chain intelligence: a freight control tower, an agentic AI copilot
-      that acts on your data, billing audits, health checks, and a decision engine that turns
-      raw order files into execution-ready plans.
+    <div class="eyebrow">SupChainMate</div>
+    <h1>Supply-chain decisions,<br>backed by evidence.</h1>
+    <p class="lede">
+      A decision-intelligence control plane for supply chains: demand forecasting, inventory
+      optimisation, logistics and commercial analytics, with an audited decision layer that shows
+      the evidence, confidence and impact behind every recommendation, and lets a person approve it.
     </p>
-    <a class="cta" href="https://github.com/Kisharky/SupChainMate">View on GitHub</a>
-    <a class="cta ghost" href="https://github.com/Kisharky/SupChainMate#-getting-started">Get started</a>
+    <p class="note">
+      Built solo as a portfolio project. Runs on the public
+      <a href="https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce">Olist Brazilian e-commerce dataset</a>
+      (99k orders); every figure is computed from that data. Where a module needs fields Olist doesn't
+      have (carriers, freight rates, risk signals), the values are simulated and labelled as such in the UI.
+    </p>
+    <div class="ctas">
+      <a class="btn primary" href="https://github.com/Kisharky/SupChainMate">View on GitHub</a>
+      <a class="btn ghost" href="#walkthrough">Watch the walkthrough</a>
+      <a class="btn ghost" href="#run">Run it locally</a>
+    </div>
   </div>
 </header>
 
 <div class="strip">
   <div class="wrap">
-    <b>Prophet</b> forecasting · <b>LightGBM</b> delay prediction · <b>Isolation Forest</b> anomaly radar ·
-    <b>Groq LLaMA-3.3-70B</b> agent · <b>NVIDIA cuOpt</b> routing · <b>Streamlit</b> UI
+    <b>Next.js 14</b> · <b>FastAPI</b> · <b>Prophet</b> forecasting · <b>LightGBM</b> delay risk ·
+    <b>Isolation Forest</b> anomalies · provider-agnostic LLM routing (<b>NVIDIA NIM</b> / <b>Groq</b>) ·
+    <b>JWT + RBAC</b> · <b>Docker</b> · tested in CI
   </div>
 </div>
 
-<section>
+<section id="walkthrough">
   <div class="wrap">
-    <h2>Mission Control</h2>
-    <p class="sub">Upload CSV/Excel — or try the built-in demo of 99,000 real orders — and get a live intelligence HUD.</p>
-    <img class="shot" src="dashboard_preview.png" alt="SupChainMate Mission Control dashboard">
+    <h2>Walkthrough</h2>
+    <p class="sub">Executive Control Tower → Decision Center → Commercial Intelligence → Logistics → Forecasting → Inventory.</p>
+    <div class="demo"><img src="images/demo.gif" alt="SupChainMate control plane walkthrough" loading="lazy"></div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
     <h2>What it does</h2>
-    <p class="sub">Every number is computed from your data. AI adds reasoning and wording — never the figures.</p>
+    <p class="sub">Every panel ends in a decision, a document or an export. The numbers come from computation on the data; the AI routes requests and writes the prose.</p>
     <div class="grid">
-      <div class="card cyan">
-        <h3>⛟ Freight Control Tower</h3>
-        <p>Every shipment classified — on track, at risk, late — with real on-time performance
-           vs promised dates, exceptions surfaced first, and carrier scorecards graded A–D.</p>
+      <div class="card">
+        <span class="tag">Decisions</span>
+        <h3>Decision Center</h3>
+        <p>Each recommendation carries its evidence, confidence and expected impact. Approve, reject, modify or escalate it, and the action lands in an immutable audit trail.</p>
       </div>
       <div class="card">
-        <h3>🤖 Agentic Copilot</h3>
-        <p>An AI that acts: lists at-risk shipments, drafts SLA-review emails from real scorecard
-           numbers, builds reorder plans, runs audits — via LLM tool calling, with a
-           zero-API-key offline mode.</p>
-      </div>
-      <div class="card yellow">
-        <h3>⚖ Freight Cost Audit</h3>
-        <p>Billing anomaly detection: per-carrier cost outliers, potential duplicate charges,
-           premiums paid on late deliveries, and your re-tender opportunity.</p>
-      </div>
-      <div class="card green">
-        <h3>🩺 Health Check</h3>
-        <p>A scored assessment (0–100, A–F) across delivery, risk, cost discipline, inventory,
-           network efficiency, and data quality — with DIFOT tracking and priority actions.</p>
-      </div>
-      <div class="card cyan">
-        <h3>📑 Tender / RFP Toolkit</h3>
-        <p>A data-backed freight tender in one click: monthly lane volumes, incumbent carrier
-           summary, a ready-to-edit RFP document, and a carrier rate-shift simulator.</p>
+        <span class="tag">Planning</span>
+        <h3>Forecasting &amp; inventory</h3>
+        <p>Prophet forecasts with a weekly backtest (MAPE, MAE, RMSE, bias), feeding per-SKU safety stock, EOQ and reorder points.</p>
       </div>
       <div class="card">
-        <h3>⌁ Decision Engine</h3>
-        <p>Safety stock, EOQ, reorder points, and lead-time buffers from real inventory
-           mathematics — stress-tested live in the What-If Lab.</p>
+        <span class="tag">Logistics</span>
+        <h3>Logistics &amp; freight</h3>
+        <p>Network map, carrier scorecards, delay-risk prediction, freight cost audit and a disruption radar that flags where several risk signals converge.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Commercial</span>
+        <h3>Commercial &amp; customers</h3>
+        <p>Account profitability, revenue leakage and a margin waterfall, plus a Customer 360 view built from the order history.</p>
+      </div>
+      <div class="card">
+        <span class="tag">AI</span>
+        <h3>Planner &amp; AI workers</h3>
+        <p>A planner routes each request to the right capability. Answers cite the knowledge base, and every feature still works with no API keys.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Your data</span>
+        <h3>Data Hub</h3>
+        <p>Upload a CSV or Excel export and map its columns. The whole platform then switches from the demo data to yours; delete the import and it switches back.</p>
       </div>
     </div>
   </div>
@@ -131,28 +163,41 @@
 
 <section>
   <div class="wrap">
-    <h2>Two ways in</h2>
-    <p class="sub">The same decision engine underneath — two very different front doors.</p>
-    <div class="modes">
-      <div class="card">
-        <h3>Enterprise mode</h3>
-        <ul class="plain">
-          <li>Upload orders, delivery, location & cost files — columns auto-detected</li>
-          <li>Shopify / WooCommerce order exports recognised out of the box</li>
-          <li>Full HUD: disruption radar map, forecasts, control tower, audits</li>
-          <li>Six CSV exports ready for Power BI, Excel, or your ERP</li>
-        </ul>
-      </div>
-      <div class="card green">
-        <h3>Small retailer mode</h3>
-        <ul class="plain">
-          <li>No spreadsheets — five quick questions per product</li>
-          <li>Plain-English answers: when to reorder, how much, what buffer</li>
-          <li>Multi-product tracker saved locally — survives restarts</li>
-          <li>Email reorder digests (or download them) when stock runs low</li>
-        </ul>
-      </div>
+    <h2>Screens</h2>
+    <p class="sub">From the running app on the Olist demo data.</p>
+    <div class="shots">
+      <figure><img src="images/control-tower.png" alt="Executive Control Tower" loading="lazy"><figcaption><b>Executive Control Tower</b> — KPIs, AI executive summary, live agent run.</figcaption></figure>
+      <figure><img src="images/decision-center.png" alt="Decision Center" loading="lazy"><figcaption><b>Decision Center</b> — evidence, confidence, impact and the audit trail.</figcaption></figure>
+      <figure><img src="images/commercial.png" alt="Commercial Intelligence" loading="lazy"><figcaption><b>Commercial Intelligence</b> — profitability, revenue leakage, margin waterfall.</figcaption></figure>
+      <figure><img src="images/logistics.png" alt="Logistics Command Center" loading="lazy"><figcaption><b>Logistics</b> — network map and live carrier scorecard.</figcaption></figure>
+      <figure><img src="images/forecasting.png" alt="Forecasting" loading="lazy"><figcaption><b>Forecasting</b> — Prophet forecast with weekly backtest.</figcaption></figure>
+      <figure><img src="images/inventory.png" alt="Inventory Intelligence" loading="lazy"><figcaption><b>Inventory</b> — per-SKU reorder points, EOQ, safety stock.</figcaption></figure>
     </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Design principles</h2>
+    <p class="sub">What keeps it trustworthy.</p>
+    <ol class="principles">
+      <li><b>Numbers from data, words from AI</b>Language models route requests and write explanations. They never produce the figures.</li>
+      <li><b>Decisions over dashboards</b>Every view ends in an action, a document or an export.</li>
+      <li><b>Works with zero keys</b>API keys add LLM reasoning, not correctness. Everything runs offline.</li>
+      <li><b>Honest labelling</b>Simulated demo values are marked as simulated in the UI.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="run">
+  <div class="wrap">
+    <h2>Run it locally</h2>
+    <p class="sub">The repo ships a 5,000-order sample so it clones fast. Full setup, the Next.js frontend and Docker are in the <a href="https://github.com/Kisharky/SupChainMate#getting-started">README</a>.</p>
+<pre><code>git clone https://github.com/Kisharky/SupChainMate.git
+cd SupChainMate/logistics-ai-dashboard
+pip install -r requirements.txt
+python scripts/fetch_olist.py   <span class="c"># optional: full 99k-order dataset</span>
+uvicorn api.main:app --reload   <span class="c"># API on :8000, then `npm run dev` in frontend/</span></code></pre>
   </div>
 </section>
 

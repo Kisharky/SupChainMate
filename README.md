@@ -740,6 +740,7 @@ Coverage spans the decision-engine mathematics (safety stock, EOQ, ROP, monotoni
 - Real carrier tracking API integrations
 - OAuth-based store connections and hosted multi-tenant deployment
 - Scheduled background runs (workers acting between sessions, not just on load)
+- **Next.js 15/16 upgrade.** `npm audit` currently flags the frontend (1 critical, 4 high). All of them are in the Next 14 line (image-optimisation DoS, request smuggling in rewrites, and a vulnerable `glob` via `eslint-config-next`). No 14.x release fixes them, so the frontend is on the last 14.2 patch until the major upgrade lands.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history (v1.0 → v4.8).
 
@@ -760,4 +761,4 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history (v1.0 → v4.8).
 
 ## License
 
-MIT © [Kishan Nagesh](https://www.linkedin.com/in/kisharky-n-5147941a4) — Master of Business (Supply Chain & International Business), Monash University, Melbourne
+MIT © [Kishan Nagesh](https://www.linkedin.com/in/gowdakishan) — Master of Business (Supply Chain & International Business), Monash University, Melbourne

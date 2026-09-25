@@ -11,7 +11,7 @@
 
 [![Version](https://img.shields.io/badge/version-6.0.0-10B981?style=for-the-badge)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-EAB308?style=for-the-badge)](#license)
-[![Tests](https://img.shields.io/badge/tests-139%20passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](logistics-ai-dashboard/tests)
+[![CI](https://github.com/Kisharky/SupChainMate/actions/workflows/ci.yml/badge.svg)](https://github.com/Kisharky/SupChainMate/actions/workflows/ci.yml)
 
 [![Next.js](https://img.shields.io/badge/Next.js_14-000000?logo=next.js&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React_18-20232A?logo=react&logoColor=61DAFB)](https://react.dev)
@@ -25,7 +25,10 @@
 [![JWT](https://img.shields.io/badge/Auth-JWT_+_RBAC-000000?logo=jsonwebtokens&logoColor=white)](#authentication--access-control)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](#configuration)
 [![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)](#run-with-docker)
-[![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+
+<br/>
+
+Built solo as a portfolio project. Runs on the public [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) (99k orders); every figure is computed from that data. Where a module needs fields Olist doesn't have (carriers, freight rates, risk signals), the values are simulated and labelled as such in the UI.
 
 <br/>
 
@@ -217,7 +220,7 @@ The platform serves two audiences through one decision engine:
 
 | Mode | Audience | Input |
 |------|----------|-------|
-| **Enterprise** | Supply chain teams with data | CSV/Excel uploads, Shopify/WooCommerce API sync, or the built-in demo (99k real orders) |
+| **Enterprise** | Supply chain teams with data | CSV/Excel uploads, Shopify/WooCommerce API sync, or the built-in demo (Olist: 5k-order sample in the repo, full 99k via `scripts/fetch_olist.py`) |
 | **Small Retailer** | Shops without spreadsheets | A five-question form per product — no files required |
 
 ```
@@ -640,7 +643,8 @@ SupChainMate/
 │   ├── tests/
 │   │   ├── test_core.py          # Decision engine, forecasting, optimisation, network
 │   │   └── test_modules.py       # Feature-module suite
-│   └── data/                     # Demo dataset (Olist, 99k orders) + SQLite DB
+│   ├── scripts/                  # fetch_olist.py (full 99k dataset) · make_sample.py
+│   └── data/                     # Olist 5k-order sample (fetch script for the full set) + SQLite DB
 ├── CHANGELOG.md
 └── README.md
 ```
@@ -660,6 +664,7 @@ SupChainMate/
 git clone https://github.com/Kisharky/SupChainMate.git
 cd SupChainMate/logistics-ai-dashboard
 pip install -r requirements.txt
+python scripts/fetch_olist.py        # optional: full 99k-order Olist set (repo ships a 5k sample)
 ```
 
 ### Run
@@ -708,13 +713,15 @@ Upload any CSV or Excel — the ingestion engine auto-detects columns under any 
 
 **Demo dataset**: [Olist Brazilian E-Commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) — 99,441 real orders with genuine promised-vs-actual delivery dates. Demo carrier names, freight costs, and transport modes are simulated and labelled in the UI.
 
+The repo ships a **5,000-order sample** (≈2 MB — orders, the customers they reference, and one geolocation point per zip) so it clones fast and CI stays quick. `python scripts/fetch_olist.py` downloads the full dataset (≈100 MB) into `data/`; `python scripts/make_sample.py` regenerates the sample deterministically.
+
 ---
 
 ## Testing
 
 ```bash
 cd logistics-ai-dashboard
-python -m pytest tests/ -q        # 119 tests
+python -m pytest tests/ -q        # full suite — also runs on every push (CI badge above)
 ```
 
 Coverage spans the decision-engine mathematics (safety stock, EOQ, ROP, monotonicity), network scoring (Haversine, clustering, Isolation Forest), forecasting aggregation, optimisation summaries, shipment classification, carrier scorecards, cost-audit anomaly detection, health-check scoring, tender and rate-shift math, ensemble backtesting, alert digests, SQLite persistence, agent routing and tracing, and the store connectors (exercised against mocked HTTP — no network required).

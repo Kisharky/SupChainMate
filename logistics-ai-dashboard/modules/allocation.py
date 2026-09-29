@@ -157,6 +157,7 @@ def build_recommendation(scored: pd.DataFrame, impact: dict,
         drivers=drivers, confidence=conf, confidence_basis=basis,
         impact=Impact(
             cost_savings_yr=round(impact.get("savings_total", 0), 0) or None,
+            savings_basis=trust.BASIS_ALLOCATION,
             service_level_pct=round(impact["on_time_recommended"], 1)
             if "on_time_recommended" in impact else None,
             other=(f"CO2e {impact['co2_current']:.2f}→{impact['co2_recommended']:.2f} kg/shipment"

@@ -144,6 +144,8 @@ def whats_changed() -> dict[str, Any]:
             "new_risks": new_risks or ["No new risks detected."],
             "completed": completed or ["No decisions actioned yet today."],
             "realized_savings": round(float(realized), 0),
+            "savings_basis": ("Sum of the modelled savings on approved recommendations. Each is an "
+                              "estimate with its own stated basis; nothing here is measured as realised."),
             "unresolved": unresolved,
         }
     return services._safe(build, {"date": "", "changes": [], "new_risks": [],
@@ -201,7 +203,10 @@ def courses_of_action(issue: str) -> dict[str, Any]:
                                * risk_pen * (o["confidence"] / 100), 2)
         opts.sort(key=lambda o: o["score"], reverse=True)
         return {"issue": _ISSUES[key], "issue_key": key,
-                "options": opts, "recommended": opts[0]["id"]}
+                "options": opts, "recommended": opts[0]["id"],
+                "source": "representative",
+                "savings_basis": ("Illustrative planning figure for this course of action: "
+                                  "fixed per option, not computed from your data.")}
     return services._safe(build, {"issue": "", "options": [], "recommended": None})
 
 

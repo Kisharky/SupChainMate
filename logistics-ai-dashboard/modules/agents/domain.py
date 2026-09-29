@@ -104,7 +104,8 @@ class InventoryAgent(BaseAgent):
         res.impact = Impact(
             cost_savings_yr=float(outputs.savings_vs_current),
             stockout_risk_pct=round((1 - sl) * 100, 1),
-            service_level_pct=round(sl * 100, 1))
+            service_level_pct=round(sl * 100, 1),
+            savings_basis=trust.BASIS_NAIVE_POLICY)
         res.outputs = {"safety_stock": float(outputs.safety_stock),
                        "reorder_point": float(outputs.reorder_point),
                        "eoq": float(outputs.eoq),
@@ -147,7 +148,8 @@ class ProcurementAgent(BaseAgent):
         res.confidence = float(np.clip(30 + 40 * support + 30 * strength, 20, 95))
         res.confidence_basis = ("volume history depth + re-tender share of spend"
                                 if pack else "no order-date history")
-        res.impact = Impact(cost_savings_yr=retender if retender > 0 else None)
+        res.impact = Impact(cost_savings_yr=retender if retender > 0 else None,
+                            savings_basis=trust.BASIS_RETENDER if retender > 0 else None)
         res.outputs = {"po_lines": len(urgent), "retender_opportunity": retender,
                        "tender_ready": pack is not None}
 
@@ -213,7 +215,8 @@ class LogisticsAgent(BaseAgent):
                  if scorecard is not None and len(scorecard) else None)
         res.impact = Impact(
             service_level_pct=round(float(on_time), 1) if on_time is not None and not pd.isna(on_time) else None,
-            cost_savings_yr=sum(r.impact.cost_savings_yr or 0 for r in res.recommendations) or None)
+            cost_savings_yr=sum(r.impact.cost_savings_yr or 0 for r in res.recommendations) or None,
+            savings_basis=trust.BASIS_COMBINED)
         res.outputs = {"on_time_pct": on_time, "late": kpis.get("late", 0),
                        "at_risk": kpis.get("at_risk", 0), "worst_carrier": worst}
         return res

@@ -89,8 +89,8 @@ export function Sparkline({ seed = 4, color = "var(--good)", trend = "up", w = 1
 }
 
 /* ---- KPI card ---- */
-export function KpiCard({ label, value, unit, prefix, delta, status = "good", seed = 4 }:
-  { label: string; value: number | string; unit?: string; prefix?: string; delta?: number; status?: KpiStatus; seed?: number }) {
+export function KpiCard({ label, value, unit, prefix, delta, status = "good", seed = 4, basis }:
+  { label: string; value: number | string; unit?: string; prefix?: string; delta?: number; status?: KpiStatus; seed?: number; basis?: string }) {
   const trend = delta == null || delta === 0 ? "flat" : delta > 0 ? "up" : "down";
   const deltaColor = trend === "up" ? "var(--good)" : trend === "down" ? "var(--critical)" : "var(--text-3)";
   const arrow = trend === "up" ? "▲" : trend === "down" ? "▼" : "—";
@@ -98,7 +98,7 @@ export function KpiCard({ label, value, unit, prefix, delta, status = "good", se
     <Card className="relative overflow-hidden">
       <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: STATUS_COLOR[status] }} />
       <div className="p-4 flex flex-col gap-2.5">
-        <div className="eyebrow">{label}</div>
+        <div className="eyebrow"><Basis text={basis}>{label}</Basis></div>
         <div className="text-[2.25rem] font-bold leading-none tracking-tight tnum">
           {prefix}{value}{unit && <span className="text-[1.125rem] text-ink-3 font-semibold ml-0.5">{unit}</span>}
         </div>
@@ -233,6 +233,17 @@ export function DataTable({ head, children }: { head: ReactNode; children: React
     </div>
   );
 }
+/** A figure's stated basis as a hover note (dotted underline, help cursor).
+ *  Used on every savings number so it says what it is measured against. */
+export function Basis({ text, children }: { text?: string | null; children: ReactNode }) {
+  if (!text) return <>{children}</>;
+  return (
+    <span title={text} aria-label={text}
+      className="cursor-help underline decoration-dotted underline-offset-[3px]"
+      style={{ textDecorationColor: "var(--text-3)" }}>{children}</span>
+  );
+}
+
 export function Th({ children, num }: { children: ReactNode; num?: boolean }) {
   return <th className={`px-3.5 py-2.5 text-[10.5px] uppercase tracking-wider font-semibold text-ink-3 bg-[var(--panel-2)] border-b ${num ? "text-right" : ""}`}
     style={{ borderColor: "var(--hairline)" }}>{children}</th>;

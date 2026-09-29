@@ -113,8 +113,10 @@ def inventory_snapshot() -> dict[str, Any]:
                 "service_level": str(r.get("Svc Level", "—")),
                 "savings_yr": float(r.get("Est. Savings/yr ($)", 0) or 0),
             })
+        from modules import trust
         return {"kpis": _jsonable(kpis), "rows": rows,
-                "allocation": _inventory_allocation()}
+                "allocation": _inventory_allocation(),
+                "savings_basis": trust.BASIS_NAIVE_POLICY}
 
     return _safe(build, {
         "kpis": {"SKUs": 1204, "A-class": 168, "Est. Savings/yr": "$0.9M"},
@@ -300,7 +302,9 @@ def procurement_snapshot() -> dict[str, Any]:
             "recommended_share": round(float(r.get("Recommended Share", 0) or 0) * 100, 1)
             if r.get("Recommended Share") is not None else None,
         } for _, r in scored.iterrows()]
+        from modules import trust
         return {"carriers": rows, "impact": _jsonable(impact),
+                "savings_basis": trust.BASIS_ALLOCATION,
                 "optimization": _carrier_allocation(scorecard)}
     return _safe(build, {"carriers": [], "impact": {}, "optimization": None})
 

@@ -54,6 +54,23 @@ class Impact:
     stockout_risk_pct: Optional[float] = None
     service_level_pct: Optional[float] = None
     other: Optional[str] = None
+    # What cost_savings_yr is measured against, shown next to the figure.
+    savings_basis: Optional[str] = None
+    # True when the saving is a one-off amount, not a yearly run-rate.
+    savings_one_off: bool = False
+
+
+# Savings bases — each saving states what it is measured against.
+BASIS_NAIVE_POLICY = ("Modelled against a naive baseline: monthly ordering with safety stock of "
+                      "half the lead-time demand (modules/decisions.py). Not measured against your actual costs.")
+BASIS_RATE_SHIFT = ("Simulated: the volume shift priced at each carrier's current average rate. "
+                    "Demo carrier rates are simulated.")
+BASIS_ALLOCATION = ("Current vs recommended carrier mix, priced at each carrier's average cost per "
+                    "shipment. Demo carrier rates are simulated.")
+BASIS_AUDIT = "One-off: the value of charges flagged by the freight cost audit, if all are recovered."
+BASIS_RETENDER = ("Freight spend above the network-median rate: re-tender upside, not a quote. "
+                  "Demo carrier rates are simulated.")
+BASIS_COMBINED = "Sum of the savings on this agent's recommendations; each states its own basis."
 
 
 @dataclass
@@ -114,6 +131,7 @@ def from_decision_engine(demand_profile, outputs, history_days: int,
         cost_savings_yr=float(outputs.savings_vs_current),
         stockout_risk_pct=round((1 - service_level) * 100, 1),
         service_level_pct=round(service_level * 100, 1),
+        savings_basis=BASIS_NAIVE_POLICY,
     )
     return [Recommendation(
         source="Planner", category="INVENTORY POLICY",
@@ -154,7 +172,8 @@ def from_sku_engine(sku_plan: Optional[pd.DataFrame],
             ],
             confidence=conf, confidence_basis=basis,
             impact=Impact(cost_savings_yr=float(r.get("Est. Savings/yr ($)", 0) or 0),
-                          stockout_risk_pct=round(stockout_risk, 1)),
+                          stockout_risk_pct=round(stockout_risk, 1),
+                          savings_basis=BASIS_NAIVE_POLICY),
         ))
     return recs
 
@@ -198,6 +217,7 @@ def from_carrier_scorecard(scorecard: Optional[pd.DataFrame],
         ],
         confidence=conf, confidence_basis=basis,
         impact=Impact(cost_savings_yr=saving,
+                      savings_basis=BASIS_RATE_SHIFT if saving else None,
                       service_level_pct=float(best["On-Time %"]),
                       other=f"+{gap:.1f} pts on-time on shifted volume"),
     )]
@@ -225,7 +245,8 @@ def from_cost_audit(audit: Optional[dict]) -> list[Recommendation]:
             Driver("Late-delivery premiums", f"${k['late_premium_value']:,.0f}"),
         ],
         confidence=conf, confidence_basis=basis,
-        impact=Impact(cost_savings_yr=float(k["flagged_value"])),
+        impact=Impact(cost_savings_yr=float(k["flagged_value"]),
+                      savings_basis=BASIS_AUDIT, savings_one_off=True),
     )]
 
 
@@ -293,6 +314,8 @@ def summary_kpis() -> dict:
         "approved": len(approved),
         "rejected": sum(1 for r in all_recs if r["status"] == "REJECTED"),
         "approved_savings": float(approved_savings),
+        "approved_savings_basis": ("Sum of the modelled savings on approved recommendations, "
+                                   "including one-off recoveries. Estimates, not measured savings."),
         "avg_confidence": round(float(np.mean([r.get("confidence", 0) for r in pend])), 1)
         if pend else None,
     }

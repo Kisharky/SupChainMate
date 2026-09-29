@@ -85,7 +85,7 @@ export interface CarrierAllocation {
   improvement_pct: number; lanes: string[]; assignments: AllocationAssignment[];
   detail: string; status: { plan?: Record<string, string> };
 }
-export interface ProcurementResponse { carriers: ProcurementRow[]; impact: Record<string, number>; optimization: CarrierAllocation | null; source: string; }
+export interface ProcurementResponse { carriers: ProcurementRow[]; impact: Record<string, number>; optimization: CarrierAllocation | null; source: string; savings_basis?: string; }
 
 export interface OperationsResponse { kpis: Record<string, number>; status_counts: Record<string, number>; source: string; }
 
@@ -100,6 +100,7 @@ export interface InventoryResponse {
   kpis: Record<string, unknown>; rows: InventoryRow[];
   allocation?: CarrierAllocation & { units_label?: string } | null;
   source: string;
+  savings_basis?: string;
 }
 
 export interface Lane { from: string; to: string; status: KpiStatus; }
@@ -128,14 +129,14 @@ export interface ReportItem { id: string; title: string; subtitle: string; statu
 export interface ReportsResponse { reports: ReportItem[]; source: string; }
 
 export interface Driver { reason: string; evidence: string; }
-export interface DecisionImpact { cost_savings_yr?: number | null; stockout_risk_pct?: number | null; service_level_pct?: number | null; other?: string | null; }
+export interface DecisionImpact { cost_savings_yr?: number | null; stockout_risk_pct?: number | null; service_level_pct?: number | null; other?: string | null; savings_basis?: string | null; savings_one_off?: boolean; }
 export interface Recommendation {
   rec_key: string; source: string; category: string; title: string; action: string;
   drivers: Driver[]; confidence: number; confidence_basis: string; impact: DecisionImpact;
   status: string; created_ts?: string; decided_ts?: string; decided_by?: string; note?: string;
 }
 export interface DecisionsResponse {
-  kpis: { pending: number; approved: number; rejected: number; approved_savings: number; avg_confidence: number | null };
+  kpis: { pending: number; approved: number; rejected: number; approved_savings: number; approved_savings_basis?: string; avg_confidence: number | null };
   pending: Recommendation[]; history: Recommendation[]; source: string;
 }
 export interface AuditEntry { ts: string; actor: string; event: string; rec_key: string | null; details: string; }
@@ -243,6 +244,7 @@ export interface CustomerForecast {
 }
 export interface CustomerRecs {
   recommendations: { id: string; title: string; reasoning: string; status: string; business_impact: string; estimated_savings: number; confidence: number }[];
+  savings_basis?: string;
 }
 export interface CustomerTimeline { events: { type: string; label: string; status: string; detail: string; hours_ago: number }[]; }
 export interface CustomerBrain { total: number; customer: string; groups: Record<string, { title: string; snippet: string; score: number }[]>; }
@@ -434,7 +436,7 @@ export interface ExecBrief {
 }
 export interface WhatChanged {
   date: string; changes: string[]; new_risks: string[]; completed: string[];
-  realized_savings: number; unresolved: { title: string; reason: string }[];
+  realized_savings: number; savings_basis?: string; unresolved: { title: string; reason: string }[];
 }
 export interface TimelineItem { id: string; title: string; stage: string; confidence: number; impact_usd: number; status: string; outcome: string | null; ts: string; }
 export interface Timeline { stages: string[]; counts: Record<string, number>; items: TimelineItem[]; }
@@ -455,7 +457,7 @@ export interface CoaOption {
   execution_time: string; confidence: number; business_outcome: string; evidence: string[];
   optimization: string; roi: number; score: number;
 }
-export interface CoaResponse { issue: string; issue_key: string; options: CoaOption[]; recommended: string; }
+export interface CoaResponse { issue: string; issue_key: string; options: CoaOption[]; recommended: string; savings_basis?: string; }
 export interface ScenarioImpact { financial_usd: number; service_pp: number; logistics_pp: number; inventory_pct: number; customers_affected: number; positive: boolean; }
 export interface ScenarioResponse {
   kind: string; label: string; magnitude: number; impact: ScenarioImpact;

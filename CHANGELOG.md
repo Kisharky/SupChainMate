@@ -2,6 +2,20 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Savings say what they are measured against
+- Every savings figure in the app now carries its basis as a hover note (dotted
+  underline): Decision Center cards and KPI, Inventory, Procurement, Workspace
+  courses of action and "What Changed Today", and Customer 360 recommendations.
+- The basis travels with the data: `Impact.savings_basis` is set wherever a saving
+  is computed (naive inventory baseline, carrier rate-shift simulation, carrier
+  mix, re-tender upside, audit recovery), and page-level figures get
+  `savings_basis` from the API.
+- Audit recoveries are flagged `savings_one_off` and shown as "one-off" instead
+  of "/yr".
+- Workspace "realized" savings are relabelled "approved (modelled)" since nothing
+  is measured as realised; course-of-action savings are marked as illustrative
+  (they are fixed per option) and the response is labelled `representative`.
+
 ## Honest numbers — forecast and delay-risk fixes
 - **No fabricated demand history.** `forecast.daily_demand` no longer injects
   random "event" days and inflates demand on them (5,000 orders had become

@@ -2,6 +2,24 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Honest numbers — forecast and delay-risk fixes
+- **No fabricated demand history.** `forecast.daily_demand` no longer injects
+  random "event" days and inflates demand on them (5,000 orders had become
+  5,169.5). Real demand passes through untouched; the old behaviour is opt-in via
+  `simulate_event_history=True` and documented as synthetic. Uploaded data
+  (`ingestion.orders_to_daily_demand`) is never amplified.
+- **`run_forecast` works.** It carries the `external_signal` regressor onto the
+  future frame instead of crashing with `ValueError`.
+- **Delay risk learns the real outcome.** The delay model previously learned a
+  random simulated `status` (≈0.5 AUC, a different at-risk count every run). It
+  now trains on delivered-after-promised-date from the data (0.67 AUC on the
+  sample, deterministic), uses the promised lead time instead of random
+  `lead_days`, and falls back to `status` only when the data has no dates.
+- **The API shipment board carries ML risk.** `/api` shipments now train and pass
+  the delay model (previously none, so risk was blank and nothing was flagged at
+  risk); failures are logged, not swallowed.
+- `optimize/solvers/local.py` docstring no longer claims a scipy exact solver.
+
 ## Repo hygiene — review fixes
 - Added the MIT `LICENSE` file the badge promised.
 - Replaced the static "tests passing" and "CI" badges with the live GitHub Actions badge.

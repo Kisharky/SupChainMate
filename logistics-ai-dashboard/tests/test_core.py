@@ -181,3 +181,56 @@ def test_config_get_env(monkeypatch):
 def test_config_paths_exist():
     assert os.path.isdir(config.DATA_DIR)
     assert os.path.exists(config.DEMO_ORDERS)
+
+
+def test_daily_demand_does_not_fabricate_history_by_default():
+    """Real demand must pass through untouched unless simulation is asked for."""
+    orders = forecast.load_orders("data/olist_orders.csv")
+    raw = orders.groupby(orders["order_purchase_timestamp"].dt.normalize()).size()
+    daily = forecast.daily_demand(orders)
+    assert (daily["external_signal"] == 0).all()
+    assert np.isclose(daily["y"].sum(), float(raw.sum()))
+
+    sim = forecast.daily_demand(orders, simulate_event_history=True)
+    assert sim["external_signal"].sum() > 0
+    assert sim["y"].sum() > daily["y"].sum()
+
+
+def test_run_forecast_carries_the_regressor():
+    """run_forecast must populate external_signal on the future frame."""
+    orders = forecast.load_orders("data/olist_orders.csv")
+    daily = forecast.daily_demand(orders)
+    model, fc = forecast.run_forecast(daily, horizon_days=7)
+    assert len(fc) == len(daily) + 7
+    assert fc["yhat"].notna().all()
+
+
+def test_delay_model_learns_the_real_delivery_outcome():
+    """The delay model trains on delivered-after-promise, not simulated statuses."""
+    from modules import tracking
+    orders = pd.read_csv(config.DEMO_DELIVERY)
+    labels = tracking.delay_labels(orders)
+    delivered = orders["order_delivered_customer_date"].notna()
+    expected = (pd.to_datetime(orders["order_delivered_customer_date"])
+                > pd.to_datetime(orders["order_estimated_delivery_date"]))
+    assert (labels[delivered] == expected[delivered].astype(float)).all()
+    assert labels[~delivered].isna().all()
+
+    model, X_test, y_test = tracking.train_delay_model(orders)
+    assert model.label_source_ == "delivered_vs_promised"
+    assert len(X_test) > 0
+    # Features are deterministic: same data, same features.
+    pd.testing.assert_frame_equal(tracking._engineer_features(orders),
+                                  tracking._engineer_features(orders))
+
+
+def test_api_shipment_board_has_stable_real_risk_scores():
+    """The API board carries ML risk on every shipment, identically on rebuild."""
+    from api import services
+    services.clear_data_caches()
+    first, kpis_a, _ = services._shipments()
+    services.clear_data_caches()
+    second, kpis_b, _ = services._shipments()
+    assert first["delay_proba"].notna().all()
+    assert kpis_a["at_risk"] == kpis_b["at_risk"]
+    pd.testing.assert_series_equal(first["delay_proba"], second["delay_proba"])

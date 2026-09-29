@@ -20,6 +20,37 @@ except ImportError:
     _HAS_LGBM = False
 
 
+# Date columns, Olist names first, then the normalised upload names. Shared
+# with the control tower so both read the same dates.
+ORDER_DATE_COLS = ["order_purchase_timestamp", "order_date", "date", "ds"]
+ACTUAL_DATE_COLS = ["order_delivered_customer_date", "delivery_date", "delivered_date"]
+PROMISED_DATE_COLS = ["order_estimated_delivery_date", "estimated_date", "promised_date", "eta"]
+
+# Minimum labelled deliveries needed to train on the real outcome.
+_MIN_REAL_LABELS = 50
+
+
+def _first_col(df: pd.DataFrame, candidates: list[str]):
+    return next((c for c in candidates if c in df.columns), None)
+
+
+def delay_labels(df: pd.DataFrame) -> pd.Series | None:
+    """Real delivery outcome: 1 if delivered after the promised date, else 0.
+
+    NaN where either date is missing (still in flight, cancelled). Returns
+    None when the data has no actual/promised date columns at all.
+    """
+    actual_col = _first_col(df, ACTUAL_DATE_COLS)
+    promised_col = _first_col(df, PROMISED_DATE_COLS)
+    if not (actual_col and promised_col):
+        return None
+    actual = pd.to_datetime(df[actual_col], errors="coerce")
+    promised = pd.to_datetime(df[promised_col], errors="coerce")
+    labels = (actual > promised).astype(float)
+    labels[actual.isna() | promised.isna()] = np.nan
+    return labels
+
+
 def simulate_tracking(df: pd.DataFrame) -> pd.DataFrame:
     """Simulate operational order statuses for demo purposes."""
     df = df.copy()
@@ -40,11 +71,7 @@ def _engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame(index=df.index)
 
     # ── Timestamp features ───────────────────────────────────────────────────
-    date_col = None
-    for col in ["order_purchase_timestamp", "order_date", "date", "ds"]:
-        if col in df.columns:
-            date_col = col
-            break
+    date_col = _first_col(df, ORDER_DATE_COLS)
 
     if date_col:
         dt = pd.to_datetime(df[date_col], errors="coerce")
@@ -63,11 +90,17 @@ def _engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         out["is_month_end"] = 0
 
     # ── Lead time features ───────────────────────────────────────────────────
+    # Lead time: an explicit column if present, else the lead time promised
+    # at purchase (promised date − order date), else a constant. Never random.
+    promised_col = _first_col(df, PROMISED_DATE_COLS)
     if "lead_days" in df.columns:
         out["lead_days"] = pd.to_numeric(df["lead_days"], errors="coerce").fillna(7)
+    elif date_col and promised_col:
+        promised = pd.to_datetime(df[promised_col], errors="coerce")
+        out["lead_days"] = (promised - pd.to_datetime(df[date_col], errors="coerce")).dt.days
+        out["lead_days"] = out["lead_days"].fillna(out["lead_days"].median()).fillna(7)
     else:
-        np.random.seed(42)
-        out["lead_days"] = np.random.uniform(1, 20, size=len(df))
+        out["lead_days"] = 7.0
 
     out["lead_days_sq"]  = out["lead_days"] ** 2          # non-linear signal
     out["long_lead"]     = (out["lead_days"] > 14).astype(int)
@@ -79,15 +112,29 @@ def train_delay_model(df: pd.DataFrame):
     """
     Train a LightGBM (or RandomForest fallback) classifier to predict delay risk.
     Returns (model, X_test, y_test).
+
+    The label is the real outcome — delivered after the promised date — on
+    every shipment that has both dates. Only when the data carries no such
+    dates does it fall back to ``status == "Delayed"``. The source is recorded
+    on the model as ``label_source_``.
     """
-    df = df.copy()
-    df["is_delayed"] = (df["status"] == "Delayed").astype(int)
+    labels = delay_labels(df)
+    if (labels is not None and labels.notna().sum() >= _MIN_REAL_LABELS
+            and labels.dropna().nunique() == 2):
+        known = labels.notna()
+        X = _engineer_features(df[known])
+        y = labels[known].astype(int)
+        label_source = "delivered_vs_promised"
+    else:
+        if "status" not in df.columns:
+            raise ValueError("No delivery dates or status column to learn delay risk from.")
+        X = _engineer_features(df)
+        y = (df["status"] == "Delayed").astype(int)
+        label_source = "status"
 
-    X = _engineer_features(df)
-    y = df["is_delayed"]
-
+    stratify = y if y.value_counts().min() >= 2 else None
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=0.2, random_state=42, stratify=stratify
     )
 
     if _HAS_LGBM:
@@ -112,6 +159,7 @@ def train_delay_model(df: pd.DataFrame):
         )
 
     model.fit(X_train, y_train)
+    model.label_source_ = label_source
     return model, X_test, y_test
 
 

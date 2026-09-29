@@ -384,7 +384,18 @@ def _shipments():
     from modules import control_tower
     orders = data_source.orders_dataset()
     orders = control_tower.assign_demo_carriers(orders)
-    shipments = control_tower.prepare_shipments(orders)
+    # Delay-risk model trained on the real outcome (delivered vs promised
+    # date) so open shipments carry an ML risk score. If it can't train
+    # (e.g. imported data with no delivery dates) the board shows no score
+    # rather than an invented one.
+    delay_model = None
+    try:
+        from modules import tracking
+        delay_model, _, _ = tracking.train_delay_model(orders)
+    except Exception as exc:  # noqa: BLE001 - logged, board still renders
+        import config
+        config.get_logger(__name__).warning("delay model not trained: %s", exc)
+    shipments = control_tower.prepare_shipments(orders, delay_model)
     kpis = control_tower.shipment_kpis(shipments)
     scorecard = control_tower.carrier_scorecard(shipments)
     return shipments, kpis, scorecard

@@ -315,7 +315,7 @@ npm install && npm run dev             # http://localhost:3000
 
 | Capability | Description |
 |---|---|
-| **Decision Engine** | Safety stock (combined variance formula), EOQ, reorder point, lead-time buffer, and annual savings — reference inventory mathematics (Nahmias) |
+| **Decision Engine** | Safety stock (combined variance formula), EOQ, reorder point, lead-time buffer, and annual savings vs a stated naive baseline — reference inventory mathematics (Nahmias) |
 | **SKU Intelligence** | Per-product decisions for the whole catalogue: ABC classification (revenue Pareto), differentiated service levels by class, per-SKU safety stock / ROP / EOQ, editable stock levels with ORDER NOW / SOON / OK status, per-SKU reorder plan export |
 | **Demand Forecasting** | Prophet with external regressors, plus a **model tournament**: LightGBM / Random Forest / Gradient Boosting / Ridge and their ensemble, backtested against Prophet on a 28-day holdout with the champion crowned by MAPE |
 | **Market Signals** | External factor engine: keyless FX (frankfurter/ECB), Brent crude (Stooq), weather (Open-Meteo), offline holiday calendar, and PostHog/GA daily-events imports — with a terminal-style ticker, factor↔demand correlations (incl. 7-day leading), and factor uplift **proven on the forecast holdout** |
@@ -488,7 +488,7 @@ Every material AI recommendation flows through a human-in-the-loop **Decision Ce
 
 - **Explainable** — each recommendation carries WHY drivers, every one backed by an evidence value from the data (demand σ, days of cover, on-time gaps, the formula used)
 - **Confidence with a stated basis** — a transparent heuristic (data support + signal strength, 20–95). The basis string says exactly what it's built from; it is deliberately *not* presented as a calibrated probability
-- **Quantified business impact** — cost savings ($/yr), stockout risk (%), and service level (%) chips on every card, computed by the same deterministic engines
+- **Quantified business impact** — cost savings ($/yr), stockout risk (%), and service level (%) chips on every card, computed by the same deterministic engines. Savings are modelled against a stated naive baseline (monthly ordering, safety stock of half the lead-time demand, or your own current safety stock if you enter it; see `naive_current` in `modules/decisions.py`), not measured against your actual costs
 - **Approve / Reject / Modify / Escalate** — modifications and escalations carry a note; decisions are stamped with actor and UTC time
 - **Decision history + immutable audit trail** — every creation and decision event is logged to SQLite and exportable as CSV
 - **Dedicated screen** — the React control plane ships a full [Decision Center](#the-control-plane--reactnextjs-frontend) view (pending cards with evidence, one-click actions, live history and audit); the Streamlit app carries the same workflow

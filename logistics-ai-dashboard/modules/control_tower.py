@@ -36,9 +36,9 @@ _DEMO_BASE_RATES = {
     "TransAmerica XP": 15.0,
 }
 
-_ORDER_DATE_CANDIDATES = ["order_purchase_timestamp", "order_date", "date", "ds"]
-_ACTUAL_DATE_CANDIDATES = ["order_delivered_customer_date", "delivery_date", "delivered_date"]
-_PROMISED_DATE_CANDIDATES = ["order_estimated_delivery_date", "estimated_date", "promised_date", "eta"]
+_ORDER_DATE_CANDIDATES = tracking.ORDER_DATE_COLS
+_ACTUAL_DATE_CANDIDATES = tracking.ACTUAL_DATE_COLS
+_PROMISED_DATE_CANDIDATES = tracking.PROMISED_DATE_COLS
 
 import config
 
@@ -143,9 +143,14 @@ def prepare_shipments(tracking_df: pd.DataFrame, delay_model=None) -> pd.DataFra
 
     # ML delay probability for shipments still in flight
     if delay_model is not None:
+        # train_delay_model returns (model, X_test, y_test) — accept either
+        # the tuple or a bare estimator so callers can't silently lose the
+        # ML risk scores.
+        estimator = delay_model[0] if isinstance(delay_model, tuple) else delay_model
         try:
-            out["delay_proba"] = tracking.predict_delay_risk(delay_model, df) * 100.0
-        except Exception:
+            out["delay_proba"] = tracking.predict_delay_risk(estimator, df) * 100.0
+        except Exception as exc:  # noqa: BLE001 - surfaced, not swallowed
+            config.get_logger(__name__).warning("delay risk scoring failed: %s", exc)
             out["delay_proba"] = np.nan
     else:
         out["delay_proba"] = np.nan

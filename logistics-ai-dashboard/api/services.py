@@ -113,8 +113,10 @@ def inventory_snapshot() -> dict[str, Any]:
                 "service_level": str(r.get("Svc Level", "—")),
                 "savings_yr": float(r.get("Est. Savings/yr ($)", 0) or 0),
             })
+        from modules import trust
         return {"kpis": _jsonable(kpis), "rows": rows,
-                "allocation": _inventory_allocation()}
+                "allocation": _inventory_allocation(),
+                "savings_basis": trust.BASIS_NAIVE_POLICY}
 
     return _safe(build, {
         "kpis": {"SKUs": 1204, "A-class": 168, "Est. Savings/yr": "$0.9M"},
@@ -300,7 +302,9 @@ def procurement_snapshot() -> dict[str, Any]:
             "recommended_share": round(float(r.get("Recommended Share", 0) or 0) * 100, 1)
             if r.get("Recommended Share") is not None else None,
         } for _, r in scored.iterrows()]
+        from modules import trust
         return {"carriers": rows, "impact": _jsonable(impact),
+                "savings_basis": trust.BASIS_ALLOCATION,
                 "optimization": _carrier_allocation(scorecard)}
     return _safe(build, {"carriers": [], "impact": {}, "optimization": None})
 
@@ -384,7 +388,18 @@ def _shipments():
     from modules import control_tower
     orders = data_source.orders_dataset()
     orders = control_tower.assign_demo_carriers(orders)
-    shipments = control_tower.prepare_shipments(orders)
+    # Delay-risk model trained on the real outcome (delivered vs promised
+    # date) so open shipments carry an ML risk score. If it can't train
+    # (e.g. imported data with no delivery dates) the board shows no score
+    # rather than an invented one.
+    delay_model = None
+    try:
+        from modules import tracking
+        delay_model, _, _ = tracking.train_delay_model(orders)
+    except Exception as exc:  # noqa: BLE001 - logged, board still renders
+        import config
+        config.get_logger(__name__).warning("delay model not trained: %s", exc)
+    shipments = control_tower.prepare_shipments(orders, delay_model)
     kpis = control_tower.shipment_kpis(shipments)
     scorecard = control_tower.carrier_scorecard(shipments)
     return shipments, kpis, scorecard

@@ -1,8 +1,9 @@
 # SupChainMate — Guided Demo Walkthrough
 
 A five-minute script for showing SupChainMate as a decision-intelligence
-platform, not a dashboard. Everything below runs offline on the bundled Olist
-dataset (99,441 real orders) — no API keys required. Numbers are computed live
+platform, not a dashboard. Everything below runs offline on the Olist dataset
+(99,441 real orders; the repo ships a 5,000-order sample — run
+`python scripts/fetch_olist.py` first for the full set) — no API keys required. Numbers are computed live
 from data; anything modeled is labelled as such in the UI.
 
 ---

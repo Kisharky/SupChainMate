@@ -271,7 +271,9 @@ def recommendations(cid: str) -> dict[str, Any]:
                 "business_impact": "High" if savings > a["revenue"] * 0.01 else "Medium",
                 "estimated_savings": savings, "confidence": 70 + int(s * 25),
             })
-        return {"recommendations": recs, "source": "representative"}
+        return {"recommendations": recs, "source": "representative",
+                "savings_basis": ("Representative estimate: a fixed rule on this account's figures "
+                                  "(e.g. 60% of leakage recovered, 1% of revenue for on-time gains).")}
     return services._safe(build, {"recommendations": []})
 
 

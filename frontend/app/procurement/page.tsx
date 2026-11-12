@@ -24,7 +24,7 @@ export default function Procurement() {
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-        <KpiCard label="Projected Savings" value={savings ? `${Math.round(savings / 1000)}` : "—"} unit="k" prefix="$" status="good" seed={3} />
+        <KpiCard label="Projected Savings" value={savings ? `${Math.round(savings / 1000)}` : "—"} unit="k" prefix="$" status="good" seed={3} basis={data?.savings_basis} />
         <KpiCard label="On-Time (now)" value={otNow ? otNow.toFixed(1) : "—"} unit="%" status="good" seed={7} />
         <KpiCard label="On-Time (optimised)" value={otRec ? otRec.toFixed(1) : "—"} unit="%" status="good" seed={9} delta={otNow && otRec ? Number((otRec - otNow).toFixed(2)) : undefined} />
         <KpiCard label="Volume Shift" value={im["total_shift_pts"] ? im["total_shift_pts"].toFixed(1) : "—"} unit="pts" status="info" seed={5} />

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 import pandas as pd
 from prophet import Prophet
 
@@ -23,7 +24,17 @@ def load_orders(path: str = DEFAULT_DATA_PATH) -> pd.DataFrame:
     return df
 
 
-def daily_demand(orders_df: pd.DataFrame) -> pd.DataFrame:
+def daily_demand(orders_df: pd.DataFrame,
+                 simulate_event_history: bool = False) -> pd.DataFrame:
+    """Aggregate orders into a daily demand series.
+
+    The ``external_signal`` column is a Prophet regressor slot for
+    promo/holiday events. It is ZERO for every historical day unless
+    ``simulate_event_history=True``, in which case a seeded synthetic
+    event is injected on ~5% of days and demand on those days is scaled
+    by 1.5x. That mode exists to demonstrate the regressor; it fabricates
+    history, so it is OFF by default and must be labelled wherever shown.
+    """
     g = (
         orders_df.groupby(orders_df["order_purchase_timestamp"].dt.normalize())
         .size()
@@ -31,17 +42,15 @@ def daily_demand(orders_df: pd.DataFrame) -> pd.DataFrame:
     )
     g.columns = ["ds", "y"]
     g["ds"] = pd.to_datetime(g["ds"])
-    # Keep demand as float because external signal scaling applies non-integer multipliers.
     g["y"] = pd.to_numeric(g["y"], errors="coerce").astype("float64")
-    
-    # Add synthetic external signal (e.g., Marketing Event / Holiday)
-    import numpy as np
-    np.random.seed(42)
-    g['external_signal'] = np.random.choice([0, 1], size=len(g), p=[0.95, 0.05])
-    # Amplify historical demand when signal is present so the model learns it.
-    # Use vectorized arithmetic instead of masked assignment to avoid dtype setitem issues on pandas 3.x.
-    g["y"] = g["y"] * (1.0 + 0.5 * g["external_signal"].astype(float))
-    
+
+    if simulate_event_history:
+        rng = np.random.default_rng(42)
+        g["external_signal"] = rng.choice([0, 1], size=len(g), p=[0.95, 0.05])
+        g["y"] = g["y"] * (1.0 + 0.5 * g["external_signal"].astype(float))
+    else:
+        g["external_signal"] = 0.0
+
     return g.sort_values("ds").reset_index(drop=True)
 
 
@@ -56,9 +65,20 @@ def fit_prophet_model(daily_df: pd.DataFrame) -> Prophet:
     return model
 
 
-def run_forecast(daily_df: pd.DataFrame, horizon_days: int = 7) -> tuple[Prophet, pd.DataFrame]:
+def run_forecast(daily_df: pd.DataFrame, horizon_days: int = 7):
+    """Fit Prophet and forecast ``horizon_days`` ahead.
+
+    Carries the ``external_signal`` regressor onto the future frame
+    (historical values joined, future days default to 0) so
+    ``model.predict`` has every regressor it was fitted with.
+
+    Returns ``(model, forecast_df)``.
+    """
     model = fit_prophet_model(daily_df)
     future = model.make_future_dataframe(periods=horizon_days)
+    if "external_signal" in daily_df.columns:
+        future = future.merge(daily_df[["ds", "external_signal"]], on="ds", how="left")
+        future["external_signal"] = future["external_signal"].fillna(0.0)
     forecast = model.predict(future)
     return model, forecast
 

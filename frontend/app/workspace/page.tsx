@@ -4,9 +4,9 @@
  * Executive brief · What Changed Today · AI planner · courses of action ·
  * scenario simulator · Detect→…→Learn decision timeline.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, Button, Badge } from "@/components/ui/primitives";
+import { Card, CardHead, Button, Badge, Basis } from "@/components/ui/primitives";
 import {
   api, ExecBrief, WhatChanged, Timeline, CoaResponse,
   ScenarioResponse, WorkspaceCatalog, PlannerDecision,
@@ -207,7 +207,7 @@ function WhatChangedToday({ data }: { data: WhatChanged | null }) {
   );
   return (
     <Card>
-      <CardHead title="What Changed Today" hint={data?.date} right={data ? <Badge status="good">{money(data.realized_savings)} realized</Badge> : undefined} />
+      <CardHead title="What Changed Today" hint={data?.date} right={data ? <Basis text={data.savings_basis}><Badge status="good">{money(data.realized_savings)} approved (modelled)</Badge></Basis> : undefined} />
       <div className="p-[18px] flex flex-col gap-3">
         {data ? (
           <>
@@ -257,7 +257,7 @@ function CoursesOfAction({ cat }: { cat: WorkspaceCatalog | null }) {
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[0.75rem]">
                     <Metric l="Cost" v={money(o.implementation_cost)} />
-                    <Metric l="Savings/yr" v={money(o.expected_savings)} good />
+                    <Metric l={<Basis text={coa.savings_basis}>Savings/yr</Basis>} v={money(o.expected_savings)} good />
                     <Metric l="ROI" v={`${o.roi}×`} good />
                     <Metric l="Risk" v={o.operational_risk} riskColor={riskColor[o.operational_risk]} />
                     <Metric l="Service" v={`${o.service_level_impact > 0 ? "+" : ""}${o.service_level_impact} pp`} />
@@ -279,7 +279,7 @@ function CoursesOfAction({ cat }: { cat: WorkspaceCatalog | null }) {
     </Card>
   );
 }
-function Metric({ l, v, good, riskColor }: { l: string; v: string | number; good?: boolean; riskColor?: string }) {
+function Metric({ l, v, good, riskColor }: { l: ReactNode; v: string | number; good?: boolean; riskColor?: string }) {
   return (
     <div>
       <div className="text-ink-3">{l}</div>

@@ -89,8 +89,19 @@ def active_summary() -> dict:
         "source": "imported" if (orders or custs) else "demo",
         "orders_dataset": orders["name"] if orders else None,
         "customers_dataset": custs["name"] if custs else None,
-        "demo_dataset": "Olist (99k orders)",
+        "demo_dataset": _demo_label(),
     }
+
+
+def _demo_label() -> str:
+    """'Olist (5,000-order sample)' as shipped, 'Olist (99,441 orders)' after
+    scripts/fetch_olist.py — counted, never hard-coded."""
+    try:
+        with open(_OLIST_ORDERS, "rb") as f:
+            n = sum(1 for _ in f) - 1
+    except OSError:
+        return "Olist"
+    return f"Olist ({n:,}-order sample)" if n < 50_000 else f"Olist ({n:,} orders)"
 
 
 # ── orders ────────────────────────────────────────────────────────────────────

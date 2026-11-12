@@ -2,6 +2,50 @@
 
 All notable changes to SupChainMate are documented here.
 
+## Savings say what they are measured against
+- Every savings figure in the app now carries its basis as a hover note (dotted
+  underline): Decision Center cards and KPI, Inventory, Procurement, Workspace
+  courses of action and "What Changed Today", and Customer 360 recommendations.
+- The basis travels with the data: `Impact.savings_basis` is set wherever a saving
+  is computed (naive inventory baseline, carrier rate-shift simulation, carrier
+  mix, re-tender upside, audit recovery), and page-level figures get
+  `savings_basis` from the API.
+- Audit recoveries are flagged `savings_one_off` and shown as "one-off" instead
+  of "/yr".
+- Workspace "realized" savings are relabelled "approved (modelled)" since nothing
+  is measured as realised; course-of-action savings are marked as illustrative
+  (they are fixed per option) and the response is labelled `representative`.
+
+## Honest numbers — forecast and delay-risk fixes
+- **No fabricated demand history.** `forecast.daily_demand` no longer injects
+  random "event" days and inflates demand on them (5,000 orders had become
+  5,169.5). Real demand passes through untouched; the old behaviour is opt-in via
+  `simulate_event_history=True` and documented as synthetic. Uploaded data
+  (`ingestion.orders_to_daily_demand`) is never amplified.
+- **`run_forecast` works.** It carries the `external_signal` regressor onto the
+  future frame instead of crashing with `ValueError`.
+- **Delay risk learns the real outcome.** The delay model previously learned a
+  random simulated `status` (≈0.5 AUC, a different at-risk count every run). It
+  now trains on delivered-after-promised-date from the data (0.67 AUC on the
+  sample, deterministic), uses the promised lead time instead of random
+  `lead_days`, and falls back to `status` only when the data has no dates.
+- **The API shipment board carries ML risk.** `/api` shipments now train and pass
+  the delay model (previously none, so risk was blank and nothing was flagged at
+  risk); failures are logged, not swallowed.
+- `optimize/solvers/local.py` docstring no longer claims a scipy exact solver.
+
+## Repo hygiene — review fixes
+- Added the MIT `LICENSE` file the badge promised.
+- Replaced the static "tests passing" and "CI" badges with the live GitHub Actions badge.
+- The repo now ships a **5,000-order Olist sample** (~2 MB, down from ~101 MB):
+  orders, the customers they reference, and one median geolocation point per zip.
+  `scripts/fetch_olist.py` downloads the full 99k-order set; `scripts/make_sample.py`
+  regenerates the sample deterministically. The Data Hub demo label now counts rows
+  instead of hard-coding "99k".
+- Fonts (Inter, JetBrains Mono) are self-hosted via `next/font/local` in
+  `frontend/app/fonts/`, so the build no longer needs network access to Google Fonts.
+- Next.js bumped 14.2.15 → 14.2.35 (latest 14.x patch) and non-breaking `npm audit fix`.
+
 ## Agentic Ops Workflows — the detect→decide→act loop, made legible
 - Added an **Agentic Ops Workflows** section to the Workforce page: a small set of
   signature freight workflows shown as a full **detect → diagnose → decide →

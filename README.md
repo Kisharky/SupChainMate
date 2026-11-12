@@ -11,7 +11,7 @@
 
 [![Version](https://img.shields.io/badge/version-6.0.0-10B981?style=for-the-badge)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-EAB308?style=for-the-badge)](#license)
-[![Tests](https://img.shields.io/badge/tests-139%20passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](logistics-ai-dashboard/tests)
+[![CI](https://github.com/Kisharky/SupChainMate/actions/workflows/ci.yml/badge.svg)](https://github.com/Kisharky/SupChainMate/actions/workflows/ci.yml)
 
 [![Next.js](https://img.shields.io/badge/Next.js_14-000000?logo=next.js&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React_18-20232A?logo=react&logoColor=61DAFB)](https://react.dev)
@@ -25,7 +25,10 @@
 [![JWT](https://img.shields.io/badge/Auth-JWT_+_RBAC-000000?logo=jsonwebtokens&logoColor=white)](#authentication--access-control)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](#configuration)
 [![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)](#run-with-docker)
-[![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+
+<br/>
+
+Built solo as a portfolio project. Runs on the public [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) (99k orders); every figure is computed from that data. Where a module needs fields Olist doesn't have (carriers, freight rates, risk signals), the values are simulated and labelled as such in the UI.
 
 <br/>
 
@@ -217,7 +220,7 @@ The platform serves two audiences through one decision engine:
 
 | Mode | Audience | Input |
 |------|----------|-------|
-| **Enterprise** | Supply chain teams with data | CSV/Excel uploads, Shopify/WooCommerce API sync, or the built-in demo (99k real orders) |
+| **Enterprise** | Supply chain teams with data | CSV/Excel uploads, Shopify/WooCommerce API sync, or the built-in demo (Olist: 5k-order sample in the repo, full 99k via `scripts/fetch_olist.py`) |
 | **Small Retailer** | Shops without spreadsheets | A five-question form per product — no files required |
 
 ```
@@ -312,7 +315,7 @@ npm install && npm run dev             # http://localhost:3000
 
 | Capability | Description |
 |---|---|
-| **Decision Engine** | Safety stock (combined variance formula), EOQ, reorder point, lead-time buffer, and annual savings — reference inventory mathematics (Nahmias) |
+| **Decision Engine** | Safety stock (combined variance formula), EOQ, reorder point, lead-time buffer, and annual savings vs a stated naive baseline — reference inventory mathematics (Nahmias) |
 | **SKU Intelligence** | Per-product decisions for the whole catalogue: ABC classification (revenue Pareto), differentiated service levels by class, per-SKU safety stock / ROP / EOQ, editable stock levels with ORDER NOW / SOON / OK status, per-SKU reorder plan export |
 | **Demand Forecasting** | Prophet with external regressors, plus a **model tournament**: LightGBM / Random Forest / Gradient Boosting / Ridge and their ensemble, backtested against Prophet on a 28-day holdout with the champion crowned by MAPE |
 | **Market Signals** | External factor engine: keyless FX (frankfurter/ECB), Brent crude (Stooq), weather (Open-Meteo), offline holiday calendar, and PostHog/GA daily-events imports — with a terminal-style ticker, factor↔demand correlations (incl. 7-day leading), and factor uplift **proven on the forecast holdout** |
@@ -485,7 +488,7 @@ Every material AI recommendation flows through a human-in-the-loop **Decision Ce
 
 - **Explainable** — each recommendation carries WHY drivers, every one backed by an evidence value from the data (demand σ, days of cover, on-time gaps, the formula used)
 - **Confidence with a stated basis** — a transparent heuristic (data support + signal strength, 20–95). The basis string says exactly what it's built from; it is deliberately *not* presented as a calibrated probability
-- **Quantified business impact** — cost savings ($/yr), stockout risk (%), and service level (%) chips on every card, computed by the same deterministic engines
+- **Quantified business impact** — cost savings ($/yr), stockout risk (%), and service level (%) chips on every card, computed by the same deterministic engines. Savings are modelled, not measured, and every figure states its basis on hover. Inventory savings are modelled against a stated naive baseline (monthly ordering, safety stock of half the lead-time demand, or your own current safety stock if you enter it; see `naive_current` in `modules/decisions.py`). Carrier savings are priced at simulated demo rates, and audit recoveries are marked one-off
 - **Approve / Reject / Modify / Escalate** — modifications and escalations carry a note; decisions are stamped with actor and UTC time
 - **Decision history + immutable audit trail** — every creation and decision event is logged to SQLite and exportable as CSV
 - **Dedicated screen** — the React control plane ships a full [Decision Center](#the-control-plane--reactnextjs-frontend) view (pending cards with evidence, one-click actions, live history and audit); the Streamlit app carries the same workflow
@@ -640,7 +643,8 @@ SupChainMate/
 │   ├── tests/
 │   │   ├── test_core.py          # Decision engine, forecasting, optimisation, network
 │   │   └── test_modules.py       # Feature-module suite
-│   └── data/                     # Demo dataset (Olist, 99k orders) + SQLite DB
+│   ├── scripts/                  # fetch_olist.py (full 99k dataset) · make_sample.py
+│   └── data/                     # Olist 5k-order sample (fetch script for the full set) + SQLite DB
 ├── CHANGELOG.md
 └── README.md
 ```
@@ -660,6 +664,7 @@ SupChainMate/
 git clone https://github.com/Kisharky/SupChainMate.git
 cd SupChainMate/logistics-ai-dashboard
 pip install -r requirements.txt
+python scripts/fetch_olist.py        # optional: full 99k-order Olist set (repo ships a 5k sample)
 ```
 
 ### Run
@@ -708,13 +713,15 @@ Upload any CSV or Excel — the ingestion engine auto-detects columns under any 
 
 **Demo dataset**: [Olist Brazilian E-Commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) — 99,441 real orders with genuine promised-vs-actual delivery dates. Demo carrier names, freight costs, and transport modes are simulated and labelled in the UI.
 
+The repo ships a **5,000-order sample** (≈2 MB — orders, the customers they reference, and one geolocation point per zip) so it clones fast and CI stays quick. `python scripts/fetch_olist.py` downloads the full dataset (≈100 MB) into `data/`; `python scripts/make_sample.py` regenerates the sample deterministically.
+
 ---
 
 ## Testing
 
 ```bash
 cd logistics-ai-dashboard
-python -m pytest tests/ -q        # 119 tests
+python -m pytest tests/ -q        # full suite — also runs on every push (CI badge above)
 ```
 
 Coverage spans the decision-engine mathematics (safety stock, EOQ, ROP, monotonicity), network scoring (Haversine, clustering, Isolation Forest), forecasting aggregation, optimisation summaries, shipment classification, carrier scorecards, cost-audit anomaly detection, health-check scoring, tender and rate-shift math, ensemble backtesting, alert digests, SQLite persistence, agent routing and tracing, and the store connectors (exercised against mocked HTTP — no network required).
@@ -733,6 +740,7 @@ Coverage spans the decision-engine mathematics (safety stock, EOQ, ROP, monotoni
 - Real carrier tracking API integrations
 - OAuth-based store connections and hosted multi-tenant deployment
 - Scheduled background runs (workers acting between sessions, not just on load)
+- **Next.js 15/16 upgrade.** `npm audit` currently flags the frontend (1 critical, 4 high). All of them are in the Next 14 line (image-optimisation DoS, request smuggling in rewrites, and a vulnerable `glob` via `eslint-config-next`). No 14.x release fixes them, so the frontend is on the last 14.2 patch until the major upgrade lands.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history (v1.0 → v4.8).
 
@@ -753,4 +761,4 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history (v1.0 → v4.8).
 
 ## License
 
-MIT © [Kishan Nagesh](https://www.linkedin.com/in/kisharky-n-5147941a4) — Master of Business (Supply Chain & International Business), Monash University, Melbourne
+MIT © [Kishan Nagesh](https://www.linkedin.com/in/gowdakishan) — Master of Business (Supply Chain & International Business), Monash University, Melbourne

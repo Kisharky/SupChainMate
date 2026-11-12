@@ -5,7 +5,7 @@ is the honest fallback when NVIDIA cuOpt is not reachable/configured.
 * Routing: nearest-neighbour construction + 2-opt improvement over a Haversine
   distance matrix (a clean TSP tour connecting the network's hubs).
 * Allocation: greedy least-cost transportation heuristic respecting supply and
-  demand (uses scipy's exact solver when available, greedy otherwise).
+  demand. Greedy least-cost cell selection — not a guaranteed optimum.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 /** Inventory Intelligence — genuinely live engine output. */
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, DataTable, Th, Td, Badge, Button, TableState } from "@/components/ui/primitives";
+import { Card, CardHead, DataTable, Th, Td, Badge, Button, TableState, Basis } from "@/components/ui/primitives";
 import { api, InventoryResponse } from "@/lib/api";
 
 export default function Inventory() {
@@ -31,7 +31,7 @@ export default function Inventory() {
           hint={data ? `${(data.kpis as any)?.n_skus ?? rows.length} SKUs · ${(data.kpis as any)?.a_class ?? "—"} A-class` : "loading…"} />
         <DataTable head={<>
           <Th>SKU</Th><Th>Class</Th><Th num>Reorder point</Th><Th num>EOQ</Th>
-          <Th num>Safety stock</Th><Th>Service</Th><Th num>Est. savings/yr</Th>
+          <Th num>Safety stock</Th><Th>Service</Th><Th num><Basis text={data?.savings_basis}>Est. savings/yr</Basis></Th>
         </>}>
           {err && <TableState cols={7} kind="error" />}
           {rows.map((r) => (

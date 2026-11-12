@@ -11,7 +11,7 @@ import dynamic from "next/dynamic";
 import { AppShell } from "@/components/AppShell";
 import {
   Card, CardHead, KpiCard, Badge, Button, Progress, Sparkline, DataTable, Th, Td,
-  Modal, EmptyState, Alert, Skeleton,
+  Modal, EmptyState, Alert, Skeleton, Basis
 } from "@/components/ui/primitives";
 import {
   api, CustomerDetail, CustomerOrders, CustomerShipments, CustomerForecast,
@@ -202,7 +202,7 @@ export default function Customer360() {
       {/* ---- 9. Recommendations ---- */}
       <Section title="Recommendations" hint={recs ? `${recs.recommendations.length}` : ""}>
         <div className="flex flex-col gap-3">
-          {recs?.recommendations.map((r) => <RecCard key={r.id} rec={r} />)}
+          {recs?.recommendations.map((r) => <RecCard key={r.id} rec={r} basis={recs.savings_basis} />)}
           {!recs && <EmptyState kind="loading" />}
         </div>
       </Section>
@@ -290,7 +290,7 @@ function TrendCard({ title, data, color }: { title: string; data: { period: stri
   );
 }
 
-function RecCard({ rec }: { rec: CustomerRecs["recommendations"][number] }) {
+function RecCard({ rec, basis }: { rec: CustomerRecs["recommendations"][number]; basis?: string }) {
   const [status, setStatus] = useState(rec.status);
   const [showReason, setShowReason] = useState(false);
   return (
@@ -298,7 +298,7 @@ function RecCard({ rec }: { rec: CustomerRecs["recommendations"][number] }) {
       <div className="flex items-center gap-2 flex-wrap">
         <Badge status={statusBadge(status) as "good" | "warning" | "info"}>{status}</Badge>
         <span className="font-semibold text-[0.9375rem]">{rec.title}</span>
-        <span className="ml-auto text-[0.75rem] text-ink-3">impact <b className="text-ink">{rec.business_impact}</b> · saves <b className="text-ink tnum">{compact(rec.estimated_savings)}</b> · {rec.confidence}%</span>
+        <span className="ml-auto text-[0.75rem] text-ink-3">impact <b className="text-ink">{rec.business_impact}</b> · <Basis text={basis}>saves <b className="text-ink tnum">{compact(rec.estimated_savings)}</b></Basis> · {rec.confidence}%</span>
       </div>
       {showReason && <p className="text-[0.8125rem] text-ink-2 mt-2">{rec.reasoning}</p>}
       <div className="flex gap-2 mt-3">

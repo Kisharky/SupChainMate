@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardHead, Button, Badge, DataTable, Th, Td } from "@/components/ui/primitives";
+import { Card, CardHead, Button, Badge, DataTable, Th, Td, Basis } from "@/components/ui/primitives";
 import { api, DecisionsResponse, Recommendation, AuditEntry, DecisionStatus } from "@/lib/api";
 
 const confColor = (c: number) => (c >= 80 ? "good" : c >= 55 ? "warning" : "critical");
@@ -51,15 +51,15 @@ export default function Decisions() {
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
         {[
-          { l: "Pending", v: k?.pending ?? "—", s: "warning" },
+          { l: "Pending", v: k?.pending ?? "—", s: "warning", b: undefined as string | undefined },
           { l: "Approved", v: k?.approved ?? "—", s: "good" },
           { l: "Rejected", v: k?.rejected ?? "—", s: "critical" },
-          { l: "Approved Savings/yr", v: k?.approved_savings != null ? `$${Math.round(k.approved_savings).toLocaleString()}` : "—", s: "good" },
+          { l: "Approved Savings/yr", v: k?.approved_savings != null ? `$${Math.round(k.approved_savings).toLocaleString()}` : "—", s: "good", b: k?.approved_savings_basis },
           { l: "Avg Confidence", v: k?.avg_confidence != null ? `${k.avg_confidence}%` : "—", s: "info" },
         ].map((m) => (
           <Card key={m.l} className="p-4 relative overflow-hidden">
             <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: `var(--${m.s})` }} />
-            <div className="eyebrow">{m.l}</div>
+            <div className="eyebrow"><Basis text={m.b}>{m.l}</Basis></div>
             <div className="text-[1.75rem] font-bold tnum mt-1">{m.v}</div>
           </Card>
         ))}
@@ -86,7 +86,11 @@ export default function Decisions() {
 
                 {/* Business impact */}
                 <div className="flex gap-2 flex-wrap mt-3">
-                  {rec.impact?.cost_savings_yr ? <Badge status="good">↑ ${Math.round(rec.impact.cost_savings_yr).toLocaleString()}/yr</Badge> : null}
+                  {rec.impact?.cost_savings_yr ? (
+                    <Basis text={rec.impact.savings_basis ?? "Modelled estimate"}>
+                      <Badge status="good">↑ ${Math.round(rec.impact.cost_savings_yr).toLocaleString()}{rec.impact.savings_one_off ? " one-off" : "/yr"}</Badge>
+                    </Basis>
+                  ) : null}
                   {rec.impact?.stockout_risk_pct != null ? <Badge status="warning">stockout {rec.impact.stockout_risk_pct}%</Badge> : null}
                   {rec.impact?.service_level_pct != null ? <Badge status="info">service {rec.impact.service_level_pct}%</Badge> : null}
                   {rec.impact?.other ? <Badge status="neutral">{rec.impact.other}</Badge> : null}
